@@ -6,7 +6,11 @@
 
 ## 시연 영상
 
-[시연 영상 보기 (5분 24초, MP4 21MB)](docs/demo/gureuneun-guide-demo.mp4)
+**[시연 영상 보기 (5분 24초, 브라우저에서 바로 재생)](https://aikong2024.github.io/gureuneun-guide/)**
+
+[![시연 영상](docs/demo/poster.jpg)](https://aikong2024.github.io/gureuneun-guide/)
+
+영상 파일은 [docs/demo/gureuneun-guide-demo.mp4](docs/demo/gureuneun-guide-demo.mp4)에도 있습니다 (MP4, 21MB).
 
 Pleos Connect 에뮬레이터에서 앱이 실제로 돌아가는 화면을 녹화했습니다. 왼쪽이 차 화면, 오른쪽이 동승자 휴대폰, 왼쪽 아래가 Virtual Console의 차량 상태(실내 조명 색, 창문)입니다. 소리는 에뮬레이터 속 차가 Pleos TextToSpeech로 낸 안내 음성을 그대로 담았습니다.
 
