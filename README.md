@@ -152,7 +152,7 @@ adb shell am start -n app.gureuneun.guide/.MainActivity --es demo jump --es to h
 1. 에뮬레이터를 소리 파일 출력으로 띄웁니다. Car 이미지는 안내 음성을 차량용 오디오 경로로 내보내서 화면 녹화 도구에는 소리가 담기지 않기 때문입니다.
    `QEMU_AUDIO_DRV=wav QEMU_WAV_PATH=/tmp/rgdev/emu_audio.wav emulator -avd <AVD 이름> -audio wav` (다른 경로를 쓰면 `EMU_WAV`로 알려 줍니다)
 2. `cd tools/demo && npm install && node record.mjs ./out` (화면 녹화에 scrcpy를 쓰려면 `SCRCPY=<scrcpy 경로>`, 없으면 adb screenrecord)
-3. `python3 compose.py ./out ./out/demo.mp4 [cuts.json]` (ffmpeg, Pillow 필요. cuts.json에는 장면별로 남길 구간을 초 단위로 적습니다)
+3. `python3 compose.py ./out ./out/demo.mp4 [cuts.json]` (ffmpeg, Pillow 필요. cuts.json에는 장면별로 남길 구간을 초 단위로 적습니다. 위 영상에 쓴 값은 `tools/demo/cuts.example.json`)
 
 ## 이야기 출처
 
