@@ -58,6 +58,10 @@ android {
         compose = true
         buildConfig = true
     }
+    // 차 앱에는 명소 장면 사진(posters)만 넣고, 휴대폰용 동영상 클립과 개발용 페이지는 뺌
+    androidResources {
+        ignoreAssetsPattern = "!clips:!render.html:!.DS_Store"
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

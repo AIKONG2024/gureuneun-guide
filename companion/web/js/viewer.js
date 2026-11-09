@@ -11,6 +11,7 @@
   var mode = 'cinematic', current = null, mood = { rain: false, night: false };
   var view = { yaw: 0.7, pitch: 0.32, dist: 20, target: new T.Vector3(0, 3, 0), radius: 8 };
   var drag = null, lastInteract = 0, t0 = performance.now();
+  var paused = false;
   var animators = [], rain = null, stars = null, sunLight, hemiLight, glowLights = [];
 
   function mat(color, opts) {
@@ -101,7 +102,7 @@
     var path = new T.Mesh(new T.PlaneGeometry(2.2, 60), mat('#d8c9a3')); path.rotation.x = -Math.PI / 2; path.rotation.z = 0.5; path.position.y = 0.02; g.add(path);
     var r = rng(11);
     for (var k = 0; k < 22; k++) { var a = r() * Math.PI * 2, d = 20 + r() * 14; g.add(tree(r, Math.cos(a) * d, Math.sin(a) * d, 1 + r() * 0.8)); }
-    return { group: g, target: new T.Vector3(0, 2.5, 0), radius: 13 };
+    return { group: g, target: new T.Vector3(0, 2.5, 0), radius: 16 };
   };
 
   function pavilion(w, d, x, z, ry) {
@@ -153,9 +154,12 @@
     var bw1 = at(box(22, 1.2, 3, rock), -8, 0.4, 2); bw1.rotation.y = 0.25; g.add(bw1);
     var bw2 = at(box(22, 1.2, 3, rock), 8, 0.4, -4); bw2.rotation.y = -0.3; g.add(bw2);
     var sand = new T.Mesh(new T.PlaneGeometry(80, 26), mat('#e8dcc0')); sand.rotation.x = -Math.PI / 2; sand.position.set(0, 0.08, 30); g.add(sand);
-    var red = horse('#e53935'); red.position.set(-17, 1.0, 4.6); red.rotation.y = 0.25; g.add(red);
-    var white = horse('#f4f4f4'); white.position.set(17.5, 1.0, -7); white.rotation.y = Math.PI - 0.3; g.add(white);
-    return { group: g, target: new T.Vector3(0, 3, 0), radius: 18 };
+    var tower = mat('#d9d9d9');
+    var red = horse('#e53935'); red.scale.setScalar(1.35); red.position.set(-8, 2.2, 3.2); red.rotation.y = 0.25; g.add(red);
+    g.add(at(cyl(1.6, 1.9, 1.6, 16, tower), -8, 1.0, 3.2));
+    var white = horse('#f4f4f4'); white.scale.setScalar(1.35); white.position.set(8, 2.2, -3.6); white.rotation.y = Math.PI - 0.3; g.add(white);
+    g.add(at(cyl(1.6, 1.9, 1.6, 16, tower), 8, 1.0, -3.6));
+    return { group: g, target: new T.Vector3(0, 4, 0), radius: 13 };
   };
 
   function rocks(g, r, n, cx, cz, spread) {
@@ -190,19 +194,19 @@
     var g = new T.Group();
     g.add(ground('#7d9a6a', 90));
     var river = new T.Mesh(new T.PlaneGeometry(200, 36), new T.MeshStandardMaterial({ color: '#2f6f8f', roughness: 0.3 })); river.rotation.x = -Math.PI / 2; river.position.set(0, 0.05, -34); g.add(river);
-    var lines = stripeTexture(60, '#c9a227', 'rgba(70,45,0,0.55)', 0); lines.repeat.set(1, 1);
-    var gold = new T.MeshStandardMaterial({ color: '#e0b43a', map: lines, metalness: 0.75, roughness: 0.28, emissive: '#3a2a00', emissiveIntensity: 0.2 });
+    var lines = stripeTexture(60, '#f6d27a', 'rgba(150,100,10,0.35)', 0); lines.repeat.set(1, 1);
+    var gold = new T.MeshStandardMaterial({ color: '#f2c14e', map: lines, metalness: 0.3, roughness: 0.35, emissive: '#6b4a00', emissiveIntensity: 0.25 });
     var tower = new T.Mesh(new T.CylinderGeometry(3.4, 5.4, 44, 4, 1), gold);
     tower.rotation.y = Math.PI / 4; tower.scale.set(1.6, 1, 0.75); tower.position.y = 22; tower.castShadow = true; g.add(tower);
     var crown = new T.Mesh(new T.CylinderGeometry(1.2, 3.4, 4, 4, 1), gold); crown.rotation.y = Math.PI / 4; crown.scale.set(1.6, 1, 0.75); crown.position.y = 46; g.add(crown);
     g.add(at(cyl(0.12, 0.12, 6, 6, mat('#dddddd')), 0, 51, 0));
     g.add(at(box(16, 3, 12, mat('#c7c2b6')), 0, 1.5, 3));
     var r = rng(4), grey = mat('#9aa3ad');
-    for (var i = 0; i < 12; i++) { var h = 6 + r() * 16; g.add(at(box(4 + r() * 4, h, 4 + r() * 4, grey), -40 + i * 7 + r() * 3, h / 2, 22 + r() * 12)); }
+    for (var i = 0; i < 12; i++) { var h = 6 + r() * 14; var side = i % 2 ? 1 : -1; g.add(at(box(4 + r() * 4, h, 4 + r() * 4, grey), side * (16 + r() * 26), h / 2, 26 + r() * 20)); }
     var night = [];
     for (var j = 0; j < 40; j++) { var win = new T.Mesh(new T.PlaneGeometry(1.2, 0.5), new T.MeshBasicMaterial({ color: '#ffe9a8', transparent: true, opacity: 0 })); win.position.set((r() - 0.5) * 9, 4 + r() * 36, 2.5); g.add(win); night.push(win); }
-    animators.push(function () { night.forEach(function (w) { w.material.opacity = mood.night ? 0.9 : 0; }); gold.emissiveIntensity = mood.night ? 0.55 : 0.18; });
-    return { group: g, target: new T.Vector3(0, 20, 0), radius: 24 };
+    animators.push(function () { night.forEach(function (w) { w.material.opacity = mood.night ? 0.9 : 0; }); gold.emissiveIntensity = mood.night ? 0.6 : 0.25; });
+    return { group: g, target: new T.Vector3(0, 24, 0), radius: 30 };
   };
 
   MODELS.riverpark = function () {
@@ -212,7 +216,7 @@
     var bridge = new T.Group();
     bridge.add(at(box(110, 1.2, 4, mat('#9fa8b3')), 0, 5, 0));
     for (var i = -4; i <= 4; i++) { bridge.add(at(cyl(0.6, 0.8, 5, 8, mat('#8a929c')), i * 12, 2.5, 0)); }
-    bridge.position.z = -40; g.add(bridge);
+    bridge.position.z = -30; g.add(bridge);
     var r = rng(13), colors = ['#ff6b6b', '#ffd166', '#4ecdc4', '#a78bfa'];
     for (var k = 0; k < 10; k++) { var tent = new T.Mesh(new T.ConeGeometry(1.2, 1.6, 4), mat(colors[k % 4])); tent.position.set(-30 + k * 6 + r() * 2, 0.8, 12 + r() * 8); g.add(tent); }
     for (var t = 0; t < 18; t++) g.add(tree(r, -50 + t * 6, 24 + r() * 5, 1 + r() * 0.5));
@@ -234,7 +238,7 @@
         if (age > 2.2) { fw.remove(p); p.geometry.dispose(); }
       });
     });
-    return { group: g, target: new T.Vector3(0, 4, -12), radius: 22 };
+    return { group: g, target: new T.Vector3(0, 4, -10), radius: 20 };
   };
 
   MODELS.assembly = function () {
@@ -257,7 +261,7 @@
     for (var t = 0; t < 18; t++) { var a = r() * Math.PI * 2, d = 26 + r() * 10; g.add(tree(r, Math.cos(a) * d, Math.sin(a) * d, 1 + r() * 0.5)); }
     var glow = new T.PointLight('#fff1c9', 0, 40); glow.position.set(0, 14, 12); g.add(glow); glowLights.push(glow);
     g.userData.columns = n;
-    return { group: g, target: new T.Vector3(0, 6, 0), radius: 15 };
+    return { group: g, target: new T.Vector3(0, 6, 0), radius: 18 };
   };
 
   MODELS.generic = function () {
@@ -370,18 +374,50 @@
     var last = performance.now();
     (function loop() {
       requestAnimationFrame(loop);
+      if (paused) return;
       var now = performance.now(), dt = Math.min(0.05, (now - last) / 1000), t = (now - t0) / 1000; last = now;
       animators.forEach(function (f) { f(t, dt); });
-      if (mode === 'cinematic') {
-        var a = t * 0.16, d = view.radius * (2.35 + 0.25 * Math.sin(t * 0.21));
-        camera.position.set(view.target.x + Math.cos(a) * d, view.target.y + view.radius * (0.55 + 0.18 * Math.sin(t * 0.13)), view.target.z + Math.sin(a) * d);
-      } else {
+      if (mode === 'cinematic') cinematicCamera(t);
+      else {
         if (!drag && now - lastInteract > 4000) view.yaw += dt * 0.12;
         camera.position.set(view.target.x + Math.cos(view.yaw) * Math.cos(view.pitch) * view.dist, view.target.y + Math.sin(view.pitch) * view.dist, view.target.z + Math.sin(view.yaw) * Math.cos(view.pitch) * view.dist);
       }
       camera.lookAt(view.target);
       renderer.render(scene, camera);
     })();
+  };
+
+  function cinematicCamera(t) {
+    // 세로 화면(휴대폰)에서는 좌우가 좁아 조금 더 물러나서 찍음
+    var boost = camera.aspect < 1 ? Math.pow(1 / camera.aspect, 0.6) : 1;
+    var a = 0.6 + t * 0.16, d = view.radius * (2.35 + 0.25 * Math.sin(t * 0.21)) * boost;
+    camera.position.set(view.target.x + Math.cos(a) * d, view.target.y + view.radius * (0.55 + 0.18 * Math.sin(t * 0.13)), view.target.z + Math.sin(a) * d);
+  }
+
+  GG.setPaused = function (p) { paused = !!p; };
+
+  /** 짧은 영상용 프레임을 정해진 시간 간격으로 그려서 넘겨줌 (차 화면과 휴대폰 영상 클립 제작용) */
+  GG.renderFrames = function (o, onFrame) {
+    paused = true;
+    mode = 'cinematic';
+    build(o.model);
+    mood.night = !!o.night; mood.rain = !!o.rain; applyMood();
+    renderer.setPixelRatio(1);
+    renderer.setSize(o.width, o.height, false);
+    camera.aspect = o.width / o.height; camera.updateProjectionMatrix();
+    var total = Math.round(o.seconds * o.fps), i = 0, dt = 1 / o.fps;
+    function step() {
+      if (i >= total) return Promise.resolve(total);
+      var t = i * dt;
+      animators.forEach(function (f) { f(t, dt); });
+      cinematicCamera(t);
+      camera.lookAt(view.target);
+      renderer.render(scene, camera);
+      var data = renderer.domElement.toDataURL('image/jpeg', 0.9);
+      var idx = i++;
+      return Promise.resolve(onFrame(data, idx, total)).then(step);
+    }
+    return step();
   };
 
   GG.show = function (o) {

@@ -51,7 +51,7 @@
       "lon": 126.4916,
       "radius": 3000,
       "color": "#3EC5FF",
-      "model": "",
+      "model": "beach",
       "story": {
         "ko": {
           "short": "제주에 왔어요! 오늘은 제주 서쪽 바닷가를 따라 협재까지 달려요.",

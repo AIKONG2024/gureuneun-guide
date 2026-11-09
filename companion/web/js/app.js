@@ -51,9 +51,32 @@
 
   // ---------------------------------------------------------------- 3D
   GG.mount($('stage'), { model: 'cheomseongdae' });
-  GG.onMode = function (m) { $('mVideo').classList.toggle('on', m === 'cinematic'); $('mOrbit').classList.toggle('on', m === 'orbit'); };
-  $('mVideo').onclick = function () { GG.setMode('cinematic'); };
-  $('mOrbit').onclick = function () { GG.setMode('orbit'); };
+  // '영상'은 미리 만든 짧은 클립(/clips/모형.mp4)을, '3D 돌려 보기'는 실시간 3D 모형을 보여 줌
+  var clipModel = null, clipNight = false, clipOk = false;
+  var clipEl = $('clip');
+  clipEl.onerror = function () { clipOk = false; showVideoMode(false); GG.setMode('cinematic'); };
+  clipEl.onloadeddata = function () { clipOk = true; };
+  function setClip(model, night) {
+    if (!model) { clipOk = false; showVideoMode(false); return; }
+    if (model === clipModel && night === clipNight) return;
+    clipModel = model; clipNight = night; clipOk = true;
+    var tryNight = night ? '/clips/' + model + '_night.mp4' : null;
+    clipEl.onerror = function () {
+      if (tryNight && clipEl.getAttribute('src') === tryNight) { clipEl.src = '/clips/' + model + '.mp4'; return; }
+      clipOk = false; showVideoMode(false); GG.setMode('cinematic');
+    };
+    clipEl.src = tryNight || ('/clips/' + model + '.mp4');
+    clipEl.play && clipEl.play().catch(function () {});
+  }
+  function showVideoMode(on) {
+    clipEl.classList.toggle('hidden', !on);
+    GG.setPaused(on);
+    $('mVideo').classList.toggle('on', on || GG.mode() === 'cinematic');
+    $('mOrbit').classList.toggle('on', !on && GG.mode() === 'orbit');
+  }
+  GG.onMode = function (m) { if (m === 'orbit') showVideoMode(false); $('mVideo').classList.toggle('on', m === 'cinematic'); $('mOrbit').classList.toggle('on', m === 'orbit'); };
+  $('mVideo').onclick = function () { if (clipOk && clipModel) showVideoMode(true); else GG.setMode('cinematic'); };
+  $('mOrbit').onclick = function () { showVideoMode(false); GG.setMode('orbit'); };
 
   // ---------------------------------------------------------------- 탭과 언어
   function setTab(tab) {
@@ -126,7 +149,10 @@
   function showStory(m) {
     S.story = m; S.lines = sentences(m.text); S.lineIdx = 0; S.storyDone = false;
     var place = placeById(m.placeId);
-    GG.show({ model: m.model || (place && place.model) || 'generic', name: place ? nm(place.name) : m.name, rain: !!m.rain, night: !!m.night, mode: 'cinematic', caption: S.lines[0] || '' });
+    var model = m.model || (place && place.model) || 'generic';
+    GG.show({ model: model, name: place ? nm(place.name) : m.name, rain: !!m.rain, night: !!m.night, mode: 'cinematic', caption: S.lines[0] || '' });
+    setClip(model, !!m.night);
+    showVideoMode(true);
     renderNow();
     if (S.tab !== 'pick') setTab('now');
     if (navigator.vibrate) navigator.vibrate(40);
@@ -381,7 +407,14 @@
   }
 
   function loadScenario(id) {
-    return fetch('/api/scenarios/' + id).then(function (r) { return r.json(); }).then(function (sc) { S.scenario = sc; renderAll(); });
+    return fetch('/api/scenarios/' + id).then(function (r) { return r.json(); }).then(function (sc) {
+      S.scenario = sc;
+      if (!S.story) {
+        var first = sc.places.filter(function (p) { return p.model; })[0];
+        if (first) GG.show({ model: first.model, name: '', caption: '', mode: 'cinematic' });
+      }
+      renderAll();
+    });
   }
 
   function renderAll() {

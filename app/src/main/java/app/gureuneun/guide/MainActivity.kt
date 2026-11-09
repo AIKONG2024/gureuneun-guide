@@ -38,6 +38,7 @@ class MainActivity : ComponentActivity() {
             mediaKeys = MediaKeys(applicationContext) { engine.onMediaCommand(it) }.also { engine.attachMedia(it) }
         }
         val scenarios = engine.scenarioList()
+        engine.companion.watchReachability()
 
         setContent {
             val ui by engine.ui.collectAsState()
@@ -93,7 +94,11 @@ class MainActivity : ComponentActivity() {
             "fast" -> engine.setDemoFast(intent.getIntExtra("n", 6))
             "follow" -> engine.setFollowGear(intent.getBooleanExtra("on", true))
             "next" -> engine.onMediaCommand(MediaKeys.Command.NEXT)
+            "prev" -> engine.onMediaCommand(MediaKeys.Command.PREVIOUS)
+            "pick" -> engine.answerPick(intent.getStringExtra("mode") ?: "destination")
+            "window" -> engine.answerWindow(intent.getBooleanExtra("open", true))
             "end" -> engine.endTrip()
+            "clear" -> engine.forgetSavedTrip()
             "home" -> engine.goHome()
         }
     }

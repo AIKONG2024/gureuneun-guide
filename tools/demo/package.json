@@ -1,0 +1,10 @@
+{
+  "name": "gureuneun-guide-demo-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "시연 영상을 자동으로 찍는 도구 (에뮬레이터, Virtual Console, 휴대폰 화면)",
+  "type": "module",
+  "dependencies": {
+    "playwright-core": "^1.56.0"
+  }
+}

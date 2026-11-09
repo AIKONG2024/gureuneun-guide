@@ -82,6 +82,8 @@ class VehicleBridge(private val context: Context, private val scope: CoroutineSc
     private var vehicle: Vehicle? = null
     private val main = Handler(Looper.getMainLooper())
     private var ambientAreas: List<SeatArea> = emptyList()
+    /** 차량 서비스가 준비되기 전에 들어온 조명 요청 (준비되면 바로 적용) */
+    private var pendingAmbient: Pair<Int, Int>? = null
     private var started = false
 
     private fun post(block: () -> Unit) {
@@ -217,6 +219,10 @@ class VehicleBridge(private val context: Context, private val scope: CoroutineSc
                 ambientAreas = areas
                 GLog.i("Vehicle", "실내 조명 색 영역 ${areas.size}곳")
                 post { state.update { it.copy(ambientAreas = areas.size) } }
+                pendingAmbient?.let { (c, b) ->
+                    pendingAmbient = null
+                    post { setAmbient(c, b) }
+                }
                 areas.firstOrNull()?.let { area -> watchAmbient(v, area) }
             }, { e -> fail("조명 색 영역 확인", e) })
         }.onFailure { fail("조명 색 영역 확인", it) }
@@ -286,7 +292,11 @@ class VehicleBridge(private val context: Context, private val scope: CoroutineSc
     /** 실내 조명 색(RGB)과 밝기(0~100)를 바꿈 */
     fun setAmbient(color: Int, brightness: Int) {
         val v = vehicle ?: return
-        val areas = ambientAreas.ifEmpty { listOf(SeatArea(SeatValue.ROW_1_LEFT)) }
+        if (ambientAreas.isEmpty()) {
+            pendingAmbient = color to brightness
+            return
+        }
+        val areas = ambientAreas
         areas.forEach { area ->
             runCatching {
                 v.getLight().setAmbientLightSwitch(area, LightSwitch.ON, { _, _ -> }, { e -> fail("조명 켜기", e) })

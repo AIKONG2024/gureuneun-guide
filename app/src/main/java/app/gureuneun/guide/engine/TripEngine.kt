@@ -120,8 +120,11 @@ class TripEngine(private val app: GuideApp) {
         // 시연 주행: 말하는 동안은 실제 속도, 쉬는 동안(길 안내 대기 포함)은 빨리 감기
         demo.storyPlaying = { player.speaking }
         player.onSentence = { item, index ->
+            val text = item.sentences.getOrNull(index) ?: ""
+            GLog.i("Speak", "[" + item.lang + "] " + text)
+            companion.send("say", JSONObject().put("text", text).put("lang", item.lang).put("kind", item.kind.name).put("placeId", item.placeId ?: ""))
             if (item.placeId != null) {
-                companion.send("line", JSONObject().put("placeId", item.placeId).put("index", index).put("text", item.sentences.getOrNull(index) ?: ""))
+                companion.send("line", JSONObject().put("placeId", item.placeId).put("index", index).put("text", text))
             }
         }
         observeVehicle()
@@ -424,7 +427,11 @@ class TripEngine(private val app: GuideApp) {
             sound.chime(rising = true)
             setAmbient(color, 90)
         } else {
-            val side = Geo.sideOf(p, heading, place.pos)
+            // 지나갈 때 가장 가까워지는 지점에서 어느 쪽에 보이는지로 판단 ("잠시 후 오른쪽에")
+            val side = polyline?.let { line ->
+                val (pt, hd) = line.at(line.project(place.pos))
+                if (Geo.distanceM(pt, place.pos) < 40) "ahead" else Geo.sideOf(pt, hd, place.pos)
+            } ?: Geo.sideOf(p, heading, place.pos)
             val word = sideWord(side)
             val announce = place.announce.pick(lang)
                 .replace("{Side}", word.replaceFirstChar { it.uppercase() })
@@ -737,7 +744,8 @@ class TripEngine(private val app: GuideApp) {
         val cur = player.current
         ui.update {
             it.copy(
-                nowPlace = cur?.placeId?.let { id -> scenario?.findPlace(id) } ?: if (cur == null) it.nowPlace else null,
+                // 안내 문구처럼 장소가 없는 항목이 나와도 마지막 명소 영상은 그대로 둠
+                nowPlace = cur?.placeId?.let { id -> scenario?.findPlace(id) } ?: it.nowPlace,
                 nowKind = cur?.kind ?: it.nowKind,
                 nowTitle = cur?.title ?: it.nowTitle,
                 nowText = cur?.text ?: it.nowText,
@@ -812,9 +820,16 @@ class TripEngine(private val app: GuideApp) {
     private fun clearTrip() = prefs.edit().remove("trip_scenario").remove("trip_entered").remove("trip_progress").remove("trip_join").apply()
 
     fun resumeTrip() {
+        if (prefs.getString("trip_scenario", null) == null) return
         val id = prefs.getString("trip_scenario", null) ?: return
         val l = prefs.getString("trip_lang", "ko") ?: "ko"
         ui.update { it.copy(lang = l) }
         startTrip(id, l, prefs.getString("trip_join", null), ui.value.demoMode, resume = true)
+    }
+
+    /** 이어서 가기 기록을 지움 (시연 녹화 전 초기화용) */
+    fun forgetSavedTrip() {
+        clearTrip()
+        ui.update { it.copy(resumable = false) }
     }
 }

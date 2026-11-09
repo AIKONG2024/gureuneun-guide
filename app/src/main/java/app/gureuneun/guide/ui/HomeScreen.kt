@@ -148,7 +148,7 @@ fun HomeScreen(
                 Status(t(lang, "내비게이션", "Navigation"), navi.connected)
                 Status(t(lang, "음성", "Voice") + if (speech == SpeechBridge.Engine.PLEOS) " (Pleos)" else "", speech != SpeechBridge.Engine.NONE)
                 Status(t(lang, "위치", "Location"), locationOk == true)
-                Status(t(lang, "그룹 서버", "Group server"), group.online || group.code != null, maybeOk = true)
+                Status(t(lang, "그룹 서버", "Group server"), group.online || group.reachable, maybeOk = true)
             }
         }
     }

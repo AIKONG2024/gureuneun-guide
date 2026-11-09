@@ -33,6 +33,7 @@ class CompanionClient(private val scope: CoroutineScope, private val prefs: Shar
     data class State(
         val baseUrl: String,
         val online: Boolean = false,
+        val reachable: Boolean = false,
         val code: String? = null,
         val joinUrl: String? = null,
         val publicBase: String? = null,
@@ -49,6 +50,7 @@ class CompanionClient(private val scope: CoroutineScope, private val prefs: Shar
         .pingInterval(15, TimeUnit.SECONDS)
         .build()
     private var socket: WebSocket? = null
+    private var watching = false
     private var reconnectJob: Job? = null
     private var carName: String = "1호차"
     private val json = "application/json; charset=utf-8".toMediaType()
@@ -148,5 +150,21 @@ class CompanionClient(private val scope: CoroutineScope, private val prefs: Shar
         state.update { it.copy(online = false, code = null, joinUrl = null, phones = 0, cars = emptyList()) }
     }
 
-    suspend fun ping(): Boolean = call("GET", "/api/info") != null
+    suspend fun ping(): Boolean {
+        val ok = call("GET", "/api/info") != null
+        state.update { it.copy(reachable = ok) }
+        return ok
+    }
+
+    /** 처음 화면에서 그룹 서버가 켜져 있는지 주기적으로 확인 */
+    fun watchReachability() {
+        if (watching) return
+        watching = true
+        scope.launch {
+            while (true) {
+                if (state.value.code == null) ping()
+                delay(8000)
+            }
+        }
+    }
 }

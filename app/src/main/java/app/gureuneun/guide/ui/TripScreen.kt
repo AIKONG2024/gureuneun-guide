@@ -166,13 +166,11 @@ private fun NowCard(ui: TripEngine.Ui, parkedView: Boolean, accent: Color, engin
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (parkedView && place?.model != null) {
                 Column {
-                    PlaceViewer(
+                    PlaceClip(
                         model = place.model,
                         name = place.name.pick(lang),
-                        caption = ui.nowSentence,
-                        lang = lang,
-                        rain = ui.rain,
                         night = ui.night,
+                        accent = accent,
                         modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(22.dp)),
                     )
                     Spacer(Modifier.height(12.dp))

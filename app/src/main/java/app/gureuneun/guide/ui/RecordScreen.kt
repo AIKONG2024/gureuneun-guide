@@ -94,7 +94,7 @@ fun RecordScreen(ui: TripEngine.Ui, recorder: TripRecorder, group: CompanionClie
 
 private fun describe(e: TripRecorder.Event, lang: String): String = when (e.type) {
     "depart" -> t(lang, "출발", "Departed")
-    "pass" -> t(lang, "${e.title} 지남", "Passed ${e.title}")
+    "pass" -> if (e.placeId == null || e.placeId in CITY_IDS) t(lang, "${e.title}에 들어섬", "Arrived in ${e.title}") else t(lang, "${e.title} 지남", "Passed ${e.title}")
     "story" -> t(lang, "${e.title} 이야기 들음 (${lenWord(e.detail, lang)})", "Heard about ${e.title} (${lenWord(e.detail, lang)})")
     "pick" -> t(lang, "${e.detail}님이 고른 ${e.title} 안내", "Navigated to ${e.title}, picked by ${e.detail}")
     "share" -> t(lang, "${e.title} 다른 차에 보냄", "Sent ${e.title} to the other cars")
@@ -105,6 +105,8 @@ private fun describe(e: TripRecorder.Event, lang: String): String = when (e.type
     "end" -> t(lang, "여행 끝", "Trip ended")
     else -> e.title
 }
+
+private val CITY_IDS = setOf("gyeongju", "jejucity", "yeouido")
 
 private fun lenWord(d: String, lang: String) = when (d) {
     "SHORT" -> t(lang, "짧게", "short")

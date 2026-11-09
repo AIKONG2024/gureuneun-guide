@@ -18,3 +18,7 @@ keystore.properties
 companion/node_modules/
 companion/data/
 companion/.env
+
+# 시연 녹화 도구
+tools/demo/node_modules/
+tools/demo/out/

@@ -16,6 +16,8 @@ const WEB = path.join(HERE, 'web');
 const SCENARIOS = path.join(HERE, '..', 'app', 'src', 'main', 'assets', 'scenarios');
 const DATA = path.join(HERE, 'data');
 const FONT = process.env.FONT_FILE || ['/System/Library/Fonts/AppleSDGothicNeo.ttc', '/usr/share/fonts/truetype/nanum/NanumGothic.ttf'].find(f => fs.existsSync(f));
+let HAS_DRAWTEXT = false;
+let HAS_PIL = false;
 
 function lanIp() {
   for (const list of Object.values(os.networkInterfaces())) {
@@ -40,7 +42,7 @@ function makeGroup(code, scenarioId, lang) {
   const g = {
     code, scenarioId, lang, createdAt: Date.now(),
     cars: new Map(), phones: new Set(),
-    story: null, line: null, passes: [], picks: [], acks: [], reports: [],
+    story: null, line: null, passes: [], picks: [], acks: [], reports: [], said: [],
     record: null, photos: [], highlight: null, ended: false,
   };
   groups.set(code, g);
@@ -58,11 +60,38 @@ function summary(g) {
   };
 }
 
+// 서버를 다시 켜도 여행 그룹이 이어지도록 디스크에 저장해 둔다
+const saveTimers = new Map();
+function persist(g) {
+  clearTimeout(saveTimers.get(g.code));
+  saveTimers.set(g.code, setTimeout(() => {
+    const keep = { code: g.code, scenarioId: g.scenarioId, lang: g.lang, createdAt: g.createdAt, story: g.story, passes: g.passes, picks: g.picks, acks: g.acks, reports: g.reports, record: g.record, photos: g.photos, highlight: g.highlight, ended: g.ended };
+    try { fs.writeFileSync(path.join(DATA, g.code, 'group.json'), JSON.stringify(keep)); } catch (e) { console.warn('[persist]', e.message); }
+  }, 300));
+}
+
+function restoreGroups() {
+  if (!fs.existsSync(DATA)) return;
+  for (const code of fs.readdirSync(DATA)) {
+    const f = path.join(DATA, code, 'group.json');
+    if (!/^\d{4}$/.test(code) || !fs.existsSync(f)) continue;
+    try {
+      const s = JSON.parse(fs.readFileSync(f, 'utf8'));
+      const g = makeGroup(code, s.scenarioId, s.lang);
+      Object.assign(g, s, { cars: new Map(), phones: new Set() });
+      if (g.highlight && g.highlight.status === 'processing') g.highlight = null;
+    } catch (e) { console.warn('[restore]', code, e.message); }
+  }
+  if (groups.size) console.log('[group] 이전 그룹 ' + groups.size + '개를 불러왔어요');
+}
+restoreGroups();
+
 function send(ws, obj) {
   try { if (ws.readyState === 1) ws.send(JSON.stringify(obj)); } catch {}
 }
 
 function broadcast(g, obj, { cars = true, phones = true, except = null } = {}) {
+  persist(g);
   if (cars) for (const c of g.cars.values()) if (c.ws !== except) send(c.ws, obj);
   if (phones) for (const p of g.phones) if (p !== except) send(p, obj);
 }
@@ -117,6 +146,34 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST' }); return res.end(); }
 
     if (p === '/api/info') return json(res, 200, { publicBase: PUBLIC_BASE, groups: groups.size, font: !!FONT });
+
+    // 개발용: 3D 장면 프레임을 받아 MP4 클립으로 만든다 (web/clips 에 저장되어 차 앱과 휴대폰이 같이 씀)
+    if (p === '/api/render/start' && req.method === 'POST') {
+      const body = await readJson(req);
+      const dir = path.join(DATA, 'render', String(body.name).replace(/[^\w]/g, ''));
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.mkdirSync(dir, { recursive: true });
+      return json(res, 200, { ok: true });
+    }
+    if (p === '/api/render/frames' && req.method === 'POST') {
+      const body = await readJson(req);
+      const dir = path.join(DATA, 'render', String(body.name).replace(/[^\w]/g, ''));
+      body.frames.forEach((d, k) => {
+        const b64 = String(d).replace(/^data:image\/jpeg;base64,/, '');
+        fs.writeFileSync(path.join(dir, String(body.start + k).padStart(5, '0') + '.jpg'), Buffer.from(b64, 'base64'));
+      });
+      return json(res, 200, { ok: true });
+    }
+    if (p === '/api/render/done' && req.method === 'POST') {
+      const body = await readJson(req);
+      const name = String(body.name).replace(/[^\w]/g, '');
+      const dir = path.join(DATA, 'render', name);
+      fs.mkdirSync(path.join(WEB, 'clips'), { recursive: true });
+      const out = path.join(WEB, 'clips', name + '.mp4');
+      await run('ffmpeg', ['-y', '-framerate', String(body.fps || 30), '-i', path.join(dir, '%05d.jpg'), '-c:v', 'libx264', '-preset', 'slow', '-crf', '26', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', out]);
+      fs.rmSync(dir, { recursive: true, force: true });
+      return json(res, 200, { ok: true, file: '/clips/' + name + '.mp4', bytes: fs.statSync(out).size });
+    }
 
     if (p === '/api/groups' && req.method === 'POST') {
       const body = await readJson(req);
@@ -174,6 +231,8 @@ const server = http.createServer(async (req, res) => {
         broadcast(g, Object.assign({ type: 'report' }, r), { phones: false });
         return json(res, 200, { ok: true });
       }
+      // 차가 실제로 읽은 문장과 시각 (시연 영상에 음성을 다시 입힐 때 씀)
+      if (sub === '/said' && req.method === 'GET') return json(res, 200, g.said || []);
       return json(res, 404, { error: 'unknown' });
     }
 
@@ -236,6 +295,7 @@ wss.on('connection', (ws, req) => {
       else if (type === 'trip') { g.scenarioId = msg.scenarioId || g.scenarioId; g.lang = msg.lang || g.lang; broadcast(g, msg, { cars: false }); }
       else if (type === 'pick') { msg.id = msg.id || crypto.randomUUID().slice(0, 8); g.picks.push(msg); broadcast(g, msg, { except: ws }); }
       else if (type === 'pick_ack') { g.acks.push(msg); broadcast(g, msg, { except: ws }); }
+      else if (type === 'say') { (g.said = g.said || []).push({ at: Date.now(), text: msg.text, lang: msg.lang, kind: msg.kind, car: msg.car }); }
       else if (type === 'window' || type === 'trip_end') broadcast(g, msg, { cars: false });
     } else {
       if (type === 'pick') {
@@ -290,11 +350,27 @@ async function makeHighlight(g, file, name, lastModified) {
   const args = ['-y', '-i', file];
   const parts = [];
   const esc = s => s.replace(/\\/g, '\\\\').replace(/:/g, '\\:').replace(/'/g, "\u2019");
+  // 자막: ffmpeg drawtext 가 있으면 그대로 쓰고, 없으면 Pillow 로 만든 투명 PNG 를 겹친다
+  const captions = [];
+  if (!HAS_DRAWTEXT && HAS_PIL && FONT) {
+    for (let i = 0; i < clips.length; i++) {
+      if (!clips[i].title) continue;
+      const png = path.join(DATA, g.code, 'cap-' + i + '.png');
+      try { await run('python3', [path.join(HERE, 'tools', 'caption_png.py'), clips[i].title, FONT, png]); captions[i] = png; } catch (e) { console.warn('[caption]', e.message); }
+    }
+    captions.forEach(p => { if (p) args.push('-loop', '1', '-i', p); });
+  }
+  let capInput = 1;
   clips.forEach((c, i) => {
     const s = Math.max(0, Math.min(duration - seg, c.t - seg / 2));
     let f = '[0:v]trim=start=' + s.toFixed(2) + ':duration=' + seg.toFixed(2) + ',setpts=PTS-STARTPTS,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30';
-    if (FONT && c.title) f += ",drawtext=fontfile='" + FONT + "':text='" + esc(c.title) + "':x=48:y=h-110:fontsize=54:fontcolor=white:box=1:boxcolor=black@0.45:boxborderw=18";
-    parts.push(f + '[v' + i + ']');
+    if (HAS_DRAWTEXT && FONT && c.title) {
+      f += ",drawtext=fontfile='" + FONT + "':text='" + esc(c.title) + "':x=48:y=h-110:fontsize=54:fontcolor=white:box=1:boxcolor=black@0.45:boxborderw=18";
+      parts.push(f + '[v' + i + ']');
+    } else if (captions[i]) {
+      parts.push(f + '[b' + i + ']');
+      parts.push('[b' + i + '][' + (capInput++) + ':v]overlay=0:0:shortest=1[v' + i + ']');
+    } else parts.push(f + '[v' + i + ']');
   });
   const filter = parts.join(';') + ';' + clips.map((_, i) => '[v' + i + ']').join('') + 'concat=n=' + clips.length + ':v=1:a=0[out]';
   args.push('-filter_complex', filter, '-map', '[out]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out);
@@ -307,3 +383,7 @@ async function makeHighlight(g, file, name, lastModified) {
 server.listen(PORT, '0.0.0.0', () => {
   console.log('구르는 가이드 그룹 서버: ' + PUBLIC_BASE + ' (에뮬레이터에서는 http://10.0.2.2:' + PORT + ')');
 });
+
+// ffmpeg 자막 기능 확인
+run('ffmpeg', ['-hide_banner', '-filters']).then(out => { HAS_DRAWTEXT = /\bdrawtext\b/.test(out); }).catch(() => console.warn('ffmpeg 가 없어 하이라이트 영상을 만들 수 없어요'));
+run('python3', ['-c', 'import PIL']).then(() => { HAS_PIL = true; }).catch(() => {});
