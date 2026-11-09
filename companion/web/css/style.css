@@ -80,3 +80,26 @@ input[type=text] { width: 100%; padding: 12px; border-radius: 12px; border: 1px 
 .landing { max-width: 520px; margin: 0 auto; padding: 40px 20px; text-align: center; }
 .landing h1 { font-size: 34px; margin: 10px 0; }
 .landing input { text-align: center; font-size: 30px; letter-spacing: 10px; margin: 20px 0; }
+
+/* 퀴즈, 보물 상자, 물어본 것, 이어 듣기 */
+.quiz { border: 2px solid rgba(255,201,77,.55); background: linear-gradient(180deg, rgba(255,201,77,.10), var(--surface) 60%); }
+.quiz .label { color: #ffc94d; font-weight: 900; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+.quiz .q { font-size: 22px; font-weight: 900; line-height: 1.4; margin: 6px 0 12px; }
+.quiz .choices button { display: block; width: 100%; text-align: left; padding: 15px 16px; border-radius: 16px; background: var(--surface2); margin-bottom: 8px; font-weight: 800; font-size: 17px; }
+.quiz .choices button.picked { outline: 2px solid var(--muted); }
+.quiz .choices button.right { background: rgba(74,222,128,.22); outline: 2px solid var(--good); }
+.quiz .choices button.wrong { background: rgba(248,113,113,.18); outline: 2px solid #f87171; }
+.quiz .result { font-weight: 900; font-size: 18px; margin-top: 6px; }
+.stars { color: #ffc94d; font-size: 22px; letter-spacing: 2px; }
+.stars .off { color: var(--line); }
+.treasure { text-align: center; border: 2px solid #ffc94d; background: radial-gradient(circle at 50% 0%, rgba(255,201,77,.28), var(--surface) 70%); animation: glow 1.6s ease-in-out infinite alternate; }
+.treasure .big { font-size: 26px; font-weight: 900; margin: 6px 0; }
+@keyframes glow { from { box-shadow: 0 0 0 rgba(255,201,77,0); } to { box-shadow: 0 0 28px rgba(255,201,77,.45); } }
+.qa li { list-style: none; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.qa ul { margin: 0; padding: 0; }
+.qa .q { font-weight: 800; }
+.qa .a { color: var(--muted); font-size: 15px; line-height: 1.55; margin-top: 4px; }
+.qa .t { color: var(--accent); font-size: 12px; font-weight: 800; }
+.handoff { border: 2px solid rgba(127,227,255,.45); }
+.handoff .text { font-size: 16px; line-height: 1.65; color: var(--muted); margin: 8px 0 12px; max-height: 9.9em; overflow: hidden; }
+.kidline { font-size: 16px; line-height: 1.6; }

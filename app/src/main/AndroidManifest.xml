@@ -10,14 +10,23 @@
 
     <!-- Pleos Connect SDK 권한 -->
     <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
+    <uses-permission android:name="pleos.car.permission.STT_SERVICE" />
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH" />
+    <!-- 순정 내비 화면 띄우기 (주변 충전소, 휴게소 검색) -->
+    <uses-permission android:name="pleos.car.permission.NAVI_CUSTOM_MAP" />
     <uses-permission android:name="pleos.car.permission.FUSED_LOCATION" />
     <uses-permission android:name="pleos.car.permission.CAR_LIGHTS" />
     <uses-permission android:name="pleos.car.permission.CONTROL_CAR_LIGHTS" />
     <uses-permission android:name="pleos.car.permission.CAR_WINDOWS" />
     <uses-permission android:name="pleos.car.permission.CONTROL_CAR_WINDOWS" />
     <uses-permission android:name="pleos.car.permission.CAR_SEATS" />
+    <uses-permission android:name="pleos.car.permission.CONTROL_CAR_SEATS" />
+    <uses-permission android:name="pleos.car.permission.CAR_CLIMATE" />
+    <uses-permission android:name="pleos.car.permission.CONTROL_CAR_CLIMATE" />
+    <uses-permission android:name="pleos.car.permission.CAR_DOORS" />
+    <uses-permission android:name="pleos.car.permission.CONTROL_CAR_DOORS" />
+    <uses-permission android:name="pleos.car.permission.CAR_ENERGY" />
     <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
     <uses-permission android:name="pleos.car.permission.CAR_INFO" />
     <uses-permission android:name="pleos.car.permission.CAR_SAFETY" />

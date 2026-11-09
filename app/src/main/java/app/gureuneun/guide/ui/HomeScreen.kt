@@ -53,6 +53,7 @@ fun HomeScreen(
     speech: SpeechBridge.Engine,
     locationOk: Boolean?,
     group: CompanionClient.State,
+    listenReady: Boolean = false,
     onStart: (scenarioId: String, joinCode: String?) -> Unit,
     onResume: () -> Unit,
     onLang: (String) -> Unit,
@@ -147,6 +148,7 @@ fun HomeScreen(
                 Status(t(lang, "차량", "Vehicle"), vehicle.connected)
                 Status(t(lang, "내비게이션", "Navigation"), navi.connected)
                 Status(t(lang, "음성", "Voice") + if (speech == SpeechBridge.Engine.PLEOS) " (Pleos)" else "", speech != SpeechBridge.Engine.NONE)
+                Status(t(lang, "말로 묻기", "Voice questions"), listenReady)
                 Status(t(lang, "위치", "Location"), locationOk == true)
                 Status(t(lang, "그룹 서버", "Group server"), group.online || group.reachable, maybeOk = true)
             }

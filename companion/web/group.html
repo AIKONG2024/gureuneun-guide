@@ -17,6 +17,17 @@
   </div>
 
   <section id="tab-now">
+    <div class="card treasure hidden" id="treasureCard">
+      <div class="stars" id="treasureStars"></div>
+      <div class="big" id="treasureTitle"></div>
+      <div class="small" id="treasureText"></div>
+    </div>
+    <div class="card quiz hidden" id="quizCard">
+      <div class="label"><span id="quizLabel"></span><span class="stars" id="quizStars" style="margin-left:auto"></span></div>
+      <div class="q" id="quizQ"></div>
+      <div class="choices" id="quizChoices"></div>
+      <div class="result" id="quizResult"></div>
+    </div>
     <div class="card now">
       <div class="label" id="nowLabel"></div>
       <div class="name" id="nowName"></div>
@@ -27,6 +38,19 @@
         <span class="small" id="nowSmall"></span>
         <button class="btn" id="report" style="margin-left:auto"></button>
       </div>
+    </div>
+    <div class="card handoff hidden" id="handoffCard">
+      <h2 id="handoffTitle"></h2>
+      <div class="text" id="handoffText"></div>
+      <button class="btn primary block" id="handoffBtn"></button>
+    </div>
+    <div class="card hidden" id="kidCard">
+      <h2 id="kidTitle"></h2>
+      <div class="kidline" id="kidText"></div>
+    </div>
+    <div class="card qa hidden" id="qaCard">
+      <h2 id="qaTitle"></h2>
+      <ul id="qaList"></ul>
     </div>
     <div class="card">
       <h2 id="meTitle"></h2>

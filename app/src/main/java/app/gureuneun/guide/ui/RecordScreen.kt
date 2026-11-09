@@ -42,6 +42,10 @@ fun RecordScreen(ui: TripEngine.Ui, recorder: TripRecorder, group: CompanionClie
     val minutes = ((if (recorder.endedAt > 0) recorder.endedAt else System.currentTimeMillis()) - recorder.startedAt) / 60000
     val stories = recorder.events.count { it.type == "story" }
     val passed = recorder.events.filter { it.type == "pass" && sc.findPlace(it.placeId)?.kind?.name != "CITY" }
+    val asked = recorder.events.count { it.type == "ask" }
+    val stars = recorder.events.filter { it.type == "quiz_ok" }.map { it.placeId }.distinct().size
+    val quizzes = recorder.events.count { it.type == "quiz" }
+    val treasure = recorder.events.any { it.type == "treasure" }
 
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF1A1F2B), G.bg)))) {
         Row(Modifier.fillMaxSize().padding(36.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
@@ -55,9 +59,16 @@ fun RecordScreen(ui: TripEngine.Ui, recorder: TripRecorder, group: CompanionClie
                     Stat(t(lang, "지난 명소", "Places"), t(lang, "${passed.size}곳", "${passed.size}"), Modifier.weight(1f))
                     Stat(t(lang, "들은 이야기", "Stories"), t(lang, "${stories}편", "$stories"), Modifier.weight(1f))
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Stat(t(lang, "말로 물어본 것", "Questions"), t(lang, "${asked}번", "$asked"), Modifier.weight(1f))
+                    if (quizzes > 0 || sc.treasureStars > 0) {
+                        Stat(t(lang, "퀴즈 별", "Quiz stars"), "$stars/${maxOf(quizzes, sc.quiz.size)}", Modifier.weight(1f))
+                        Stat(t(lang, "보물 상자", "Treasure"), if (treasure) t(lang, "열었어요", "Opened") else t(lang, "다음에", "Next time"), Modifier.weight(1f))
+                    }
+                }
                 Panel(padding = 24.dp) {
                     SectionTitle(t(lang, "오늘 있었던 일", "What happened today"))
-                    recorder.events.filter { it.type in setOf("depart", "pass", "story", "pick", "share", "window", "rain", "night", "arrive", "end") }.forEach { e ->
+                    recorder.events.filter { it.type in SHOWN }.forEach { e ->
                         Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(fmt.format(Date(e.time)), color = G.muted, fontSize = 20.sp, modifier = Modifier.width(90.dp))
                             Text(describe(e, lang), color = G.text, fontSize = 22.sp)
@@ -103,8 +114,26 @@ private fun describe(e: TripRecorder.Event, lang: String): String = when (e.type
     "night" -> t(lang, "밤이 되어 밤 이야기로 바꿈", "Switched to night stories")
     "arrive" -> t(lang, "목적지 도착", "Arrived")
     "end" -> t(lang, "여행 끝", "Trip ended")
+    "qa" -> t(lang, "“${e.detail}” 물어봐서 ${e.title} 알려 줌", "Asked “${e.detail}”: ${e.title}")
+    "quiz" -> t(lang, "${e.title} 퀴즈를 휴대폰으로 보냄", "Sent the ${e.title} quiz to phones")
+    "quiz_ok" -> if (e.detail.isBlank()) t(lang, "${e.title} 퀴즈 정답, 별 하나", "Got the ${e.title} quiz right, one star") else t(lang, "${e.detail} 님이 ${e.title} 퀴즈를 맞혀 별 하나", "${e.detail} got the ${e.title} quiz right")
+    "treasure" -> t(lang, "별 ${e.detail}개로 보물 상자 열림", "Opened the treasure box with ${e.detail} stars")
+    "kid" -> t(lang, "${e.title}에서 뒷자리 친구들 이야기", "A story for the back seat at ${e.title}")
+    "air" -> t(lang, "${e.title}에서 바깥 공기 들임", "Let in the air at ${e.title}")
+    "jam" -> t(lang, "길이 막혀 긴 이야기로 바꿈", "Traffic, switched to longer stories")
+    "rest" -> t(lang, "오래 달려서 쉬어 가자고 함", "Suggested a break")
+    "rest_nav" -> t(lang, "내비게이션에 가까운 ${e.title} 띄움", "Showed nearby ${e.title} in navigation")
+    "charge" -> t(lang, "배터리가 빠듯해 충전하자고 함", "Suggested charging")
+    "charge_nav" -> t(lang, "내비게이션에 가까운 충전소 띄움", "Showed chargers nearby in navigation")
+    "sunroof" -> t(lang, "${e.title}에서 선루프 열고 하늘 봄", "Opened the sunroof at ${e.title}")
+    "climate" -> t(lang, "말로 온도를 ${e.detail}도로 맞춤", "Set the temperature to ${e.detail} by voice")
     else -> e.title
 }
+
+private val SHOWN = setOf(
+    "depart", "pass", "story", "pick", "share", "window", "rain", "night", "arrive", "end",
+    "qa", "quiz", "quiz_ok", "treasure", "kid", "air", "jam", "rest", "rest_nav", "charge", "charge_nav", "sunroof", "climate",
+)
 
 private val CITY_IDS = setOf("gyeongju", "jejucity", "yeouido")
 

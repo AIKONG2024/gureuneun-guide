@@ -83,6 +83,7 @@ dependencies {
     implementation("ai.pleos.playground:NaviHelper:3.0.5")
     implementation("ai.pleos.playground:FusedLocation:1.1.3")
     implementation("ai.pleos.playground:TextToSpeech:3.3.1")
+    implementation("ai.pleos.playground:SpeechToText:3.3.1")
 
     // UI
     implementation(platform("androidx.compose:compose-bom:2024.09.03"))
@@ -97,4 +98,8 @@ dependencies {
     // QR 생성, 동반 서버 연결
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // 단위 시험 (질문 알아듣기, 조사 처리, 시나리오 자료 점검)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

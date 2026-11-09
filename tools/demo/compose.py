@@ -31,13 +31,14 @@ SUB = (150, 160, 182)
 ACCENT = (255, 179, 71)
 REPO = 'github.com/AIKONG2024/gureuneun-guide'
 
-ORDER = ['gyeongju1', 'gyeongju2', 'jeju', 'record', 'seoul']
+ORDER = ['gyeongju1', 'gyeongju2', 'jeju', 'record', 'seoul', 'care']
 TITLES = {
     'gyeongju1': '장면 1. 경주, 가족 여행',
     'gyeongju2': '장면 1. 경주, 가족 여행',
     'jeju': '장면 2. 제주, 친구들의 렌터카 두 대',
     'record': '장면 2. 여행이 끝나면 남는 기록',
     'seoul': '장면 3. 서울, 외국인 손님을 태운 택시',
+    'care': '장면 4. 먼 길에서 차가 먼저 챙기는 것',
 }
 
 
@@ -185,9 +186,30 @@ def encode_scene(sc, tmp, out):
         state['n'] += 1
 
     audio = sc.get('audioFile')
+    # 말로 묻기 장면의 질문 목소리 (에뮬레이터에는 마이크가 없어 음성 인식 SDK 에 넣은 녹음을 영상 소리에도 겹침)
+    overlays = []
+    for o in sc.get('overlays', []):
+        if os.path.exists(o['file']):
+            overlays.append(o)
+        else:
+            print('  질문 목소리 파일 없음:', o['file'])
     if audio and os.path.exists(audio):
         args.extend(['-i', audio])
-        fc.append('[%d:a]loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000[aout]' % state['n'])
+        base_idx = state['n']
+        state['n'] += 1
+        if overlays:
+            fc.append('[%d:a]aresample=48000,aformat=channel_layouts=stereo[abase]' % base_idx)
+            labels = ['[abase]']
+            for k, o in enumerate(overlays):
+                args.extend(['-i', o['file']])
+                ms = max(0, int(o['at']))
+                fc.append('[%d:a]aresample=48000,aformat=channel_layouts=stereo,volume=%.2f,adelay=%d|%d[aov%d]' % (state['n'], o.get('gain', 1.0), ms, ms, k))
+                labels.append('[aov%d]' % k)
+                state['n'] += 1
+            fc.append('%samix=inputs=%d:normalize=0:duration=first[amix]' % (''.join(labels), len(labels)))
+            fc.append('[amix]loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000[aout]')
+        else:
+            fc.append('[%d:a]loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000[aout]' % base_idx)
     else:
         args.extend(['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo'])
         fc.append('[%d:a]anull[aout]' % state['n'])
@@ -244,7 +266,7 @@ def main():
         ('구르는 가이드', 72, BOLD, (255, 255, 255)),
         ('소스 코드와 APK   ' + REPO, 34, MED, ACCENT),
         ('', 16, REG, SUB),
-        ('사용한 Pleos SDK   Vehicle, NaviHelper, FusedLocation, TextToSpeech', 26, REG, SUB),
+        ('사용한 Pleos SDK   Vehicle, NaviHelper, FusedLocation, TextToSpeech, SpeechToText', 26, REG, SUB),
         ('현대자동차그룹 차량용 앱 개발 공모전 출품작', 26, REG, SUB),
     ])
     intro, outro = os.path.join(work, 'intro.mp4'), os.path.join(work, 'outro.mp4')
@@ -258,7 +280,7 @@ def main():
             continue
         mp4 = os.path.join(work, name + '.mp4')
         # 그 장면의 녹화 파일이 장면 영상보다 새로우면 다시 만듦 (다시 녹화한 장면만)
-        inputs = [sc.get(k) for k in ('emuFile', 'phoneFile', 'vcFile', 'audioFile')]
+        inputs = [sc.get(k) for k in ('emuFile', 'phoneFile', 'vcFile', 'audioFile')] + [o.get('file') for o in sc.get('overlays', [])]
         newest = max([os.path.getmtime(p) for p in inputs if p and os.path.exists(p)] + [0])
         if force or not os.path.exists(mp4) or os.path.getmtime(mp4) < newest:
             print('장면 합치기', name, '%.0f초' % ((sc['end'] - sc['start']) / 1000.0))

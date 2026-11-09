@@ -19,7 +19,8 @@ class StoryPlayer(private val speech: SpeechBridge, private val changed: () -> U
     /** 문장을 읽기 시작할 때마다 불림 (휴대폰 자막을 맞추는 데 씀) */
     var onSentence: ((Item, Int) -> Unit)? = null
 
-    enum class Kind { SYSTEM, ANNOUNCE, STORY }
+    /** SYSTEM 안내, ANNOUNCE "잠시 후 오른쪽에", STORY 명소 이야기, ANSWER 질문에 대한 답, KID 뒷자리 아이 이야기 */
+    enum class Kind { SYSTEM, ANNOUNCE, STORY, ANSWER, KID }
 
     data class Item(
         val key: String,
@@ -53,13 +54,14 @@ class StoryPlayer(private val speech: SpeechBridge, private val changed: () -> U
     private var sentenceStartedAt = 0L
     private var cutsAtIndex = 0
     private var cutAfterSentence = false
-    private var interjection: Item? = null
+    // 끼워 말할 짧은 알림. 여러 개가 겹치면(퀴즈 정답과 질문의 답이 같이 오면) 차례로 모두 말함
+    private val interjections = ArrayDeque<Item>()
     private var interjecting = false
     private var resumeTo: Pair<Item, Int>? = null
 
     val holdReasons: Set<String> get() = holds
     val speaking: Boolean get() = speakingNow
-    val busy: Boolean get() = current != null || queue.isNotEmpty() || interjection != null
+    val busy: Boolean get() = current != null || queue.isNotEmpty() || interjections.isNotEmpty()
     val pending: List<Item> get() = queue.toList()
 
     fun enqueue(item: Item) {
@@ -78,7 +80,7 @@ class StoryPlayer(private val speech: SpeechBridge, private val changed: () -> U
             enqueueFront(item)
             return
         }
-        interjection = item
+        interjections.addLast(item)
         pump()
     }
 
@@ -138,7 +140,7 @@ class StoryPlayer(private val speech: SpeechBridge, private val changed: () -> U
         index = 0
         cutsAtIndex = 0
         cutAfterSentence = false
-        interjection = null
+        interjections.clear()
         interjecting = false
         resumeTo = null
         changed()
@@ -170,9 +172,10 @@ class StoryPlayer(private val speech: SpeechBridge, private val changed: () -> U
 
     private fun pump() {
         if (speakingNow || holds.isNotEmpty()) return
-        val inter = interjection
-        if (inter != null && !interjecting) {
-            interjection = null
+        // 끼워 말할 차례가 오기 전에 쓸모없어진 알림(이미 답한 질문 등)은 버림
+        while (!interjecting && interjections.isNotEmpty() && interjections.first().stale?.invoke() == true) interjections.removeFirst()
+        if (interjections.isNotEmpty() && !interjecting) {
+            val inter = interjections.removeFirst()
             val cur = current
             if (cur != null && index < cur.sentences.size) resumeTo = cur to index
             else cur?.let { lastFinished = it; it.onDone?.invoke(true) }
@@ -232,11 +235,19 @@ class StoryPlayer(private val speech: SpeechBridge, private val changed: () -> U
         cutAfterSentence = false
         if (interjecting) {
             interjecting = false
-            resumeTo?.let { (item, at) ->
-                current = item
-                index = at
+            val next = interjections.removeFirstOrNull()
+            if (next != null) {
+                // 끼워 말할 것이 더 있으면 하던 이야기로 돌아가기 전에 이어서 말함
+                current = next
+                interjecting = true
+                next.onStart?.invoke()
+            } else {
+                resumeTo?.let { (item, at) ->
+                    current = item
+                    index = at
+                }
+                resumeTo = null
             }
-            resumeTo = null
         } else if (cur != null) {
             lastFinished = cur
             cur.onDone?.invoke(completed)

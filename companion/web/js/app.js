@@ -1,13 +1,18 @@
 /* 구르는 가이드 동승자 그룹 페이지
  * 앱 설치 없이 QR로 들어와, 차가 이야기를 시작하면 같은 순간 영상과 3D 모형을 보여 준다.
  * 지도에서 고른 장소는 그룹의 모든 차로 보내고, 여행이 끝나면 지나온 길과 사진, 하이라이트 영상을 모은다.
+ * 차가 내는 퀴즈를 풀어 별을 모으고(별을 다 모으면 차가 글로브 박스 보물 상자를 열어 줌),
+ * 차에 말로 물어본 것과 답을 같이 보고, 차를 세우면 하던 이야기를 휴대폰에서 이어 듣는다.
  */
 (function () {
   'use strict';
   var code = (location.pathname.match(/\/g\/(\d{4})/) || [])[1];
   var startTab = /\/record\/?$/.test(location.pathname) ? 'record' : 'now';
-  var S = { lang: localStorage.getItem('gg_lang'), group: null, scenario: null, story: null, lines: [], lineIdx: -1, storyDone: false, passes: [], picks: [], acks: [], record: null, photos: [], highlight: null, cars: [], phones: 0, selected: null, online: false, tab: startTab };
+  var S = { lang: localStorage.getItem('gg_lang'), group: null, scenario: null, story: null, lines: [], lineIdx: -1, storyDone: false, passes: [], picks: [], acks: [], record: null, photos: [], highlight: null, cars: [], phones: 0, selected: null, online: false, tab: startTab,
+    quizzes: [], answers: [], scores: {}, qa: [], handoff: null, treasure: null, stars: null, kid: null };
   var me = localStorage.getItem('gg_me') || '';
+  // 휴대폰마다 한 번만 답하도록 구분하는 값 (이름이 같아도 따로 셈)
+  var pid = localStorage.getItem('gg_pid') || (function () { var v = 'p' + Math.random().toString(36).slice(2, 10); localStorage.setItem('gg_pid', v); return v; })();
   function $(id) { return document.getElementById(id); }
 
   var TXT = {
@@ -23,7 +28,12 @@
       byOrder: '촬영 시각이 기록과 맞지 않아 지나온 순서대로 나눴어요', uploading: '올리는 중', joined: '여행 그룹에 들어왔어요', tripEnd: '오늘 여행이 끝났어요. 기록 탭에서 모아 볼 수 있어요',
       window: '창문이 조금 내려갔어요. 바깥 소리를 들어 보세요', reportAsk: '어떤 점이 틀렸나요?', reported: '신고했어요. 고맙습니다',
       sentFrom: '에서 보낸 장소', summary: '{km}km를 달려 명소 {n}곳을 지났어요', noRecord: '여행이 끝나면 지나온 길이 여기에 그려져요',
-      kind: { cafe: '카페', parking: '주차장', landmark: '명소', sea: '바다', city: '도시', forest: '숲', place: '장소' }, cars: '대', phones: '명'
+      kind: { cafe: '카페', parking: '주차장', landmark: '명소', sea: '바다', city: '도시', forest: '숲', place: '장소' }, cars: '대', phones: '명',
+      quiz: '{name} 퀴즈', newQuiz: '새 퀴즈가 왔어요', right: '정답이에요! 별 하나 모았어요', wrong: '아쉬워요. 정답은 "{a}"', gotIt: '{by} 님이 맞혔어요',
+      treasureOpen: '보물 상자가 열렸어요!', treasureOpenText: '조수석 앞 글로브 박스를 열어 보세요', treasureHand: '글로브 박스를 직접 열어 보세요',
+      treasureReady: '별을 다 모았어요!', treasureReadyText: '차를 세우면 보물 상자를 열어 줘요',
+      qaTitle: '차에 물어본 것', asked: '차에 물어봤어요: ', handoffTitle: '{name} 이야기, 휴대폰에서 이어 듣기', handoffPlay: '이어 듣기', handoffStop: '그만 듣기', handoffNew: '차에서 듣던 이야기를 휴대폰에서 이어 들을 수 있어요',
+      kidTitle: '뒷자리 친구들에게'
     },
     en: {
       now: 'Now', course: 'Course', pick: 'Pick a place', record: 'Record',
@@ -37,7 +47,12 @@
       byOrder: "The video time didn't match the record, so it was split in route order", uploading: 'Uploading', joined: 'You joined the trip group', tripEnd: "Today's trip is over. See everything in the Record tab",
       window: 'The windows are down a little. Listen to the outside', reportAsk: 'What was wrong?', reported: 'Reported. Thank you',
       sentFrom: ' sent a place', summary: 'We drove {km} km and passed {n} places', noRecord: 'Your route appears here when the trip ends',
-      kind: { cafe: 'Cafe', parking: 'Parking', landmark: 'Place', sea: 'Sea', city: 'City', forest: 'Forest', place: 'Place' }, cars: ' cars', phones: ' phones'
+      kind: { cafe: 'Cafe', parking: 'Parking', landmark: 'Place', sea: 'Sea', city: 'City', forest: 'Forest', place: 'Place' }, cars: ' cars', phones: ' phones',
+      quiz: '{name} quiz', newQuiz: 'A new quiz arrived', right: 'Correct! You earned a star', wrong: 'Not quite. The answer is "{a}"', gotIt: '{by} got it',
+      treasureOpen: 'The treasure box is open!', treasureOpenText: 'Open the glove box in front of the passenger seat', treasureHand: 'Open the glove box by hand',
+      treasureReady: 'All stars collected!', treasureReadyText: 'Park the car and the treasure box opens',
+      qaTitle: 'Asked in the car', asked: 'Asked the car: ', handoffTitle: 'Keep listening to {name} on your phone', handoffPlay: 'Keep listening', handoffStop: 'Stop', handoffNew: 'You can keep listening to the story on your phone',
+      kidTitle: 'For the back seat'
     }
   };
   function lang() { return S.lang || (S.group && S.group.lang) || 'ko'; }
@@ -100,6 +115,7 @@
     $('courseTitle').textContent = t('courseTitle'); $('pickTitle').textContent = t('pickTitle'); $('pickHelp').textContent = t('pickHelp');
     $('recTitle').textContent = t('recTitle'); $('photoTitle').textContent = t('photoTitle'); $('photoHelp').textContent = t('photoHelp'); $('photoBtn').textContent = t('photoBtn');
     $('camTitle').textContent = t('camTitle'); $('camHelp').textContent = t('camHelp'); $('camBtn').textContent = t('camBtn'); $('hlDown').textContent = t('down');
+    $('qaTitle').textContent = t('qaTitle'); $('kidTitle').textContent = t('kidTitle');
     Array.prototype.forEach.call(document.querySelectorAll('.lang button'), function (b) { b.classList.toggle('on', b.dataset.lang === lang()); });
     document.documentElement.lang = lang();
   }
@@ -390,6 +406,109 @@
     xhr.send(f);
   };
 
+  // ---------------------------------------------------------------- 퀴즈와 보물 상자
+  function starsHtml(have, need) {
+    var n = Math.max(need || 0, have || 0), s = '';
+    for (var i = 0; i < n; i++) s += i < have ? '★' : '<span class="off">☆</span>';
+    return s;
+  }
+  function myAnswer(id) { return S.answers.filter(function (a) { return a.id === id && a.pid === pid; })[0] || null; }
+  function currentQuiz() { return S.quizzes.slice().sort(function (a, b) { return b.at - a.at; })[0] || null; }
+  function starCount() {
+    if (S.stars) return S.stars.stars;
+    var ok = {}; S.answers.forEach(function (a) { if (a.correct) ok[a.id] = 1; });
+    return Object.keys(ok).length;
+  }
+  function starNeed() { return (S.stars && S.stars.need) || (S.quizzes[0] && S.quizzes[0].need) || 0; }
+
+  function renderQuiz() {
+    var q = currentQuiz(), card = $('quizCard');
+    if (!q) { card.classList.add('hidden'); return; }
+    card.classList.remove('hidden');
+    $('quizLabel').textContent = t('quiz').replace('{name}', q.name || '');
+    $('quizStars').innerHTML = starNeed() ? starsHtml(starCount(), starNeed()) : '';
+    $('quizQ').textContent = q.q;
+    var mine = myAnswer(q.id);
+    // 다시 들어온 경우 정답 번호는 모를 수 있음 (맞혔으면 고른 것이 정답)
+    var correctIdx = mine ? (typeof mine.answer === 'number' ? mine.answer : (mine.correct ? mine.choice : null)) : null;
+    $('quizChoices').innerHTML = q.choices.map(function (c, i) {
+      var cls = '';
+      if (mine) cls = i === correctIdx ? 'right' : (i === mine.choice ? 'wrong' : '');
+      return '<button data-i="' + i + '" class="' + cls + '"' + (mine ? ' disabled' : '') + '>' + (i + 1) + '. ' + escapeHtml(c) + '</button>';
+    }).join('');
+    Array.prototype.forEach.call($('quizChoices').querySelectorAll('button'), function (b) {
+      b.onclick = function () { answerQuiz(q, Number(b.dataset.i)); };
+    });
+    var others = S.answers.filter(function (a) { return a.id === q.id && a.correct && a.pid !== pid; }).map(function (a) { return a.by; });
+    var res = '';
+    if (mine) res = mine.correct ? t('right') : (correctIdx != null ? t('wrong').replace('{a}', q.choices[correctIdx]) : t('wrong').split('.')[0] + '.');
+    if (others.length) res += (res ? '  ' : '') + t('gotIt').replace('{by}', others.join(', '));
+    $('quizResult').textContent = res;
+    $('quizResult').style.color = mine && mine.correct ? 'var(--good)' : '';
+  }
+
+  function answerQuiz(q, i) {
+    if (myAnswer(q.id) || !S.ws || S.ws.readyState !== 1) return;
+    S.ws.send(JSON.stringify({ type: 'quiz_answer', id: q.id, choice: i, by: me || (lang() === 'en' ? 'Passenger' : '동승자'), pid: pid }));
+    Array.prototype.forEach.call($('quizChoices').querySelectorAll('button'), function (b) { b.disabled = true; b.classList.toggle('picked', Number(b.dataset.i) === i); });
+  }
+
+  function renderTreasure() {
+    var card = $('treasureCard');
+    var tr = S.treasure, st = S.stars;
+    if (tr) {
+      card.classList.remove('hidden');
+      $('treasureStars').innerHTML = starsHtml(tr.stars, tr.stars);
+      $('treasureTitle').textContent = t('treasureOpen');
+      $('treasureText').textContent = tr.unlocked ? t('treasureOpenText') : t('treasureHand');
+    } else if (st && st.ready) {
+      card.classList.remove('hidden');
+      $('treasureStars').innerHTML = starsHtml(st.stars, st.need);
+      $('treasureTitle').textContent = t('treasureReady');
+      $('treasureText').textContent = t('treasureReadyText');
+    } else card.classList.add('hidden');
+  }
+
+  // ---------------------------------------------------------------- 차에 물어본 것, 아이 이야기, 이어 듣기
+  function renderQa() {
+    var card = $('qaCard');
+    if (!S.qa.length) { card.classList.add('hidden'); return; }
+    card.classList.remove('hidden');
+    $('qaList').innerHTML = S.qa.slice(-5).reverse().map(function (x) {
+      return '<li><span class="t">' + hhmm(x.at) + (x.title ? '  ' + escapeHtml(x.title) : '') + '</span><div class="q">' + (x.q ? '“' + escapeHtml(x.q) + '”' : '') + '</div><div class="a">' + escapeHtml(x.a) + '</div></li>';
+    }).join('');
+  }
+
+  function renderKid() {
+    var card = $('kidCard');
+    if (!S.kid) { card.classList.add('hidden'); return; }
+    card.classList.remove('hidden');
+    $('kidText').textContent = S.kid.text;
+  }
+
+  var speaking = false;
+  function renderHandoff() {
+    var card = $('handoffCard'), h = S.handoff;
+    if (!h) { card.classList.add('hidden'); return; }
+    card.classList.remove('hidden');
+    $('handoffTitle').textContent = t('handoffTitle').replace('{name}', h.name || '');
+    $('handoffText').textContent = h.text;
+    $('handoffBtn').textContent = speaking ? t('handoffStop') : t('handoffPlay');
+  }
+  $('handoffBtn').onclick = function () {
+    var h = S.handoff;
+    if (!h || !window.speechSynthesis) return;
+    if (speaking) { speechSynthesis.cancel(); speaking = false; renderHandoff(); return; }
+    var u = new SpeechSynthesisUtterance(h.text);
+    u.lang = h.lang === 'en' ? 'en-US' : 'ko-KR';
+    u.rate = 1.0;
+    u.onend = u.onerror = function () { speaking = false; renderHandoff(); };
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+    speaking = true;
+    renderHandoff();
+  };
+
   // ---------------------------------------------------------------- 연결
   function apply(summary) {
     S.group = summary;
@@ -400,6 +519,13 @@
     S.record = summary.record || null;
     S.photos = summary.photos || [];
     S.highlight = summary.highlight || null;
+    S.quizzes = summary.quizzes || [];
+    S.answers = summary.answers || [];
+    S.scores = summary.scores || {};
+    S.qa = summary.qa || [];
+    S.handoff = summary.handoff || null;
+    S.treasure = summary.treasure || null;
+    S.stars = summary.stars || null;
     if (summary.story && !S.story) {
       showStory(summary.story);
       if (summary.line) { S.lineIdx = summary.line.index; renderLines(); }
@@ -419,6 +545,7 @@
 
   function renderAll() {
     staticTexts(); renderTop(); renderNow(); renderCourse(); renderPickList();
+    renderQuiz(); renderTreasure(); renderQa(); renderKid(); renderHandoff();
     if (S.tab === 'pick') drawPickMap();
     if (S.tab === 'record') drawRecord();
   }
@@ -451,6 +578,23 @@
         case 'photo': S.photos.push(m.photo); S.photos.sort(function (a, b) { return a.takenAt - b.takenAt; }); if (S.tab === 'record') drawRecord(); break;
         case 'highlight': S.highlight = m.highlight; renderHighlight(); break;
         case 'trip_end': toast(t('tripEnd')); break;
+        case 'quiz':
+          S.quizzes = S.quizzes.filter(function (q) { return q.id !== m.id; }).concat([m]);
+          if (m.need) S.stars = Object.assign({ stars: 0, ready: false }, S.stars || {}, { need: m.need });
+          renderQuiz(); setTab('now'); toast(t('newQuiz'));
+          if (navigator.vibrate) navigator.vibrate([60, 60, 60]);
+          break;
+        case 'quiz_answer':
+          S.answers.push(m); S.scores = m.scores || S.scores; renderQuiz();
+          break;
+        case 'stars': S.stars = m; renderQuiz(); renderTreasure(); break;
+        case 'treasure':
+          S.treasure = m; renderTreasure(); setTab('now');
+          if (navigator.vibrate) navigator.vibrate([120, 80, 120, 80, 300]);
+          break;
+        case 'qa': S.qa.push(m); renderQa(); if (m.q) toast(t('asked') + m.q); break;
+        case 'kid': S.kid = m; renderKid(); break;
+        case 'handoff': S.handoff = m; renderHandoff(); toast(t('handoffNew')); break;
       }
     };
   }

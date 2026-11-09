@@ -1,5 +1,6 @@
 // 구르는 가이드 여행 그룹 서버
 // 차 앱과 동승자 휴대폰(웹)을 네 자리 그룹 번호로 묶고, 이야기 시작과 고른 장소를 주고받는다.
+// 퀴즈(차가 내고 휴대폰이 풀고 서버가 채점), 차에 말로 물어본 것과 답, 휴대폰에서 이어 듣기도 여기서 오간다.
 // 차의 실시간 위치는 받지 않는다. 여행이 끝난 뒤 차가 올린 기록(지나온 길, 명소를 지난 시각)만 보관한다.
 import http from 'node:http';
 import fs from 'node:fs';
@@ -44,6 +45,7 @@ function makeGroup(code, scenarioId, lang) {
     cars: new Map(), phones: new Set(),
     story: null, line: null, passes: [], picks: [], acks: [], reports: [], said: [],
     record: null, photos: [], highlight: null, ended: false,
+    quizzes: {}, answers: [], qa: [], handoff: null, treasure: null, stars: null,
   };
   groups.set(code, g);
   fs.mkdirSync(path.join(DATA, code, 'photos'), { recursive: true });
@@ -57,7 +59,25 @@ function summary(g) {
     cars: [...g.cars.values()].map(c => c.name), phones: g.phones.size,
     story: g.story, line: g.line, passes: g.passes, picks: g.picks, acks: g.acks,
     record: g.record, photos: g.photos, highlight: g.highlight, ended: g.ended,
+    quizzes: Object.values(g.quizzes).map(publicQuiz), answers: g.answers.map(publicAnswer), scores: scores(g),
+    qa: g.qa.slice(-20), handoff: g.handoff, treasure: g.treasure, stars: g.stars,
   };
+}
+
+// 휴대폰에는 정답을 미리 보내지 않는다 (답을 고른 뒤에 알려 줌)
+function publicQuiz(q) {
+  return { id: q.id, name: q.name, q: q.q, choices: q.choices, lang: q.lang, at: q.at, car: q.car };
+}
+
+function publicAnswer(a) {
+  return { id: a.id, by: a.by, pid: a.pid, choice: a.choice, correct: a.correct, at: a.at };
+}
+
+// 이름별 맞힌 개수
+function scores(g) {
+  const s = {};
+  for (const a of g.answers) if (a.correct) s[a.by] = (s[a.by] || 0) + 1;
+  return s;
 }
 
 // 서버를 다시 켜도 여행 그룹이 이어지도록 디스크에 저장해 둔다
@@ -65,7 +85,7 @@ const saveTimers = new Map();
 function persist(g) {
   clearTimeout(saveTimers.get(g.code));
   saveTimers.set(g.code, setTimeout(() => {
-    const keep = { code: g.code, scenarioId: g.scenarioId, lang: g.lang, createdAt: g.createdAt, story: g.story, passes: g.passes, picks: g.picks, acks: g.acks, reports: g.reports, record: g.record, photos: g.photos, highlight: g.highlight, ended: g.ended };
+    const keep = { code: g.code, scenarioId: g.scenarioId, lang: g.lang, createdAt: g.createdAt, story: g.story, passes: g.passes, picks: g.picks, acks: g.acks, reports: g.reports, record: g.record, photos: g.photos, highlight: g.highlight, ended: g.ended, quizzes: g.quizzes, answers: g.answers, qa: g.qa, handoff: g.handoff, treasure: g.treasure, stars: g.stars };
     try { fs.writeFileSync(path.join(DATA, g.code, 'group.json'), JSON.stringify(keep)); } catch (e) { console.warn('[persist]', e.message); }
   }, 300));
 }
@@ -297,12 +317,39 @@ wss.on('connection', (ws, req) => {
       else if (type === 'pick_ack') { g.acks.push(msg); broadcast(g, msg, { except: ws }); }
       else if (type === 'say') { (g.said = g.said || []).push({ at: Date.now(), text: msg.text, lang: msg.lang, kind: msg.kind, car: msg.car }); }
       else if (type === 'window' || type === 'trip_end') broadcast(g, msg, { cars: false });
+      else if (type === 'quiz') {
+        const q = { id: String(msg.id), name: msg.name || '', q: msg.q || '', choices: Array.isArray(msg.choices) ? msg.choices.map(String) : [], answer: Number(msg.answer), lang: msg.lang || g.lang, at: Date.now(), car: msg.car };
+        g.quizzes[q.id] = q;
+        broadcast(g, Object.assign({ type: 'quiz', stars: msg.stars, need: msg.need }, publicQuiz(q)), { cars: false });
+      }
+      else if (type === 'qa') {
+        const item = { q: String(msg.q || '').slice(0, 200), a: String(msg.a || '').slice(0, 1200), title: msg.title || '', placeId: msg.placeId || '', at: msg.at || Date.now(), car: msg.car };
+        g.qa.push(item);
+        if (g.qa.length > 50) g.qa.shift();
+        broadcast(g, Object.assign({ type: 'qa' }, item), { cars: false });
+      }
+      else if (type === 'handoff') { g.handoff = { placeId: msg.placeId, name: msg.name, text: msg.text, lang: msg.lang, at: Date.now(), car: msg.car }; broadcast(g, Object.assign({ type: 'handoff' }, g.handoff), { cars: false }); }
+      else if (type === 'treasure') { g.treasure = { stars: msg.stars, unlocked: !!msg.unlocked, at: Date.now(), car: msg.car }; broadcast(g, Object.assign({ type: 'treasure' }, g.treasure), { cars: false }); }
+      else if (type === 'stars') { g.stars = { stars: msg.stars, need: msg.need, ready: !!msg.ready, by: msg.by || '' }; broadcast(g, Object.assign({ type: 'stars' }, g.stars), { cars: false }); }
+      else if (type === 'kid') broadcast(g, msg, { cars: false });
     } else {
       if (type === 'pick') {
         const pick = { type: 'pick', id: crypto.randomUUID().slice(0, 8), name: String(msg.name || '').slice(0, 60), lat: Number(msg.lat), lon: Number(msg.lon), kind: msg.kind || 'place', by: String(msg.by || '').slice(0, 20) || '동승자', fromCar: false, at: Date.now() };
         if (!Number.isFinite(pick.lat) || !Number.isFinite(pick.lon)) return;
         g.picks.push(pick);
         broadcast(g, pick);
+      }
+      else if (type === 'quiz_answer') {
+        // 채점은 서버가 한다. 휴대폰 한 대가 같은 퀴즈에 한 번만 답할 수 있다
+        const q = g.quizzes[String(msg.id)];
+        if (!q) return;
+        const pid = String(msg.pid || id).slice(0, 40);
+        if (g.answers.some(a => a.id === q.id && a.pid === pid)) return;
+        const choice = Number(msg.choice);
+        const a = { id: q.id, by: String(msg.by || '').slice(0, 20) || '동승자', pid, choice, correct: choice === q.answer, at: Date.now() };
+        g.answers.push(a);
+        console.log('[quiz]', g.code, q.id, a.by, a.correct ? '정답' : '오답');
+        broadcast(g, Object.assign({ type: 'quiz_answer', answer: q.answer, scores: scores(g) }, publicAnswer(a)));
       }
     }
   });

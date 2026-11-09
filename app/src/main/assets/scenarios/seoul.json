@@ -39,6 +39,32 @@
     "ko": "여의도 투어는 여기까지예요. 명소 {count}곳을 함께 지나왔어요. 오늘 지나온 길과 들은 이야기는 휴대폰에 담아 가세요.",
     "en": "That's the end of our Yeouido tour. We passed {count} places together. Keep today's route and stories on your phone."
   },
+  "sights": [
+    {"id": "yeouidopark", "name": {"ko": "여의도공원", "en": "Yeouido Park"}, "lat": 37.52554, "lon": 126.92159, "visible": 900,
+     "fact": {"ko": "여의도공원이에요. 넓이가 약 23만㎡이고 숲과 잔디마당, 한국 전통의 숲 같은 공간으로 나뉘어 있어요.", "en": "That's Yeouido Park. It covers about 230,000 square meters, with a nature forest, a lawn, and a traditional Korean forest."},
+     "source": "위키백과 여의도공원"},
+    {"id": "mapobridge", "name": {"ko": "마포대교", "en": "Mapo Bridge"}, "lat": 37.53361, "lon": 126.93639, "visible": 1500,
+     "fact": {"ko": "마포대교예요. 한강에 네 번째로 놓인 다리이고 길이는 1,400m예요. 다리 바로 밑으로 지하철 5호선이 강바닥 터널로 지나가요.", "en": "That's Mapo Bridge, connecting Mapo District and Yeouido. Seoul Subway Line 5 runs directly underneath it through an underwater tunnel."},
+     "source": "위키백과 마포대교"},
+    {"id": "seogangbridge", "name": {"ko": "서강대교", "en": "Seogang Bridge"}, "lat": 37.54011, "lon": 126.92704, "visible": 1500,
+     "fact": {"ko": "서강대교예요. 마포구 신수동과 여의도를 잇는 왕복 6차로 다리예요. 다리 남쪽에 국회의사당이 있어요.", "en": "That's Seogang Bridge, a six-lane bridge linking Mapo District and Yeouido. The National Assembly is at its southern end."},
+     "source": "위키백과 서강대교"},
+    {"id": "ifc", "name": {"ko": "서울국제금융센터", "en": "IFC Seoul"}, "lat": 37.52522, "lon": 126.92603, "visible": 1200,
+     "fact": {"ko": "서울국제금융센터, IFC예요. 마포대교 남쪽에 파크원 타워와 함께 서 있어요.", "en": "That's IFC Seoul, the International Finance Centre. It stands south of Mapo Bridge along with the Parc.1 towers."},
+     "source": "위키백과 마포대교"},
+    {"id": "parc1", "name": {"ko": "파크원 타워", "en": "Parc.1 towers"}, "lat": 37.52609, "lon": 126.9282, "visible": 1200,
+     "fact": {"ko": "파크원 타워예요. 서울국제금융센터와 함께 마포대교 남쪽에 서 있어요.", "en": "Those are the Parc.1 towers. They stand south of Mapo Bridge along with IFC Seoul."},
+     "source": "위키백과 마포대교"}
+  ],
+  "kid": {
+    "building63": {"ko": "뒷자리 친구들, 63빌딩은 땅 위로 60층, 땅 밑으로 3층이라서 이름이 63이래요.", "en": "Hey, back seat! The 63 Building has 60 floors above ground and 3 below. Sixty plus three makes sixty-three!"},
+    "hangang": {"ko": "뒷자리 친구들, 한강공원에서는 자전거도 타고 소풍도 해요. 서울세계불꽃축제도 이 강 위에서 열린대요.", "en": "Hey, back seat! People ride bikes and have picnics in Hangang Park. The Seoul International Fireworks Festival happens right over this river."},
+    "assembly": {"ko": "뒷자리 친구들, 국회의사당을 둘러싼 기둥이 몇 개인지 세어 볼까요? 정답은 퀴즈로 내 볼게요.", "en": "Hey, back seat! Can you count the columns around the National Assembly building? I'll ask you in a quiz."}
+  },
+  "quiz": {
+    "building63": {"q": {"ko": "63빌딩의 63은 무슨 뜻일까요?", "en": "What does 63 mean in the 63 Building?"}, "choices": {"ko": ["땅 위 60층과 땅 밑 3층을 더한 수", "지은 해", "엘리베이터 수"], "en": ["60 floors up plus 3 below", "The year it was built", "Number of elevators"]}, "answer": 0},
+    "assembly": {"q": {"ko": "국회의사당을 둘러싼 기둥은 몇 개일까요?", "en": "How many columns surround the National Assembly building?"}, "choices": {"ko": ["24개", "6개", "100개"], "en": ["24", "6", "100"]}, "answer": 0}
+  },
   "places": [
     {
       "id": "yeouido",

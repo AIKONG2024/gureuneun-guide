@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -30,7 +31,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /**
  * 차가 서 있을 때 차 화면에 크게 띄우는 명소 영상.
@@ -40,7 +43,10 @@ import kotlinx.coroutines.delay
 @Composable
 fun PlaceClip(model: String, name: String, night: Boolean, accent: Color, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
-    val frames = remember(model, night) { loadPosters(ctx, model, night) }
+    // 사진 풀기는 화면 스레드 밖에서
+    val frames by produceState(emptyList<ImageBitmap>(), model, night) {
+        value = withContext(Dispatchers.IO) { loadPosters(ctx, model, night) }
+    }
     var idx by remember(model, night) { mutableIntStateOf(0) }
     LaunchedEffect(model, night, frames.size) {
         while (frames.size > 1) {

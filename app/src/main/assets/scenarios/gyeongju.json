@@ -39,6 +39,38 @@
     "ko": "오늘 경주 여행은 여기까지예요. 명소 {count}곳을 함께 지나왔어요. 오늘 기록은 휴대폰으로 가져가실 수 있어요.",
     "en": "That's all for today's Gyeongju trip. We passed {count} places together. You can take today's record with you on your phone."
   },
+  "sights": [
+    {"id": "cheonmachong", "name": {"ko": "천마총", "en": "Cheonmachong"}, "lat": 35.83859, "lon": 129.2105, "visible": 700,
+     "fact": {"ko": "천마총이에요. 하늘로 날아오르는 흰 천마를 그린 그림이 나와서 붙은 이름이에요. 1973년에 발굴했는데 금관을 비롯해 11,297점이 나왔어요.", "en": "That's Cheonmachong, the Tomb of the Heavenly Horse. It's named after a painting of a white horse flying into the sky that was found inside. When it was excavated in 1973, 11,297 artifacts came out, including a gold crown."},
+     "source": "위키백과 천마총"},
+    {"id": "gyerim", "name": {"ko": "계림", "en": "Gyerim"}, "lat": 35.83278, "lon": 129.21889, "visible": 800,
+     "fact": {"ko": "계림이에요. 신라가 세워질 때부터 있던 숲으로 알려져 있어서 시림이라고도 불러요. 느티나무와 물푸레나무가 우거져 있어요.", "en": "That's Gyerim. The name means rooster forest, and this small woodland sits near the old site of the Silla palace."},
+     "source": "위키백과 경주 계림"},
+    {"id": "wolseong", "name": {"ko": "월성", "en": "Wolseong"}, "lat": 35.83083, "lon": 129.22611, "visible": 900,
+     "fact": {"ko": "월성이에요. 신라 임금이 살던 궁궐이 있던 곳인데, 생김새가 초승달 같아서 반월성이라고도 불러요. 2017년부터 발굴하고 있어요.", "en": "That's Wolseong, where the royal palace of Silla stood. Its walls were shaped like a crescent moon, so it's also called Banwolseong."},
+     "source": "위키백과 경주 월성"},
+    {"id": "woljeonggyo", "name": {"ko": "월정교", "en": "Woljeonggyo"}, "lat": 35.82944, "lon": 129.21806, "visible": 900,
+     "fact": {"ko": "월정교예요. 통일신라 때인 760년에 처음 놓인 지붕 덮인 다리인데, 조선 시대에 사라졌다가 2018년 4월에 다시 지어 열었어요.", "en": "That's Woljeonggyo, a covered bridge first built in 760 during the Unified Silla period. It was lost in the Joseon period and rebuilt in April 2018."},
+     "source": "위키백과 경주 춘양교지와 월정교지, Wikipedia Woljeonggyo"},
+    {"id": "gyochon", "name": {"ko": "교촌마을", "en": "Gyochon Village"}, "lat": 35.83083, "lon": 129.21611, "visible": 700,
+     "fact": {"ko": "교촌마을이에요. 경주의 전통 한옥 마을이에요.", "en": "That's Gyochon Traditional Village, a Korean folk village in Gyeongju."},
+     "source": "위키백과 경주 교촌마을"},
+    {"id": "museum", "name": {"ko": "국립경주박물관", "en": "Gyeongju National Museum"}, "lat": 35.82898, "lon": 129.22836, "visible": 900,
+     "fact": {"ko": "국립경주박물관이에요. 국립중앙박물관에 속한 박물관으로 1975년에 문을 열었어요.", "en": "That's the Gyeongju National Museum, part of the National Museum of Korea. It opened in 1975."},
+     "source": "위키백과 국립경주박물관"}
+  ],
+  "kid": {
+    "daereungwon": {"ko": "뒷자리 친구들, 동산처럼 생긴 언덕 보이죠? 저게 다 옛날 신라 임금님들이 잠든 무덤이에요. 몇 개나 보이는지 세어 볼까요?", "en": "Hey, back seat! See those big grassy hills? Each one is the tomb of a Silla king or royal from long ago. How many can you count?"},
+    "cheomseongdae": {"ko": "뒷자리 친구들, 첨성대는 옛날 사람들이 별을 보던 돌탑이에요. 선덕여왕 때 쌓았대요.", "en": "Hey, back seat! Cheomseongdae is a stone tower where people watched the stars long ago. It was built in Queen Seondeok's time."},
+    "donggung": {"ko": "뒷자리 친구들, 동궁과 월지는 신라 왕자님이 살던 궁궐과 연못이에요. 연못 가운데 섬이 세 개 있대요. 찾아볼까요?", "en": "Hey, back seat! Donggung and Wolji are the palace and pond where a Silla prince lived. There are three islands in the pond. Can you spot them?"}
+  },
+  "treasure": {"stars": 2},
+  "kidAuto": true,
+  "quiz": {
+    "daereungwon": {"q": {"ko": "대릉원의 둥근 언덕은 무엇일까요?", "en": "What are the round hills at Daereungwon?"}, "choices": {"ko": ["신라 왕과 왕족의 무덤", "옛날 놀이터", "쌀 창고"], "en": ["Tombs of Silla royals", "An old playground", "Rice storehouses"]}, "answer": 0},
+    "cheomseongdae": {"q": {"ko": "첨성대에서 옛날 사람들은 무엇을 봤을까요?", "en": "What did people watch from Cheomseongdae?"}, "choices": {"ko": ["별", "물고기", "기차"], "en": ["Stars", "Fish", "Trains"]}, "answer": 0},
+    "donggung": {"q": {"ko": "동궁과 월지 연못 가운데에는 섬이 몇 개 있을까요?", "en": "How many islands are in Wolji Pond?"}, "choices": {"ko": ["세 개", "한 개", "열 개"], "en": ["Three", "One", "Ten"]}, "answer": 0}
+  },
   "places": [
     {
       "id": "gyeongju",
@@ -115,6 +147,7 @@
     {
       "id": "cheomseongdae",
       "kind": "landmark",
+      "sky": true,
       "name": {
         "ko": "첨성대",
         "en": "Cheomseongdae"

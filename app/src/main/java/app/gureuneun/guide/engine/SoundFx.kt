@@ -71,6 +71,34 @@ class SoundFx(context: Context) {
         play(normalize(buf, 0.45))
     }
 
+    /** 음 여러 개를 차례로 울리는 짧은 소리. gap 은 음 사이 간격(초) */
+    private fun notes(freqs: DoubleArray, gap: Double, decay: Double, length: Double, peak: Double) {
+        val pre = (rate * 0.18).toInt()
+        val total = pre + (rate * length).toInt()
+        val buf = DoubleArray(total)
+        freqs.forEachIndexed { n, f ->
+            val start = pre + (n * rate * gap).toInt()
+            for (i in start until total) {
+                val t = (i - start).toDouble() / rate
+                val env = exp(-t * decay) * min(1.0, t * 300)
+                buf[i] += env * (sin(2 * PI * f * t) * 0.85 + sin(6 * PI * f * t) * 0.08)
+            }
+        }
+        play(normalize(buf, peak))
+    }
+
+    /** 듣기 시작 신호 (음성 비서처럼 짧게 두 번 올라가는 소리) */
+    fun listen() = notes(doubleArrayOf(880.0, 1174.66), 0.09, 9.0, 0.45, 0.35)
+
+    /** 다 들었다는 신호 (내려가는 소리) */
+    fun heard() = notes(doubleArrayOf(1174.66, 880.0), 0.08, 10.0, 0.4, 0.3)
+
+    /** 퀴즈 정답, 별 하나 */
+    fun star() = notes(doubleArrayOf(1318.51, 1567.98, 2093.0), 0.07, 5.0, 0.9, 0.38)
+
+    /** 보물 상자가 열릴 때 */
+    fun fanfare() = notes(doubleArrayOf(523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5, 1318.51), 0.12, 2.2, 2.4, 0.45)
+
     /** 시연용 파도 소리 (실차에서는 창문을 내리면 진짜 파도 소리가 들어옴) */
     fun waves(seconds: Int = 18) {
         stopWaves()

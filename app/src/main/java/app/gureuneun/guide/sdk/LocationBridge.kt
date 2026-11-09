@@ -14,10 +14,13 @@ import app.gureuneun.guide.core.LatLng
 import app.gureuneun.guide.core.Place
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 
 /**
  * FusedLocation SDK 연결부.
  * 여행지와 명소마다 근접 알림(Proximity Alert) 영역을 등록하고, 차가 들어서고 나가는 순간을 받음.
+ * 위치 서비스 호출은 전용 스레드에서 차례로 함.
  */
 class LocationBridge(private val context: Context) {
 
@@ -31,7 +34,8 @@ class LocationBridge(private val context: Context) {
 
     private val main = Handler(Looper.getMainLooper())
     private var fused: FusedLocation? = null
-    private val alertToPlace = mutableMapOf<String, String>()
+    private val alertToPlace = ConcurrentHashMap<String, String>()
+    private val io = Executors.newSingleThreadExecutor { r -> Thread(r, "location-sdk").apply { isDaemon = true } }
 
     private val fixListener = object : FusedLocationListener {
         override fun onChanged(location: LocationData?) {
@@ -54,10 +58,12 @@ class LocationBridge(private val context: Context) {
         runCatching {
             f.initialize()
             main.postDelayed({
-                val ok = runCatching { f.isSupported() }.getOrDefault(false)
-                supported.value = ok
-                GLog.i("Location", "FusedLocation 지원: $ok")
-                runCatching { f.registerFusedLocationCallback(fixListener) }.onFailure { GLog.w("Location", "위치 구독 실패", it) }
+                io.execute {
+                    val ok = runCatching { f.isSupported() }.getOrDefault(false)
+                    main.post { supported.value = ok }
+                    GLog.i("Location", "FusedLocation 지원: $ok")
+                    runCatching { f.registerFusedLocationCallback(fixListener) }.onFailure { GLog.w("Location", "위치 구독 실패", it) }
+                }
             }, 800)
         }.onFailure {
             GLog.w("Location", "initialize 실패", it)
@@ -69,7 +75,7 @@ class LocationBridge(private val context: Context) {
     fun watch(places: List<Place>) {
         val f = fused ?: return
         clear()
-        places.forEach { p ->
+        io.execute { places.forEach { p ->
             val req = ProximityAlertRequest(p.pos.lat, p.pos.lon, p.radiusM, setOf(ProximityTransition.ENTER, ProximityTransition.EXIT))
             runCatching {
                 f.addProximityAlert(req, object : ProximityAlertListener {
@@ -93,14 +99,15 @@ class LocationBridge(private val context: Context) {
                     }
                 })
             }.onFailure { GLog.w("Location", "근접 알림 등록 예외 ${p.id}", it) }
-        }
+        } }
     }
 
     fun clear() {
         val f = fused ?: return
-        alertToPlace.keys.toList().forEach { id -> runCatching { f.removeProximityAlert(id) } }
+        val ids = alertToPlace.keys.toList()
         alertToPlace.clear()
         registered.value = 0
+        io.execute { ids.forEach { id -> runCatching { f.removeProximityAlert(id) } } }
     }
 
     fun release() {

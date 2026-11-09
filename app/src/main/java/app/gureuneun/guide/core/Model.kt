@@ -45,10 +45,32 @@ data class Place(
     val ambience: String?,
     val stop: Boolean,
     val source: String,
+    /** 하늘과 이어지는 곳(예: 별을 보던 첨성대). 선루프가 있는 차는 세웠을 때 하늘을 열어 보자고 물어봄 */
+    val sky: Boolean = false,
 ) {
     fun story(lang: String): Story? = stories[lang] ?: stories["ko"] ?: stories.values.firstOrNull()
     val triggers: Boolean
         get() = kind == PlaceKind.CITY || kind == PlaceKind.LANDMARK || kind == PlaceKind.SEA || kind == PlaceKind.FOREST
+}
+
+/** 이야기 정류장은 아니지만 창밖으로 보이는 곳. "저거 뭐야?"에 답할 때 씀 */
+data class Sight(
+    val id: String,
+    val name: L10n,
+    val pos: LatLng,
+    val fact: L10n,
+    /** 이 거리 안이면 창밖으로 보인다고 봄 (섬처럼 멀리서도 보이는 곳은 크게) */
+    val visibleM: Double,
+    val source: String,
+)
+
+/** 명소마다 아이들에게 내는 퀴즈 */
+data class Quiz(
+    val question: L10n,
+    val choices: Map<String, List<String>>,
+    val answer: Int,
+) {
+    fun choices(lang: String): List<String> = choices[lang] ?: choices["ko"] ?: emptyList()
 }
 
 data class Scenario(
@@ -69,6 +91,14 @@ data class Scenario(
     val departure: L10n,
     val chapter: L10n,
     val finale: L10n,
+    val sights: List<Sight> = emptyList(),
+    /** 뒷자리 아이들을 위한 짧은 이야기 (명소 id 별) */
+    val kid: Map<String, L10n> = emptyMap(),
+    val quiz: Map<String, Quiz> = emptyMap(),
+    /** 퀴즈 별을 이만큼 모으면 글로브 박스 보물 상자를 열어 줌 (0 이면 보물 상자 없음) */
+    val treasureStars: Int = 0,
+    /** 뒷좌석에 사람이 앉으면 아이 모드를 저절로 켤지 (가족 코스) */
+    val kidAuto: Boolean = false,
 ) {
     fun findPlace(id: String?): Place? = places.firstOrNull { it.id == id } ?: pickables.firstOrNull { it.id == id }
     val destination: Place? get() = findPlace(destinationId)
@@ -102,6 +132,32 @@ object ScenarioParser {
             departure = l10n(o.optJSONObject("departure")),
             chapter = l10n(o.optJSONObject("chapter")),
             finale = l10n(o.optJSONObject("finale")),
+            sights = o.optJSONArray("sights")?.let { a ->
+                objects(a).map { s ->
+                    Sight(
+                        id = s.getString("id"),
+                        name = l10n(s.optJSONObject("name")),
+                        pos = LatLng(s.getDouble("lat"), s.getDouble("lon")),
+                        fact = l10n(s.optJSONObject("fact")),
+                        visibleM = s.optDouble("visible", 900.0),
+                        source = s.optString("source"),
+                    )
+                }
+            } ?: emptyList(),
+            kid = o.optJSONObject("kid")?.let { k -> k.keys().asSequence().associateWith { id -> l10n(k.optJSONObject(id)) } } ?: emptyMap(),
+            quiz = o.optJSONObject("quiz")?.let { q ->
+                q.keys().asSequence().associateWith { id ->
+                    val z = q.getJSONObject(id)
+                    val ch = z.optJSONObject("choices")
+                    Quiz(
+                        question = l10n(z.optJSONObject("q")),
+                        choices = ch?.keys()?.asSequence()?.associateWith { lang -> ch.getJSONArray(lang).let { a -> (0 until a.length()).map { a.getString(it) } } } ?: emptyMap(),
+                        answer = z.optInt("answer", 0),
+                    )
+                }
+            } ?: emptyMap(),
+            treasureStars = o.optJSONObject("treasure")?.optInt("stars", 0) ?: 0,
+            kidAuto = o.optBoolean("kidAuto", false),
         )
     }
 
@@ -139,6 +195,7 @@ object ScenarioParser {
             ambience = o.optString("ambience").ifBlank { null },
             stop = o.optBoolean("stop", false),
             source = o.optString("source"),
+            sky = o.optBoolean("sky", false),
         )
     }
 }
