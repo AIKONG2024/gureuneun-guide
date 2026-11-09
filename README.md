@@ -4,17 +4,35 @@
 
 차의 조명과 소리, 화면, 내비게이션이 함께 움직여 지나는 곳마다 이야기를 들려주고, 그날 하루를 기록으로 남겨 주는 Pleos Connect 여행 가이드 앱입니다. 현대자동차그룹 차량용 앱 개발 공모전 출품작입니다.
 
+## 시연 영상
+
+[시연 영상 보기 (5분 24초, MP4 21MB)](docs/demo/gureuneun-guide-demo.mp4)
+
+Pleos Connect 에뮬레이터에서 앱이 실제로 돌아가는 화면을 녹화했습니다. 왼쪽이 차 화면, 오른쪽이 동승자 휴대폰, 왼쪽 아래가 Virtual Console의 차량 상태(실내 조명 색, 창문)입니다. 소리는 에뮬레이터 속 차가 Pleos TextToSpeech로 낸 안내 음성을 그대로 담았습니다.
+
+| 장면 | 보여 주는 것 |
+|---|---|
+| 1. 경주, 가족 여행 | [여행 시작] 한 번으로 내비게이션 경로와 좌석 점호, 도시에 들어설 때 바뀌는 조명과 오프닝, 명소 안내, 방향지시등, 비와 밤 이야기, 주차 화면 |
+| 2. 제주, 친구들의 렌터카 두 대 | 그룹 묶기, 휴대폰에서 고른 카페가 내비게이션으로, 뒤차가 보낸 주차장, 손으로 돌려 보는 3D 모형, 바닷가 창문과 파도 소리, 하루 기록 카드, 사진과 빌트인 캠 하이라이트 |
+| 3. 서울, 외국인 손님을 태운 택시 | 차 음성과 휴대폰 화면이 모두 영어로 안내 |
+
+## 화면
+
 | 출발 전 좌석 점호 | 달리는 동안 (소리로 안내) | 차가 서면 명소 장면과 QR |
 |---|---|---|
-| ![좌석 점호](docs/images/rollcall.png) | ![주행 중](docs/images/driving.png) | ![정차 중](docs/images/parked.png) |
+| ![좌석 점호](docs/images/car_rollcall.png) | ![주행 중](docs/images/car_driving.png) | ![정차 중](docs/images/car_parked.png) |
 
-| 휴대폰 그룹 페이지 | 휴대폰에서 고른 장소가 차 내비게이션으로 | 하루 기록 카드 |
+| 휴대폰에서 고른 카페, 운전자는 확인만 | 바닷가에 세우면 창문을 열지 물음 | 하루 기록 카드 |
 |---|---|---|
-| ![휴대폰](docs/images/phone_now.png) | ![장소 고르기](docs/images/pick.png) | ![기록](docs/images/record.png) |
+| ![장소 확인](docs/images/car_pick.png) | ![창문](docs/images/car_window.png) | ![기록 카드](docs/images/car_record.png) |
+
+| 휴대폰: 지금 듣는 이야기 | 휴대폰: 장소 고르기 | 휴대폰: 사진과 하이라이트 | 휴대폰: 영어 안내 |
+|---|---|---|---|
+| ![지금](docs/images/phone_now.png) | ![장소 고르기](docs/images/phone_pick.png) | ![기록](docs/images/phone_record.png) | ![영어](docs/images/phone_english.png) |
 
 ## APK
 
-- 파일: [apk/개인참가_구르는가이드_release.apk](apk/)
+- 파일: [apk/개인참가_구르는가이드_release.apk](apk/개인참가_구르는가이드_release.apk) (release 서명, 43MB)
 - 대상: Pleos Connect 에뮬레이터 (Android 14, API 34, Car 이미지). minSdk 28
 
 ## 무엇을 하나요
@@ -23,9 +41,9 @@
 
 1. **내비게이션**: 오늘 목적지와 경유지 두 곳을 순정 내비게이션에 넣습니다 (NaviHelper).
 2. **좌석 점호**: 앉은 자리가 모두 벨트를 매면 출발 안내를 시작합니다 (Vehicle 좌석, 벨트).
-3. **도시 오프닝과 명소 안내**: 여행지와 명소마다 영역을 정해 두고 차가 들어서는 순간 실내 조명 색이 바뀌고 이야기가 시작됩니다. "잠시 후 오른쪽에 첨성대가 보여요"처럼 어느 쪽에 보일지도 먼저 알려 줍니다 (FusedLocation 근접 알림, Vehicle 실내 조명, TextToSpeech).
+3. **도시 오프닝과 명소 안내**: 여행지와 명소마다 영역을 정해 두고 차가 들어서는 순간 실내 조명 색이 바뀌고 이야기가 시작됩니다. "잠시 후 오른쪽에 첨성대가 보여요"처럼 어느 쪽에 보일지도 먼저 알려 줍니다. 하던 이야기가 남아 있어도 새 명소가 나타나면 그 문장까지만 하고 명소 안내로 넘어가고, 이미 지나친 명소 안내는 건너뜁니다 (FusedLocation 근접 알림, Vehicle 실내 조명, TextToSpeech).
 4. **길 안내와 겹치지 않게**: 다음 길 안내까지 남은 거리를 보고 이야기 길이(짧게, 보통, 길게)를 고르고, 안내 지점이 가까우면 잠시 쉬었다가 이어 갑니다 (NaviHelper TBT).
-5. **차 상태에 맞춘 이야기**: 방향지시등을 켜면 멈추고 끄면 이어서, 와이퍼가 움직이면 비 오는 날 이야기, 전조등이 켜지면 밤 이야기로 바꿉니다 (Vehicle).
+5. **차 상태에 맞춘 이야기**: 방향지시등을 켜면 멈추고 끄면 이어서, 와이퍼가 움직이면 비 오는 날 이야기, 전조등이 켜지면 밤 이야기로 바꿉니다. 비가 오거나 전조등이 켜지면 하던 이야기 사이에 바로 알려 주고 이어 갑니다 (Vehicle).
 6. **주행 규제**: 달리는 동안에는 차 화면의 영상과 QR, 긴 글을 숨기고 소리로만 안내합니다. 차가 서면 명소 장면과 QR을 크게 보여 줍니다 (CarUxRestrictions).
 7. **운전대 버튼**: 이야기를 미디어 세션으로 만들어 운전대의 이전, 다음 버튼으로 다시 듣거나 넘깁니다.
 8. **창문**: 바닷가 명소에 차를 세우면 창문을 조금 열지 먼저 묻고, 확인을 누를 때만 한 뼘쯤 내립니다 (Vehicle 창문).
@@ -97,12 +115,12 @@ npm start
 | 차량 상태 바꾸기 | Pleos Connect Virtual Console (`adb forward tcp:8088 tcp:8088` 후 http://127.0.0.1:8088) |
 | 빌드 | JDK 17, Gradle 8.9, Android Gradle Plugin 8.7.3, Kotlin 2.0.21, compileSdk 34 |
 | 그룹 서버 | Node.js 20 이상, ffmpeg (하이라이트 영상) |
-| 확인한 동작 | 한국어, 영어 음성 / 실내 조명 색과 밝기 / 창문 위치 / 경유지 두 곳 경로 요청 / TBT 거리 수신 / 기어, 방향지시등, 와이퍼, 전조등 수신 / 주행 규제 수신 |
+| 확인한 동작 | 한국어, 영어 음성 / 실내 조명 색과 밝기 / 창문 위치 / 경유지 두 곳 경로 요청 / TBT 거리 수신 / 기어, 방향지시등, 와이퍼, 전조등 수신 / 주행 규제 수신 / 운전대 미디어 키(다음, 이전) / release APK 설치와 실행 |
 
 ### 에뮬레이터에서 다르게 동작하는 부분
 
 - **위치**: 에뮬레이터는 GPS 위치가 움직이지 않습니다. 그래서 [시연 경로] 모드에서 실제 도로 경로(OSRM으로 만든 경로)를 따라 위치를 흘려 넣고, 근접 알림과 같은 판정을 앱 안에서 합니다. 실차에서는 [실제 위치] 모드로 FusedLocation 근접 알림을 그대로 씁니다.
-- **다음 길 안내 거리**: 시연 경로 모드에서는 시연 경로의 회전 지점까지 남은 거리로 계산합니다. 실제 위치 모드에서는 NaviHelper가 주는 TBT 거리를 씁니다.
+- **다음 길 안내 거리**: 시연 경로 모드에서는 시연 경로의 회전 지점까지 남은 거리로 계산합니다. 실제 위치 모드에서는 NaviHelper가 주는 TBT 거리를 씁니다. 이야기를 쉬는 거리는 실제 위치 모드에서 150m, 시연 경로 모드에서 40m입니다. 시연 경로에는 실제 내비 음성이 나오지 않아서 짧게 두었습니다.
 - **명소 장면**: 차 화면은 3D를 실시간으로 그리지 않고 같은 3D 장면에서 뽑은 장면 세 컷을 천천히 보여 줍니다. 에뮬레이터 그래픽이 CPU로 돌아가 실시간 3D가 무겁기 때문입니다. 휴대폰은 짧은 영상과 실시간 3D를 모두 씁니다.
 
 ## 직접 빌드
@@ -120,7 +138,17 @@ npm start
 adb shell am start -n app.gureuneun.guide/.MainActivity --es demo start --es scenario jeju --es lang ko
 adb shell am start -n app.gureuneun.guide/.MainActivity --es demo go      # 출발
 adb shell am start -n app.gureuneun.guide/.MainActivity --es demo jump    # 다음 명소 앞으로
+adb shell am start -n app.gureuneun.guide/.MainActivity --es demo jump --es to hyeopjae   # 정한 명소 앞으로
 ```
+
+### 시연 영상 다시 만들기 (선택)
+
+`tools/demo`에 위 영상을 만든 도구가 있습니다. 차 화면, 차 소리, 휴대폰 화면, Virtual Console을 같은 시각에 맞춰 녹화하고 자막을 붙여 한 편으로 합칩니다.
+
+1. 에뮬레이터를 소리 파일 출력으로 띄웁니다. Car 이미지는 안내 음성을 차량용 오디오 경로로 내보내서 화면 녹화 도구에는 소리가 담기지 않기 때문입니다.
+   `QEMU_AUDIO_DRV=wav QEMU_WAV_PATH=/tmp/rgdev/emu_audio.wav emulator -avd <AVD 이름> -audio wav` (다른 경로를 쓰면 `EMU_WAV`로 알려 줍니다)
+2. `cd tools/demo && npm install && node record.mjs ./out` (화면 녹화에 scrcpy를 쓰려면 `SCRCPY=<scrcpy 경로>`, 없으면 adb screenrecord)
+3. `python3 compose.py ./out ./out/demo.mp4 [cuts.json]` (ffmpeg, Pillow 필요. cuts.json에는 장면별로 남길 구간을 초 단위로 적습니다)
 
 ## 이야기 출처
 

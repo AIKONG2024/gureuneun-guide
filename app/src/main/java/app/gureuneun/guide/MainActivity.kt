@@ -90,7 +90,7 @@ class MainActivity : ComponentActivity() {
             "go" -> engine.completeRollcall()
             "play" -> engine.demoPlay()
             "pause" -> engine.demoPause()
-            "jump" -> engine.demoJumpToNext()
+            "jump" -> engine.demoJumpToNext(intent.getStringExtra("to"))
             "fast" -> engine.setDemoFast(intent.getIntExtra("n", 6))
             "follow" -> engine.setFollowGear(intent.getBooleanExtra("on", true))
             "next" -> engine.onMediaCommand(MediaKeys.Command.NEXT)

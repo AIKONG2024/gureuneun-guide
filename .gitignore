@@ -22,3 +22,5 @@ companion/.env
 # 시연 녹화 도구
 tools/demo/node_modules/
 tools/demo/out/
+__pycache__/
+*.pyc

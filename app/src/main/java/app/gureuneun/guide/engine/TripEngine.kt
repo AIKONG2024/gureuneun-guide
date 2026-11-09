@@ -85,7 +85,9 @@ class TripEngine(private val app: GuideApp) {
         const val HOLD_GUIDE = "guide"
         const val HOLD_USER = "user"
         const val WINDOW_OPEN = 3 // 0~10 중 3, 한 뼘쯤
-        private const val GUIDE_HOLD_M = 220.0
+        // 다음 길 안내가 이만큼 가까우면 이야기를 쉼. 시연 경로에는 실제 내비 음성이 없어 짧게 둠
+        private const val GUIDE_HOLD_M = 150.0
+        private const val GUIDE_HOLD_DEMO_M = 40.0
         private const val CRUISE_BRIGHTNESS = 40
     }
 
@@ -103,6 +105,8 @@ class TripEngine(private val app: GuideApp) {
     private var maneuverAlong: List<Double> = emptyList()
     private val inside = HashSet<String>()
     private val entered = LinkedHashSet<String>()
+    // 시연 중 건너뛴 명소. 지나간 것으로 치지만 "함께 지나온 명소" 수에는 넣지 않음
+    private val skippedInDemo = HashSet<String>()
     private var savedAmbient: Pair<Int, Int>? = null
     private var parkedSince: Long? = null
     private var turnJob: Job? = null
@@ -113,12 +117,14 @@ class TripEngine(private val app: GuideApp) {
     private var nightAnnounced = false
     private var windowAskedFor = HashSet<String>()
     private var regionColor = 0xFF7FE3FF.toInt()
+    private var playerWasBusy = false
 
     private val lang get() = ui.value.lang
+    private val guideHoldM get() = if (ui.value.demoMode) GUIDE_HOLD_DEMO_M else GUIDE_HOLD_M
 
     init {
-        // 시연 주행: 말하는 동안은 실제 속도, 쉬는 동안(길 안내 대기 포함)은 빨리 감기
-        demo.storyPlaying = { player.speaking }
+        // 시연 주행: 들려줄 이야기가 남아 있으면 실제 속도, 아무것도 없을 때만 빨리 감기
+        demo.storyPlaying = { player.busy }
         player.onSentence = { item, index ->
             val text = item.sentences.getOrNull(index) ?: ""
             GLog.i("Speak", "[" + item.lang + "] " + text)
@@ -156,9 +162,12 @@ class TripEngine(private val app: GuideApp) {
         maneuverAlong = sc.maneuvers.map { line.project(it.pos) }
         inside.clear()
         entered.clear()
+        skippedInDemo.clear()
         windowAskedFor.clear()
         rainAnnounced = false
         nightAnnounced = false
+        // 앞 여행에서 세워 둔 시각이 남아 있으면 첫 출발을 "다시 출발"로 잘못 알아들음
+        parkedSince = null
         player.stopAll()
         recorder.begin(sc.id, lang)
         regionColor = parseColor(sc.places.firstOrNull { it.kind == PlaceKind.CITY }?.color ?: "#7FE3FF")
@@ -211,11 +220,11 @@ class TripEngine(private val app: GuideApp) {
         // 5. 좌석 점호와 인사
         if (resume) {
             val next = nextPlaceAfter()
-            say(PlaceKindSystem.CHAPTER, sc.chapter.pick(lang).replace("{next}", next?.name?.pick(lang) ?: ""))
+            say(PlaceKindSystem.CHAPTER, fillKo(sc.chapter.pick(lang), "next", next?.name?.pick(lang) ?: ""))
             completeRollcall(silent = true)
         } else {
             val names = sc.landmarks.filter { it.triggers }.joinToString(if (lang == "en") ", " else ", ") { it.name.pick(lang) }
-            say(PlaceKindSystem.GREETING, sc.greeting.pick(lang).replace("{places}", names))
+            say(PlaceKindSystem.GREETING, fillKo(sc.greeting.pick(lang), "places", names))
             if (app.vehicle.state.value.connected && app.vehicle.state.value.allBuckled) completeRollcall()
         }
         bringToFrontSoon()
@@ -223,7 +232,7 @@ class TripEngine(private val app: GuideApp) {
 
     private enum class PlaceKindSystem { GREETING, DEPARTURE, CHAPTER, FINALE, NOTICE }
 
-    private fun say(kind: PlaceKindSystem, text: String, front: Boolean = false) {
+    private fun say(kind: PlaceKindSystem, text: String, front: Boolean = false, interject: Boolean = false) {
         if (text.isBlank()) return
         val item = StoryPlayer.Item(
             key = "sys-${kind.name}-${System.nanoTime()}",
@@ -239,7 +248,11 @@ class TripEngine(private val app: GuideApp) {
             sentences = StoryPlayer.sentences(text),
             kind = StoryPlayer.Kind.SYSTEM,
         )
-        if (front) player.enqueueFront(item) else player.enqueue(item)
+        when {
+            interject -> player.interject(item)
+            front -> player.enqueueFront(item)
+            else -> player.enqueue(item)
+        }
     }
 
     /** 모두 벨트를 매면(또는 직접 확인하면) 출발 */
@@ -267,7 +280,8 @@ class TripEngine(private val app: GuideApp) {
         demo.stop()
         player.stopAll()
         sound.stopWaves()
-        say(PlaceKindSystem.FINALE, sc.finale.pick(lang).replace("{count}", entered.count { id -> sc.findPlace(id)?.kind != PlaceKind.CITY }.toString()))
+        val count = entered.count { id -> id !in skippedInDemo && sc.findPlace(id)?.kind != PlaceKind.CITY }
+        say(PlaceKindSystem.FINALE, sc.finale.pick(lang).replace("{count}곳", koCount(count) + " 곳").replace("{count}", count.toString()))
         recorder.event("end", null, sc.title.pick(lang))
         recorder.end()
         app.location.clear()
@@ -318,12 +332,22 @@ class TripEngine(private val app: GuideApp) {
         ui.update { it.copy(demoFast = demo.fastForward) }
     }
 
-    /** 다음 명소 바로 앞으로 건너뜀 */
-    fun demoJumpToNext() {
+    /** 다음 명소(to 를 주면 그 명소) 바로 앞으로 건너뜀. 사이에 있는 명소는 지나간 것으로 침 */
+    fun demoJumpToNext(to: String? = null) {
         val line = polyline ?: return
-        val next = nextPlaceAfter() ?: return
-        val along = line.project(next.pos)
-        demo.seek(max(0.0, along - next.radiusM - 120))
+        val sc = scenario ?: return
+        val target = to?.let { id -> sc.places.firstOrNull { it.id == id } } ?: nextPlaceAfter() ?: return
+        val along = line.project(target.pos)
+        val skipped = sc.places.filter {
+            it.triggers && it.kind != PlaceKind.CITY && it.id != target.id && it.id !in entered && line.project(it.pos) < along
+        }
+        if (skipped.isNotEmpty()) {
+            entered += skipped.map { it.id }
+            skippedInDemo += skipped.map { it.id }
+            saveEntered()
+            ui.update { it.copy(entered = entered.toList()) }
+        }
+        demo.seek(max(0.0, along - target.radiusM - 120))
     }
 
     private fun maybeRunDemo() {
@@ -383,11 +407,18 @@ class TripEngine(private val app: GuideApp) {
         return sc.places.firstOrNull { it.triggers && it.kind != PlaceKind.CITY && it.id !in entered }
     }
 
+    /** 경로를 따라 이 명소를 marginM 미터 넘게 지나쳤는지. 늦게 차례가 온 안내를 걸러 낼 때 씀 */
+    private fun passed(place: Place, marginM: Double): Boolean {
+        val line = polyline ?: return false
+        val car = ui.value.carPos ?: return false
+        return line.project(car) > line.project(place.pos) + marginM
+    }
+
     /** 다음 길 안내까지(없으면 다음 명소까지) 조용히 들을 수 있는 시간으로 이야기 길이를 고름 */
     private fun chooseLength(): StoryLength {
         val guide = ui.value.guideDistanceM
         val quietM = when {
-            guide != null -> guide - GUIDE_HOLD_M
+            guide != null -> guide - guideHoldM
             else -> (ui.value.nextDistanceM ?: 2000.0) - 250.0
         }
         val quietS = quietM / max(speedMs, 3.0)
@@ -427,6 +458,8 @@ class TripEngine(private val app: GuideApp) {
             sound.chime(rising = true)
             setAmbient(color, 90)
         } else {
+            // 새 명소가 나타나면 하던 이야기는 이 문장까지만 하고 명소 안내로 넘어감
+            player.yieldCurrent()
             // 지나갈 때 가장 가까워지는 지점에서 어느 쪽에 보이는지로 판단 ("잠시 후 오른쪽에")
             val side = polyline?.let { line ->
                 val (pt, hd) = line.at(line.project(place.pos))
@@ -441,6 +474,8 @@ class TripEngine(private val app: GuideApp) {
                     StoryPlayer.Item(
                         key = "ann-${place.id}", placeId = place.id, title = name, lang = lang,
                         sentences = StoryPlayer.sentences(announce), kind = StoryPlayer.Kind.ANNOUNCE,
+                        // "잠시 후"라고 말하기엔 이미 지나쳤으면 건너뜀
+                        stale = { passed(place, 30.0) },
                         onStart = {
                             setAmbient(color, 80)
                             showStoryOnPhones(place, announce, null, "announce")
@@ -454,6 +489,8 @@ class TripEngine(private val app: GuideApp) {
             StoryPlayer.Item(
                 key = "story-${place.id}", placeId = place.id, title = name, lang = lang,
                 sentences = StoryPlayer.sentences(text), kind = StoryPlayer.Kind.STORY, length = len,
+                yieldable = true,
+                stale = if (place.kind == PlaceKind.CITY) null else ({ passed(place, place.radiusM * 1.5) }),
                 onStart = {
                     setAmbient(color, if (place.kind == PlaceKind.CITY) 90 else 80)
                     recorder.event("story", place.id, name, len.name)
@@ -522,10 +559,12 @@ class TripEngine(private val app: GuideApp) {
     private fun onTurnSignal(on: Boolean) {
         turnJob?.cancel()
         if (on) {
+            GLog.i("Trip", "방향지시등 켜짐, 이야기 잠시 멈춤")
             player.hold(HOLD_TURN)
         } else {
             turnJob = app.scope.launch {
                 delay(1200)
+                GLog.i("Trip", "방향지시등 꺼짐, 이야기 이어 감")
                 player.release(HOLD_TURN)
             }
         }
@@ -537,12 +576,12 @@ class TripEngine(private val app: GuideApp) {
         if (rain && !rainAnnounced) {
             rainAnnounced = true
             recorder.event("rain", null, if (lang == "en") "Rain" else "비")
-            say(PlaceKindSystem.NOTICE, if (lang == "en") "Looks like rain. I'll tell the next stories with the sound of rain." else "비가 오네요. 다음 이야기는 빗소리와 어울리게 들려 드릴게요.")
+            say(PlaceKindSystem.NOTICE, if (lang == "en") "Looks like rain. I'll tell the next stories with the sound of rain." else "비가 오네요. 다음 이야기는 빗소리와 어울리게 들려 드릴게요.", interject = true)
         }
         if (night && !nightAnnounced) {
             nightAnnounced = true
             recorder.event("night", null, if (lang == "en") "Night" else "밤")
-            say(PlaceKindSystem.NOTICE, if (lang == "en") "The headlights are on. From now on, night stories." else "전조등이 켜졌네요. 이제부터는 밤 풍경 이야기로 바꿔 드릴게요.")
+            say(PlaceKindSystem.NOTICE, if (lang == "en") "The headlights are on. From now on, night stories." else "전조등이 켜졌네요. 이제부터는 밤 풍경 이야기로 바꿔 드릴게요.", interject = true)
         }
     }
 
@@ -561,7 +600,7 @@ class TripEngine(private val app: GuideApp) {
             // 다시 타면 다음 장
             if (since != null && System.currentTimeMillis() - since > 15_000) {
                 val next = nextPlaceAfter()
-                if (next != null) say(PlaceKindSystem.CHAPTER, scenario?.chapter?.pick(lang).orEmpty().replace("{next}", next.name.pick(lang)))
+                if (next != null) say(PlaceKindSystem.CHAPTER, fillKo(scenario?.chapter?.pick(lang).orEmpty(), "next", next.name.pick(lang)))
             }
             if (u.demoMode && u.followGear) demoPlay()
         }
@@ -630,13 +669,15 @@ class TripEngine(private val app: GuideApp) {
 
     /** 다음 길 안내가 가까우면 잠시 멈추고, 지나가면 이어서 */
     private fun updateGuidanceHold(dist: Double?) {
-        val near = dist != null && dist in 0.0..GUIDE_HOLD_M
+        val near = dist != null && dist in 0.0..guideHoldM
         if (near && !player.isHeld(HOLD_GUIDE)) {
             guideJob?.cancel()
+            GLog.i("Trip", "길 안내 " + dist?.toInt() + "m 앞, 이야기 잠시 멈춤")
             player.hold(HOLD_GUIDE)
         } else if (!near && player.isHeld(HOLD_GUIDE) && guideJob?.isActive != true) {
             guideJob = app.scope.launch {
                 delay(1500)
+                GLog.i("Trip", "길 안내 지남, 이야기 이어 감")
                 player.release(HOLD_GUIDE)
             }
         }
@@ -699,8 +740,12 @@ class TripEngine(private val app: GuideApp) {
         ui.update { it.copy(pick = pick) }
         say(
             PlaceKindSystem.NOTICE,
-            if (lang == "en") "${pick.by} picked ${pick.name}. Tap confirm to add it to navigation."
-            else "${pick.by}님이 ${pick.name}${eulReul(pick.name)} 골랐어요. 화면에서 확인을 누르면 내비게이션에 넣을게요.",
+            when {
+                lang == "en" && pick.fromCar -> "${pick.by} sent ${spokenName(pick.name)}. Tap confirm to add it to navigation."
+                lang == "en" -> "${pick.by} picked ${spokenName(pick.name)}. Tap confirm to add it to navigation."
+                pick.fromCar -> "${pick.by}에서 ${spokenName(pick.name)}${eulReul(pick.name)} 보냈어요. 화면에서 확인을 누르면 내비게이션에 넣을게요."
+                else -> "${pick.by}님이 ${spokenName(pick.name)}${eulReul(pick.name)} 골랐어요. 화면에서 확인을 누르면 내비게이션에 넣을게요."
+            },
             front = true,
         )
     }
@@ -742,6 +787,9 @@ class TripEngine(private val app: GuideApp) {
 
     private fun syncPlayer() {
         val cur = player.current
+        val busy = player.busy
+        if (playerWasBusy && !busy) GLog.i("Player", "이야기 끝, 조용함")
+        playerWasBusy = busy
         ui.update {
             it.copy(
                 // 안내 문구처럼 장소가 없는 항목이 나와도 마지막 명소 영상은 그대로 둠
@@ -791,11 +839,38 @@ class TripEngine(private val app: GuideApp) {
 
     private fun parseColor(hex: String): Int = runCatching { Color.parseColor(hex) }.getOrDefault(0xFF7FE3FF.toInt())
 
-    private fun eulReul(word: String): String {
-        val c = word.lastOrNull() ?: return "를"
-        if (c !in '가'..'힣') return "을(를)"
-        return if ((c - '가') % 28 == 0) "를" else "을"
+    // ---------------------------------------------------------------- 한국어 조사와 수 읽기
+
+    /** 소리로 읽을 이름. 끝에 붙은 "(예시)" 같은 괄호 표기는 뺌 */
+    private fun spokenName(name: String): String = name.replace(Regex("\\s*\\([^()]*\\)\\s*$"), "").trim()
+
+    /** 마지막 글자에 받침이 있으면 true, 없으면 false, 판단할 수 없으면 null. 숫자는 읽는 소리로 판단 */
+    private fun hasJong(word: String): Boolean? {
+        val c = spokenName(word).trimEnd { !it.isLetterOrDigit() }.lastOrNull() ?: return null
+        return when (c) {
+            in '가'..'힣' -> (c - '가') % 28 != 0
+            in '0'..'9' -> c in "013678"
+            else -> null
+        }
     }
+
+    private fun josa(word: String, withJong: String, withoutJong: String): String = when (hasJong(word)) {
+        true -> withJong
+        false -> withoutJong
+        null -> "$withJong($withoutJong)"
+    }
+
+    private fun eulReul(word: String): String = josa(word, "을", "를")
+
+    /** 문구의 {key} 자리에 값을 넣고, 바로 뒤의 "예요"는 받침에 맞게 "이에요"로 바꿈 */
+    private fun fillKo(template: String, key: String, value: String): String {
+        val tag = "{$key}"
+        return template.replace(tag + "예요", value + josa(value, "이에요", "예요")).replace(tag, value)
+    }
+
+    /** 열까지는 "세 곳"처럼 우리말 수로 읽음 */
+    private fun koCount(n: Int): String =
+        listOf("한", "두", "세", "네", "다섯", "여섯", "일곱", "여덟", "아홉", "열").getOrNull(n - 1) ?: n.toString()
 
     // 다시 타면 다음 장: 앱이 다시 켜져도 이어서 갈 수 있게 저장
     private fun saveTrip(joinCode: String?) {
