@@ -1,0 +1,217 @@
+{
+  "id": "gyeongju",
+  "title": {
+    "ko": "경주 가족 여행",
+    "en": "Gyeongju family trip"
+  },
+  "subtitle": {
+    "ko": "천 년 신라의 수도를 차 한 대로 한 바퀴",
+    "en": "A drive through Silla's thousand-year capital"
+  },
+  "who": {
+    "ko": "가족, 차 한 대",
+    "en": "Family, one car"
+  },
+  "defaultLang": "ko",
+  "cars": 1,
+  "start": [
+    35.80687,
+    129.1854
+  ],
+  "destination": "donggung",
+  "waypoints": [
+    "daereungwon",
+    "cheomseongdae"
+  ],
+  "greeting": {
+    "ko": "오늘은 경주로 떠나요. 지나갈 곳은 {places}예요. 모두 안전벨트를 매면 출발 안내를 할게요.",
+    "en": "Today we're heading to Gyeongju. On the way we'll pass {places}. Buckle up and we'll set off."
+  },
+  "departure": {
+    "ko": "모두 안전벨트를 매셨네요. 그럼 천 년 전 신라로 출발할게요!",
+    "en": "Everyone's buckled up. Let's head back a thousand years, to Silla!"
+  },
+  "chapter": {
+    "ko": "다시 출발해요. 다음 장은 {next}예요.",
+    "en": "Back on the road. Next chapter: {next}."
+  },
+  "finale": {
+    "ko": "오늘 경주 여행은 여기까지예요. 명소 {count}곳을 함께 지나왔어요. 오늘 기록은 휴대폰으로 가져가실 수 있어요.",
+    "en": "That's all for today's Gyeongju trip. We passed {count} places together. You can take today's record with you on your phone."
+  },
+  "places": [
+    {
+      "id": "gyeongju",
+      "kind": "city",
+      "name": {
+        "ko": "경주",
+        "en": "Gyeongju"
+      },
+      "lat": 35.836,
+      "lon": 129.215,
+      "radius": 2600,
+      "color": "#FFB347",
+      "model": "",
+      "story": {
+        "ko": {
+          "short": "경주에 들어왔어요. 신라가 천 년 가까이 수도로 삼았던 도시예요.",
+          "medium": "경주에 들어왔어요. 신라가 천 년 가까이 수도로 삼았던 도시예요. 2000년에는 도시 곳곳의 신라 유적이 경주역사유적지구라는 이름으로 유네스코 세계유산이 됐어요.",
+          "long": "경주에 들어왔어요. 신라가 천 년 가까이 수도로 삼았던 도시예요. 2000년에는 도시 곳곳의 신라 유적이 경주역사유적지구라는 이름으로 유네스코 세계유산이 됐어요. 신라는 기원전 57년에 시작해 935년까지 이어졌어요. 왕들이 살고, 별을 보고, 잔치를 열던 자리가 지금 우리가 달리는 길 옆에 그대로 남아 있어요. 오늘은 그중에서 대릉원과 첨성대, 동궁과 월지를 차례로 만나요."
+        },
+        "en": {
+          "short": "Welcome to Gyeongju. For nearly a thousand years, this city was the capital of the Silla kingdom.",
+          "medium": "Welcome to Gyeongju. For nearly a thousand years, this city was the capital of the Silla kingdom. In 2000, the Silla sites around the city became a UNESCO World Heritage site, the Gyeongju Historic Areas.",
+          "long": "Welcome to Gyeongju. For nearly a thousand years, this city was the capital of the Silla kingdom. In 2000, the Silla sites around the city became a UNESCO World Heritage site, the Gyeongju Historic Areas. Silla began in 57 BC and lasted until 935. The places where kings lived, watched the stars and held banquets are still right beside the road we're on. Today we'll meet Daereungwon, Cheomseongdae, and Donggung Palace and Wolji Pond."
+        }
+      },
+      "rain": {
+        "ko": "비 내리는 경주는 한결 차분해요.",
+        "en": "Gyeongju feels calmer in the rain."
+      },
+      "night": {
+        "ko": "밤의 경주는 곳곳의 유적에 조명이 들어와 낮과는 또 다른 모습이에요.",
+        "en": "At night, the old sites of Gyeongju are lit up and look completely different."
+      },
+      "source": "위키백과 경주역사유적지구"
+    },
+    {
+      "id": "daereungwon",
+      "kind": "landmark",
+      "name": {
+        "ko": "대릉원",
+        "en": "Daereungwon"
+      },
+      "lat": 35.83895,
+      "lon": 129.21193,
+      "radius": 350,
+      "color": "#7BD88F",
+      "model": "tumuli",
+      "announce": {
+        "ko": "잠시 후 {side}에 대릉원이 보여요.",
+        "en": "Daereungwon is coming up {side}."
+      },
+      "story": {
+        "ko": {
+          "short": "대릉원이에요. 풀로 덮인 커다란 언덕 하나하나가 신라 왕과 왕족의 무덤이에요.",
+          "medium": "대릉원이에요. 풀로 덮인 커다란 언덕 하나하나가 신라 왕과 왕족의 무덤이에요. 그중 천마총은 1973년에 발굴됐는데, 하늘을 나는 흰 말이 그려진 그림이 나와서 천마총이라는 이름이 붙었어요.",
+          "long": "대릉원이에요. 풀로 덮인 커다란 언덕 하나하나가 신라 왕과 왕족의 무덤이에요. 그중 천마총은 1973년에 발굴됐는데, 하늘을 나는 흰 말이 그려진 그림이 나와서 천마총이라는 이름이 붙었어요. 천마총은 지름 47미터, 높이 12.7미터예요. 이 무덤 하나에서만 금관을 비롯한 유물이 만 점 넘게 나왔어요. 옆에 있는 황남대총은 경주에서 가장 큰 무덤인데, 봉우리 두 개가 나란히 붙어 있어요. 북쪽 무덤에는 여자가, 남쪽 무덤에는 남자가 묻혀 있었대요."
+        },
+        "en": {
+          "short": "This is Daereungwon. Each of these big grassy hills is the tomb of a Silla king or royal.",
+          "medium": "This is Daereungwon. Each of these big grassy hills is the tomb of a Silla king or royal. One of them, Cheonmachong, was excavated in 1973. A painting of a white horse flying into the sky was found inside, so it was named the Tomb of the Heavenly Horse.",
+          "long": "This is Daereungwon. Each of these big grassy hills is the tomb of a Silla king or royal. One of them, Cheonmachong, was excavated in 1973. A painting of a white horse flying into the sky was found inside, so it was named the Tomb of the Heavenly Horse. Cheonmachong is 47 meters across and 12.7 meters high. More than ten thousand artifacts, including a gold crown, came out of this one tomb. Next to it is Hwangnamdaechong, the largest tomb in Gyeongju, with two mounds joined side by side. A woman was buried in the north mound and a man in the south."
+        }
+      },
+      "rain": {
+        "ko": "빗물에 젖은 무덤의 풀빛이 오늘따라 더 짙어요.",
+        "en": "The rain makes the grass on the tombs look even greener."
+      },
+      "night": {
+        "ko": "어둠 속에서도 둥근 무덤의 곡선이 하늘과 맞닿아 보여요.",
+        "en": "Even in the dark, you can see the round outlines of the tombs against the sky."
+      },
+      "source": "위키백과 대릉원, 천마총, 황남대총"
+    },
+    {
+      "id": "cheomseongdae",
+      "kind": "landmark",
+      "name": {
+        "ko": "첨성대",
+        "en": "Cheomseongdae"
+      },
+      "lat": 35.8347,
+      "lon": 129.21898,
+      "radius": 320,
+      "color": "#5B7CFF",
+      "model": "cheomseongdae",
+      "announce": {
+        "ko": "잠시 후 {side}에 첨성대가 보여요.",
+        "en": "Cheomseongdae will appear {side} in a moment."
+      },
+      "story": {
+        "ko": {
+          "short": "첨성대예요. 선덕여왕 때 쌓은 돌탑으로, 지금 남아 있는 천문대 가운데 가장 오래된 것으로 꼽혀요.",
+          "medium": "첨성대예요. 선덕여왕 때 쌓은 돌탑으로, 지금 남아 있는 천문대 가운데 가장 오래된 것으로 꼽혀요. 화강암 362개를 27단으로 쌓았어요. 가운데 난 네모난 창에 사다리를 걸쳐 사람이 드나들었대요.",
+          "long": "첨성대예요. 선덕여왕 때 쌓은 돌탑으로, 지금 남아 있는 천문대 가운데 가장 오래된 것으로 꼽혀요. 화강암 362개를 27단으로 쌓았어요. 가운데 난 네모난 창에 사다리를 걸쳐 사람이 드나들었대요. 높이는 9미터 남짓이에요. 그 창은 정남쪽을 보고 있어서 춘분과 추분 한낮에는 햇빛이 창을 지나 탑 안 바닥까지 비춰요. 그래서 계절과 절기를 재는 데도 쓰였을 거라고 봐요. 천삼백 년도 더 전에 신라 사람들이 바로 이 자리에서 별을 올려다봤어요."
+        },
+        "en": {
+          "short": "This is Cheomseongdae, a stone tower built in the reign of Queen Seondeok. It's considered the oldest surviving observatory in Asia.",
+          "medium": "This is Cheomseongdae, a stone tower built in the reign of Queen Seondeok. It's considered the oldest surviving observatory in Asia. It's made of 362 granite stones stacked in 27 layers. People climbed in through the square window in the middle using a ladder.",
+          "long": "This is Cheomseongdae, a stone tower built in the reign of Queen Seondeok. It's considered the oldest surviving observatory in Asia. It's made of 362 granite stones stacked in 27 layers. People climbed in through the square window in the middle using a ladder. It stands a little over nine meters tall. The window faces due south, so at noon on the spring and autumn equinoxes, sunlight shines straight through it onto the floor inside. That's why many think it was also used to track the seasons. More than 1,300 years ago, the people of Silla looked up at the stars from this very spot."
+        }
+      },
+      "rain": {
+        "ko": "비에 젖은 첨성대는 돌 색이 한층 짙어 보여요.",
+        "en": "In the rain, the stones of Cheomseongdae look darker and richer."
+      },
+      "night": {
+        "ko": "밤이라 다행이에요. 별을 보던 탑을 별이 뜬 하늘 아래에서 보게 됐네요.",
+        "en": "Lucky us, it's night. We get to see the star-watching tower under the stars."
+      },
+      "source": "위키백과 첨성대"
+    },
+    {
+      "id": "donggung",
+      "kind": "landmark",
+      "name": {
+        "ko": "동궁과 월지",
+        "en": "Donggung Palace and Wolji Pond"
+      },
+      "lat": 35.8347,
+      "lon": 129.22644,
+      "radius": 300,
+      "color": "#FF9F43",
+      "model": "donggung",
+      "stop": true,
+      "announce": {
+        "ko": "잠시 후 {side}에 동궁과 월지가 보여요. 오늘의 마지막 목적지예요.",
+        "en": "Donggung Palace and Wolji Pond are coming up {side}. This is our last stop today."
+      },
+      "story": {
+        "ko": {
+          "short": "동궁과 월지예요. 신라 왕자가 지내던 궁궐과 그 앞 연못이에요.",
+          "medium": "동궁과 월지예요. 신라 왕자가 지내던 궁궐과 그 앞 연못이에요. 연못은 674년 문무왕 때 팠는데, 가운데에 섬 세 개를 두고 둘레에 산을 쌓아 꽃과 나무를 심었다고 해요.",
+          "long": "동궁과 월지예요. 신라 왕자가 지내던 궁궐과 그 앞 연못이에요. 연못은 674년 문무왕 때 팠는데, 가운데에 섬 세 개를 두고 둘레에 산을 쌓아 꽃과 나무를 심었다고 해요. 오랫동안 안압지라고 불렸어요. 신라가 사라진 뒤 폐허가 된 연못에 기러기와 오리가 날아들자 조선 사람들이 붙인 이름이에요. 그러다 발굴에서 나온 토기 조각으로 신라 때 이름이 월지, 달의 연못이었다는 게 밝혀졌고, 2011년에 지금 이름으로 바뀌었어요. 나라에 경사가 있거나 귀한 손님이 오면 여기서 잔치를 열었대요. 오늘은 우리가 그 손님이에요."
+        },
+        "en": {
+          "short": "This is Donggung Palace and Wolji Pond, where Silla's crown prince lived, with the pond in front of it.",
+          "medium": "This is Donggung Palace and Wolji Pond, where Silla's crown prince lived, with the pond in front of it. The pond was dug in 674 under King Munmu, with three islands in the middle and hills around it planted with flowers and trees.",
+          "long": "This is Donggung Palace and Wolji Pond, where Silla's crown prince lived, with the pond in front of it. The pond was dug in 674 under King Munmu, with three islands in the middle and hills around it planted with flowers and trees. For centuries it was called Anapji, a name given in the Joseon era because wild geese and ducks flew into the ruined pond after Silla fell. Then pottery shards dug up here showed that its Silla name was Wolji, the Moon Pond, and in 2011 it got that name back. Banquets were held here for national celebrations and honored guests. Today, we're the guests."
+        }
+      },
+      "rain": {
+        "ko": "빗방울이 연못 위에 동그라미를 그리고 있을 거예요.",
+        "en": "Raindrops must be drawing little circles on the pond right now."
+      },
+      "night": {
+        "ko": "해가 지면 누각에 불이 들어오고 연못에 그대로 비쳐요. 꼭 내려서 보고 가세요.",
+        "en": "After sunset, the pavilions light up and reflect on the water. Don't miss it."
+      },
+      "source": "위키백과 동궁과 월지"
+    }
+  ],
+  "pickables": [
+    {
+      "id": "hwangridan",
+      "kind": "cafe",
+      "name": {
+        "ko": "황리단길 카페거리",
+        "en": "Hwangridan-gil cafe street"
+      },
+      "lat": 35.8372,
+      "lon": 129.2096
+    },
+    {
+      "id": "museum",
+      "kind": "landmark",
+      "name": {
+        "ko": "국립경주박물관",
+        "en": "Gyeongju National Museum"
+      },
+      "lat": 35.8291,
+      "lon": 129.2279
+    }
+  ],
+  "route": [[35.80687,129.1854],[35.80651,129.18557],[35.80609,129.18576],[35.80576,129.18575],[35.80546,129.18546],[35.80544,129.18498],[35.80571,129.18463],[35.80601,129.18449],[35.80639,129.18448],[35.80678,129.18469],[35.80708,129.18504],[35.80734,129.18546],[35.80833,129.18714],[35.80862,129.18764],[35.80889,129.18815],[35.80944,129.18925],[35.81003,129.19049],[35.81085,129.19208],[35.81121,129.1928],[35.81209,129.19471],[35.81229,129.19515],[35.81402,129.19888],[35.81427,129.19941],[35.81513,129.20131],[35.81531,129.20168],[35.81562,129.2023],[35.81592,129.20292],[35.81738,129.20613],[35.81818,129.20785],[35.81875,129.20911],[35.81938,129.21044],[35.81987,129.21049],[35.82045,129.2105],[35.82084,129.21052],[35.82178,129.21056],[35.8229,129.21063],[35.82334,129.21066],[35.82429,129.21071],[35.82466,129.21067],[35.82509,129.21044],[35.82561,129.21017],[35.82635,129.20978],[35.82672,129.20971],[35.8271,129.20969],[35.82747,129.20968],[35.82838,129.20966],[35.82946,129.20962],[35.82992,129.2096],[35.8312,129.20958],[35.83211,129.20954],[35.83302,129.2095],[35.83301,129.2089],[35.833,129.2083],[35.83299,129.20774],[35.83299,129.2072],[35.83371,129.2072],[35.83435,129.2072],[35.83494,129.20718],[35.83679,129.20715],[35.83803,129.20712],[35.83835,129.20712],[35.83868,129.20712],[35.83905,129.20713],[35.83913,129.20757],[35.8392,129.20798],[35.83929,129.20849],[35.83953,129.20992],[35.83975,129.2108],[35.83912,129.21103],[35.83927,129.21137],[35.83949,129.2118],[35.83941,129.21224],[35.83935,129.213],[35.83945,129.21347],[35.83892,129.21369],[35.83835,129.21372],[35.83791,129.21377],[35.8376,129.21388],[35.83716,129.21414],[35.8367,129.21441],[35.8364,129.21469],[35.83612,129.21501],[35.83576,129.21565],[35.83548,129.21601],[35.83512,129.21632],[35.83537,129.21676],[35.83552,129.21717],[35.83568,129.21784],[35.83572,129.21847],[35.83575,129.21889],[35.83576,129.21949],[35.83579,129.22029],[35.83582,129.22112],[35.83585,129.22176],[35.83561,129.22222],[35.83376,129.22538],[35.83323,129.22638],[35.83301,129.22677],[35.83174,129.22876],[35.83156,129.2291],[35.83178,129.22879],[35.83303,129.22679],[35.83325,129.22641],[35.83369,129.2256]],
+  "maneuvers": [[35.81938,129.21044,"turn","left"],[35.83302,129.2095,"turn","left"],[35.83299,129.2072,"turn","right"],[35.83905,129.20713,"turn","right"],[35.83975,129.2108,"turn","right"],[35.83912,129.21103,"turn","left"],[35.83928,129.21257,"turn","slight left"],[35.83953,129.21368,"turn","right"],[35.83512,129.21632,"turn","left"],[35.83585,129.22176,"turn","slight right"],[35.83156,129.2291,"turn","sharp left"],[35.83183,129.22913,"turn","left"]]
+}

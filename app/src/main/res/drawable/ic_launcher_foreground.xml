@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 굴러가는 바퀴 -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#7FE3FF"
+        android:strokeWidth="5"
+        android:pathData="M54,30a24,24 0,1 1,-0.01 0z" />
+    <path
+        android:fillColor="#7FE3FF"
+        android:pathData="M54,46a8,8 0,1 1,-0.01 0z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#7FE3FF"
+        android:strokeWidth="3"
+        android:pathData="M54,32 L54,46 M54,62 L54,76 M32,54 L46,54 M62,54 L76,54" />
+    <!-- 이야기 말풍선 점 -->
+    <path
+        android:fillColor="#FFD166"
+        android:pathData="M76,26a6,6 0,1 1,-0.01 0z" />
+</vector>

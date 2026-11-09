@@ -1,0 +1,144 @@
+package app.gureuneun.guide.core
+
+import org.json.JSONArray
+import org.json.JSONObject
+
+data class LatLng(val lat: Double, val lon: Double)
+
+enum class PlaceKind {
+    CITY, LANDMARK, SEA, FOREST, CAFE, PARKING;
+
+    companion object {
+        fun of(s: String?): PlaceKind = entries.firstOrNull { it.name.equals(s, ignoreCase = true) } ?: LANDMARK
+    }
+}
+
+enum class StoryLength { SHORT, MEDIUM, LONG }
+
+/** 시연 경로 위의 길 안내 지점(회전, 분기 등) */
+data class Maneuver(val pos: LatLng, val type: String, val modifier: String)
+
+typealias L10n = Map<String, String>
+
+fun L10n.pick(lang: String): String = this[lang] ?: this["ko"] ?: this.values.firstOrNull() ?: ""
+
+data class Story(val short: String, val medium: String, val long: String) {
+    fun of(len: StoryLength): String = when (len) {
+        StoryLength.SHORT -> short
+        StoryLength.MEDIUM -> medium.ifBlank { short }
+        StoryLength.LONG -> long.ifBlank { medium.ifBlank { short } }
+    }
+}
+
+data class Place(
+    val id: String,
+    val name: L10n,
+    val kind: PlaceKind,
+    val pos: LatLng,
+    val radiusM: Float,
+    val color: String,
+    val model: String?,
+    val announce: L10n,
+    val stories: Map<String, Story>,
+    val rain: L10n,
+    val night: L10n,
+    val ambience: String?,
+    val stop: Boolean,
+    val source: String,
+) {
+    fun story(lang: String): Story? = stories[lang] ?: stories["ko"] ?: stories.values.firstOrNull()
+    val triggers: Boolean
+        get() = kind == PlaceKind.CITY || kind == PlaceKind.LANDMARK || kind == PlaceKind.SEA || kind == PlaceKind.FOREST
+}
+
+data class Scenario(
+    val id: String,
+    val title: L10n,
+    val subtitle: L10n,
+    val who: L10n,
+    val defaultLang: String,
+    val cars: Int,
+    val start: LatLng,
+    val destinationId: String,
+    val waypointIds: List<String>,
+    val places: List<Place>,
+    val pickables: List<Place>,
+    val route: List<LatLng>,
+    val maneuvers: List<Maneuver>,
+    val greeting: L10n,
+    val departure: L10n,
+    val chapter: L10n,
+    val finale: L10n,
+) {
+    fun findPlace(id: String?): Place? = places.firstOrNull { it.id == id } ?: pickables.firstOrNull { it.id == id }
+    val destination: Place? get() = findPlace(destinationId)
+    val waypoints: List<Place> get() = waypointIds.mapNotNull { findPlace(it) }
+    val landmarks: List<Place> get() = places.filter { it.kind != PlaceKind.CITY }
+}
+
+object ScenarioParser {
+    fun parse(text: String): Scenario {
+        val o = JSONObject(text)
+        return Scenario(
+            id = o.getString("id"),
+            title = l10n(o.optJSONObject("title")),
+            subtitle = l10n(o.optJSONObject("subtitle")),
+            who = l10n(o.optJSONObject("who")),
+            defaultLang = o.optString("defaultLang", "ko"),
+            cars = o.optInt("cars", 1),
+            start = latLng(o.getJSONArray("start")),
+            destinationId = o.getString("destination"),
+            waypointIds = o.optJSONArray("waypoints")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(),
+            places = objects(o.getJSONArray("places")).map(::place),
+            pickables = o.optJSONArray("pickables")?.let { objects(it).map(::place) } ?: emptyList(),
+            route = o.getJSONArray("route").let { a -> (0 until a.length()).map { latLng(a.getJSONArray(it)) } },
+            maneuvers = o.optJSONArray("maneuvers")?.let { a ->
+                (0 until a.length()).map { i ->
+                    val m = a.getJSONArray(i)
+                    Maneuver(LatLng(m.getDouble(0), m.getDouble(1)), m.optString(2), m.optString(3))
+                }
+            } ?: emptyList(),
+            greeting = l10n(o.optJSONObject("greeting")),
+            departure = l10n(o.optJSONObject("departure")),
+            chapter = l10n(o.optJSONObject("chapter")),
+            finale = l10n(o.optJSONObject("finale")),
+        )
+    }
+
+    private fun objects(a: JSONArray): List<JSONObject> = (0 until a.length()).map { a.getJSONObject(it) }
+
+    private fun latLng(a: JSONArray) = LatLng(a.getDouble(0), a.getDouble(1))
+
+    private fun l10n(o: JSONObject?): L10n {
+        if (o == null) return emptyMap()
+        val m = LinkedHashMap<String, String>()
+        o.keys().forEach { k -> m[k] = o.optString(k) }
+        return m
+    }
+
+    private fun place(o: JSONObject): Place {
+        val stories = LinkedHashMap<String, Story>()
+        o.optJSONObject("story")?.let { s ->
+            s.keys().forEach { lang ->
+                val v = s.getJSONObject(lang)
+                stories[lang] = Story(v.optString("short"), v.optString("medium"), v.optString("long"))
+            }
+        }
+        return Place(
+            id = o.getString("id"),
+            name = l10n(o.optJSONObject("name")),
+            kind = PlaceKind.of(o.optString("kind")),
+            pos = LatLng(o.getDouble("lat"), o.getDouble("lon")),
+            radiusM = o.optDouble("radius", 300.0).toFloat(),
+            color = o.optString("color", "#7FE3FF"),
+            model = o.optString("model").ifBlank { null },
+            announce = l10n(o.optJSONObject("announce")),
+            stories = stories,
+            rain = l10n(o.optJSONObject("rain")),
+            night = l10n(o.optJSONObject("night")),
+            ambience = o.optString("ambience").ifBlank { null },
+            stop = o.optBoolean("stop", false),
+            source = o.optString("source"),
+        )
+    }
+}

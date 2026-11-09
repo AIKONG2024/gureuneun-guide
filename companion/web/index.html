@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>구르는 가이드</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="landing">
+  <div class="small">구르는 가이드 / Rolling Guide</div>
+  <h1>여행 그룹에 들어가기</h1>
+  <p class="small">차 화면의 QR을 찍으면 바로 들어와요. 그룹 번호로도 들어올 수 있어요.<br>Scan the QR on the car screen, or enter the 4-digit group code.</p>
+  <input id="code" type="text" inputmode="numeric" maxlength="4" placeholder="0000">
+  <button class="btn primary block" id="go">들어가기 / Join</button>
+</div>
+<script>
+  document.getElementById('go').onclick = function () {
+    var c = document.getElementById('code').value.replace(/\D/g, '');
+    if (c.length === 4) location.href = '/g/' + c;
+  };
+</script>
+</body>
+</html>

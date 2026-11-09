@@ -1,0 +1,20 @@
+# Gradle / Android
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# 서명 키는 저장소에 올리지 않음
+*.jks
+*.keystore
+keystore.properties
+
+# 동반 서버
+companion/node_modules/
+companion/data/
+companion/.env

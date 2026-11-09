@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>구르는 가이드 뷰어</title>
+<link rel="stylesheet" href="css/style.css">
+<style>html,body{margin:0;height:100%;background:#0b0e13;overflow:hidden}#stage{position:fixed;inset:0}</style>
+</head>
+<body class="embed">
+<div id="stage" class="gg-stage"></div>
+<script src="vendor/three.min.js"></script>
+<script src="js/viewer.js"></script>
+<script>
+  // 차 화면(WebView)과 미리보기에서 쓰는 단독 뷰어. ?model=cheomseongdae&night=1 처럼 열 수 있음
+  var q = new URLSearchParams(location.search);
+  GG.mount(document.getElementById('stage'), { model: q.get('model') || 'cheomseongdae', tapToOrbit: q.get('embed') !== 'car' });
+  GG.show({ model: q.get('model') || 'cheomseongdae', name: q.get('name') || '', night: q.get('night') === '1', rain: q.get('rain') === '1', mode: q.get('mode') || 'cinematic' });
+</script>
+</body>
+</html>

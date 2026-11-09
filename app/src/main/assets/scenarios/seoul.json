@@ -1,0 +1,217 @@
+{
+  "id": "seoul",
+  "title": {
+    "ko": "서울 여의도 영어 투어",
+    "en": "Seoul Yeouido tour"
+  },
+  "subtitle": {
+    "ko": "기사가 영어를 잘 못해도 차가 대신 안내해요",
+    "en": "The car guides in English, even when the driver doesn't"
+  },
+  "who": {
+    "ko": "외국인 손님, 택시나 가이드 차량",
+    "en": "International guests, taxi or guide car"
+  },
+  "defaultLang": "en",
+  "cars": 1,
+  "start": [
+    37.51367,
+    126.94345
+  ],
+  "destination": "assembly",
+  "waypoints": [
+    "building63",
+    "hangang"
+  ],
+  "greeting": {
+    "ko": "어서 오세요. 오늘은 한강의 섬, 여의도를 한 바퀴 돌아요. 지나갈 곳은 {places}예요. 안전벨트를 매면 출발할게요.",
+    "en": "Welcome aboard. Today we'll drive around Yeouido, an island in the Han River. On the way we'll pass {places}. Please fasten your seatbelts and we'll get going."
+  },
+  "departure": {
+    "ko": "고마워요. 출발할게요!",
+    "en": "Thank you. Off we go!"
+  },
+  "chapter": {
+    "ko": "다시 출발해요. 다음은 {next}예요.",
+    "en": "Back on the road. Next up: {next}."
+  },
+  "finale": {
+    "ko": "여의도 투어는 여기까지예요. 명소 {count}곳을 함께 지나왔어요. 오늘 지나온 길과 들은 이야기는 휴대폰에 담아 가세요.",
+    "en": "That's the end of our Yeouido tour. We passed {count} places together. Keep today's route and stories on your phone."
+  },
+  "places": [
+    {
+      "id": "yeouido",
+      "kind": "city",
+      "name": {
+        "ko": "여의도",
+        "en": "Yeouido"
+      },
+      "lat": 37.525,
+      "lon": 126.925,
+      "radius": 1700,
+      "color": "#FFD166",
+      "model": "",
+      "story": {
+        "en": {
+          "short": "Welcome to Yeouido, an island in the middle of the Han River.",
+          "medium": "Welcome to Yeouido, an island in the middle of the Han River. Bridges connect it to both sides of Seoul. The National Assembly sits on the west side of the island, and towers like the 63 Building on the east.",
+          "long": "Welcome to Yeouido, an island in the middle of the Han River. Bridges connect it to both sides of Seoul. The National Assembly sits on the west side of the island, and towers like the 63 Building on the east. Believe it or not, there was an airfield here from 1916, and it served as an air force base until 1971. The old runway later became a huge plaza, and in 1999 it was turned into Yeouido Park."
+        },
+        "ko": {
+          "short": "여의도에 들어왔어요. 한강 한가운데 있는 섬이에요.",
+          "medium": "여의도에 들어왔어요. 한강 한가운데 있는 섬이에요. 다리로 강 양쪽과 이어져 있어요. 섬 서쪽에는 국회의사당이, 동쪽에는 63빌딩 같은 높은 건물들이 있어요.",
+          "long": "여의도에 들어왔어요. 한강 한가운데 있는 섬이에요. 다리로 강 양쪽과 이어져 있어요. 섬 서쪽에는 국회의사당이, 동쪽에는 63빌딩 같은 높은 건물들이 있어요. 놀랍게도 이 섬에는 1916년부터 비행장이 있었고, 1971년까지 공군 기지로 쓰였어요. 옛 활주로 자리는 커다란 광장이 됐다가 1999년에 여의도공원으로 바뀌었어요."
+        }
+      },
+      "rain": {
+        "ko": "비 오는 한강은 강물 색이 더 깊어져요.",
+        "en": "The Han River looks deeper in the rain."
+      },
+      "night": {
+        "ko": "밤의 여의도는 강 건너 불빛까지 한눈에 들어와요.",
+        "en": "At night, you can see the city lights all along the river from Yeouido."
+      },
+      "source": "위키백과 여의도"
+    },
+    {
+      "id": "building63",
+      "kind": "landmark",
+      "name": {
+        "ko": "63빌딩",
+        "en": "63 Building"
+      },
+      "lat": 37.51985,
+      "lon": 126.94025,
+      "radius": 380,
+      "color": "#FFC94D",
+      "model": "building63",
+      "announce": {
+        "ko": "{side}에 보이는 금빛 건물이 63빌딩이에요.",
+        "en": "{Side} is the 63 Building."
+      },
+      "story": {
+        "en": {
+          "short": "The 63 Building was completed in 1985. Its gold-tinted glass made it one of Korea's very first landmark towers.",
+          "medium": "The 63 Building was completed in 1985. Its gold-tinted glass made it one of Korea's very first landmark towers. Why 63? It has 60 floors above ground and 3 below, 63 in all. It stands about 249 meters tall, and when it opened, it was the tallest building in Asia.",
+          "long": "The 63 Building was completed in 1985. Its gold-tinted glass made it one of Korea's very first landmark towers. Why 63? It has 60 floors above ground and 3 below, 63 in all. It stands about 249 meters tall, and when it opened, it was the tallest building in Asia. Here's a fun detail. Measured above sea level, its top is just one meter lower than the summit of Namsan mountain. And the glass seems to change color with the angle of the sun, from silver to yellow, gold and even red."
+        },
+        "ko": {
+          "short": "63빌딩은 1985년에 완공됐어요. 금빛 유리로 덮인 이 건물은 우리나라 첫 랜드마크 빌딩으로 꼽혀요.",
+          "medium": "63빌딩은 1985년에 완공됐어요. 금빛 유리로 덮인 이 건물은 우리나라 첫 랜드마크 빌딩으로 꼽혀요. 이름이 왜 63일까요? 지상 60층에 지하 3층을 더해 63층이에요. 높이는 249미터쯤이고, 문을 열었을 때는 아시아에서 가장 높은 빌딩이었어요.",
+          "long": "63빌딩은 1985년에 완공됐어요. 금빛 유리로 덮인 이 건물은 우리나라 첫 랜드마크 빌딩으로 꼽혀요. 이름이 왜 63일까요? 지상 60층에 지하 3층을 더해 63층이에요. 높이는 249미터쯤이고, 문을 열었을 때는 아시아에서 가장 높은 빌딩이었어요. 재미있는 사실 하나 더요. 해발로 따지면 이 건물 꼭대기는 남산 꼭대기보다 딱 1미터 낮아요. 유리는 햇빛 각도에 따라 은색, 노란색, 금색, 붉은색으로 달라 보여요."
+        }
+      },
+      "rain": {
+        "ko": "비 오는 날에도 회색 하늘 아래 금빛 유리가 또렷해요.",
+        "en": "Even on a rainy day, the gold glass stands out against the gray sky."
+      },
+      "night": {
+        "ko": "밤에는 건물 불빛이 한강 위로 길게 비쳐요.",
+        "en": "At night, the building's lights stretch across the Han River."
+      },
+      "source": "위키백과 63빌딩"
+    },
+    {
+      "id": "hangang",
+      "kind": "landmark",
+      "name": {
+        "ko": "여의도 한강공원",
+        "en": "Yeouido Hangang Park"
+      },
+      "lat": 37.52567,
+      "lon": 126.93606,
+      "radius": 400,
+      "color": "#4FC3F7",
+      "model": "riverpark",
+      "announce": {
+        "ko": "{side}이 여의도 한강공원이에요.",
+        "en": "{Side} is Yeouido Hangang Park."
+      },
+      "story": {
+        "en": {
+          "short": "Yeouido Hangang Park runs right along the river. On weekends, people come here for picnics and bike rides.",
+          "medium": "Yeouido Hangang Park runs right along the river. On weekends, people come here for picnics and bike rides. The Seoul International Fireworks Festival, which began in 2000, lights up the sky above the river here.",
+          "long": "Yeouido Hangang Park runs right along the river. On weekends, people come here for picnics and bike rides. The Seoul International Fireworks Festival, which began in 2000, lights up the sky above the river here. The parks along the Han were built in the 1980s. Between 1982 and 1986, the river through Seoul was redeveloped, and its banks were turned into places to rest and play."
+        },
+        "ko": {
+          "short": "여의도 한강공원이에요. 주말이면 소풍 오고 자전거 타는 사람들로 붐벼요.",
+          "medium": "여의도 한강공원이에요. 주말이면 소풍 오고 자전거 타는 사람들로 붐벼요. 2000년에 시작된 서울세계불꽃축제가 바로 이 강 위에서 열려요.",
+          "long": "여의도 한강공원이에요. 주말이면 소풍 오고 자전거 타는 사람들로 붐벼요. 2000년에 시작된 서울세계불꽃축제가 바로 이 강 위에서 열려요. 한강공원은 1980년대에 만들어졌어요. 1982년부터 1986년까지 서울 구간 한강을 정비하면서 강변을 시민들이 쉬고 노는 공간으로 바꿨어요."
+        }
+      },
+      "rain": {
+        "ko": "비 오는 날의 한강공원은 조용히 강을 보기 좋아요.",
+        "en": "On a rainy day, the park is a quiet place to watch the river."
+      },
+      "night": {
+        "ko": "밤에는 강 건너 다리 불빛이 공원까지 비쳐요.",
+        "en": "At night, the lights of the bridges shine across to the park."
+      },
+      "source": "위키백과 한강공원, 63빌딩"
+    },
+    {
+      "id": "assembly",
+      "kind": "landmark",
+      "name": {
+        "ko": "국회의사당",
+        "en": "National Assembly"
+      },
+      "lat": 37.53187,
+      "lon": 126.91412,
+      "radius": 380,
+      "color": "#9FD3A6",
+      "model": "assembly",
+      "stop": true,
+      "announce": {
+        "ko": "{side}에 보이는 건물이 국회의사당이에요. 오늘의 마지막 장소예요.",
+        "en": "{Side} is the National Assembly building, our last stop."
+      },
+      "story": {
+        "en": {
+          "short": "This is the National Assembly, where Korea's lawmakers meet. They've been meeting in this building since 1975.",
+          "medium": "This is the National Assembly, where Korea's lawmakers meet. They've been meeting in this building since 1975. Look at the columns around it. There are 24 of them, but they're only decorative. They don't hold up the roof.",
+          "long": "This is the National Assembly, where Korea's lawmakers meet. They've been meeting in this building since 1975. Look at the columns around it. There are 24 of them, but they're only decorative. They don't hold up the roof. The dome on top wasn't in the first design either. It was added during planning, even though the architects didn't agree. And before the building went up, this spot was a small hill called Yangmalsan."
+        },
+        "ko": {
+          "short": "국회의사당이에요. 우리나라 국회의원들이 모여 회의하는 곳이에요. 1975년부터 이 건물을 쓰고 있어요.",
+          "medium": "국회의사당이에요. 우리나라 국회의원들이 모여 회의하는 곳이에요. 1975년부터 이 건물을 쓰고 있어요. 건물을 둘러싼 기둥을 보세요. 모두 24개인데, 지붕을 받치는 기둥이 아니라 꾸밈용이에요.",
+          "long": "국회의사당이에요. 우리나라 국회의원들이 모여 회의하는 곳이에요. 1975년부터 이 건물을 쓰고 있어요. 건물을 둘러싼 기둥을 보세요. 모두 24개인데, 지붕을 받치는 기둥이 아니라 꾸밈용이에요. 지붕 위 둥근 돔도 처음 설계에는 없었어요. 건축가들이 반대했는데도 짓는 과정에서 더해졌어요. 이 건물이 서기 전, 이 자리에는 양말산이라는 작은 산이 있었어요."
+        }
+      },
+      "rain": {
+        "ko": "비에 젖은 돔이 더 짙은 초록빛으로 보여요.",
+        "en": "In the rain, the dome looks an even deeper green."
+      },
+      "night": {
+        "ko": "밤에는 조명을 받은 돔이 멀리서도 잘 보여요.",
+        "en": "At night, the lit dome is easy to spot from far away."
+      },
+      "source": "위키백과 국회의사당 (대한민국), 여의도"
+    }
+  ],
+  "pickables": [
+    {
+      "id": "thehyundai",
+      "kind": "landmark",
+      "name": {
+        "ko": "더현대 서울",
+        "en": "The Hyundai Seoul"
+      },
+      "lat": 37.5259,
+      "lon": 126.9284
+    },
+    {
+      "id": "yeouidopark",
+      "kind": "landmark",
+      "name": {
+        "ko": "여의도공원",
+        "en": "Yeouido Park"
+      },
+      "lat": 37.52554,
+      "lon": 126.92159
+    }
+  ],
+  "route": [[37.51367,126.94345],[37.51369,126.94401],[37.51374,126.94268],[37.51362,126.94065],[37.51359,126.94021],[37.51357,126.93958],[37.51353,126.93852],[37.51344,126.93769],[37.51338,126.93665],[37.51328,126.9351],[37.51324,126.93411],[37.51326,126.9335],[37.51327,126.93188],[37.51328,126.92976],[37.51326,126.9287],[37.51319,126.92815],[37.51299,126.92732],[37.5128,126.92654],[37.51272,126.92613],[37.51268,126.92548],[37.5124,126.92516],[37.51202,126.92502],[37.51123,126.92473],[37.51042,126.92443],[37.51009,126.92431],[37.50966,126.92413],[37.50922,126.92396],[37.50971,126.92431],[37.511,126.9248],[37.51136,126.92491],[37.51214,126.9252],[37.51368,126.92621],[37.51402,126.92647],[37.51432,126.92672],[37.51464,126.92703],[37.51516,126.92742],[37.51676,126.92857],[37.51696,126.92893],[37.51699,126.92945],[37.51718,126.93202],[37.51725,126.93313],[37.5173,126.93369],[37.51736,126.93424],[37.51745,126.93505],[37.51778,126.93513],[37.51828,126.93596],[37.51849,126.9363],[37.51892,126.93699],[37.5192,126.93744],[37.51953,126.93797],[37.52028,126.93917],[37.52054,126.93959],[37.52097,126.94026],[37.52118,126.93995],[37.52147,126.93957],[37.52275,126.93797],[37.52297,126.93768],[37.52428,126.93598],[37.52455,126.93562],[37.52481,126.93527],[37.52684,126.93251],[37.52731,126.93193],[37.52773,126.93139],[37.5283,126.9307],[37.5289,126.92987],[37.52909,126.92949],[37.52934,126.92903],[37.52967,126.92834],[37.52986,126.92796],[37.53017,126.92731],[37.53045,126.92651],[37.53066,126.92593],[37.53079,126.92553],[37.53092,126.92509],[37.53108,126.92457],[37.53136,126.9237],[37.53179,126.92227],[37.53197,126.92166],[37.53208,126.92116],[37.53234,126.92027],[37.53298,126.91822],[37.53224,126.91696],[37.5317,126.9161],[37.53186,126.91574],[37.53153,126.91485],[37.53139,126.91462]],
+  "maneuvers": [[37.51271,126.92528,"turn","left"],[37.51697,126.92859,"turn","right"],[37.51745,126.93505,"turn","left"],[37.51767,126.93498,"turn","right"],[37.52097,126.94026,"turn","left"],[37.533,126.91814,"turn","left"],[37.53162,126.91598,"turn","right"],[37.53193,126.91567,"turn","left"]]
+}
