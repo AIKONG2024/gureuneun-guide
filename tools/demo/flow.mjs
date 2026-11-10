@@ -4,6 +4,7 @@
 //       그룹 서버를 자료 폴더와 함께 켜기: cd companion && DATA_DIR=/tmp/rg-flow-data npm start
 // 사용: DATA_DIR=/tmp/rg-flow-data node tools/demo/flow.mjs gyeongju | jeju | seoul | care
 //       (휴대폰 흉내를 내려고 서버 자료 폴더의 그룹 키를 읽음. 결과와 캡처는 tools/demo/out/flow)
+//       에뮬레이터가 느리면 TIME_SCALE=3 처럼 기다리는 시간을 늘림
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -23,6 +24,8 @@ fs.mkdirSync(OUT, { recursive: true });
 const SCN = Object.fromEntries(['gyeongju', 'jeju', 'seoul'].map(id => [id, JSON.parse(fs.readFileSync(path.join(REPO, 'app/src/main/assets/scenarios', id + '.json'), 'utf8'))]));
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// 에뮬레이터가 느릴 때(안내 음성 한 문장에 10초 넘게 걸릴 때) 기다리는 시간을 늘림. 예: TIME_SCALE=3
+const SCALE = Math.max(1, Number(process.env.TIME_SCALE) || 1);
 const t0 = Date.now();
 const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
 const results = [];
@@ -42,7 +45,7 @@ function fresh() { const all = appLines(); const out = all.slice(seen); seen = a
 const history = [];
 function pull() { const f = fresh(); history.push(...f); return f; }
 async function waitLog(re, ms = 20000, label) {
-  const end = Date.now() + ms;
+  const end = Date.now() + ms * SCALE;
   // 이미 들어온 줄도 봄 (기다리기 시작한 뒤 들어온 것만 보려면 mark 를 씀)
   while (Date.now() < end) {
     pull();
@@ -55,7 +58,7 @@ async function waitLog(re, ms = 20000, label) {
 function since(mark) { return history.slice(mark); }
 async function waitNew(re, ms = 20000) {
   const mark = history.length;
-  const end = Date.now() + ms;
+  const end = Date.now() + ms * SCALE;
   while (Date.now() < end) {
     pull();
     const hit = since(mark).find(l => re.test(l));
@@ -66,7 +69,7 @@ async function waitNew(re, ms = 20000) {
 }
 const mark = () => { pull(); return history.length; };
 async function waitAfter(m, re, ms = 20000) {
-  const end = Date.now() + ms;
+  const end = Date.now() + ms * SCALE;
   while (Date.now() < end) {
     pull();
     const hit = history.slice(m).find(l => re.test(l));
@@ -403,6 +406,9 @@ async function care() {
   demo('answer', '--es', 'q', '응');
   const nav = await waitAfter(m, /충전소 화면 요청/, 15000);
   check('충전: "응"이면 순정 내비 주변 충전소', !!nav);
+  // 순정 내비의 주변 충전소 화면이 뜰 때까지 잠깐 기다렸다가 찍음
+  await sleep(6000);
+  shot('c02_chargers');
   m = mark();
   demo('asktext', '--es', 'q', '기름 얼마나 남았어?');
   const st = await waitAfter(m, /\[Speak\].*배터리는/, 15000);

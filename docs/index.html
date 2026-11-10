@@ -3,26 +3,47 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1015">
 <title>구르는 가이드 시연 영상</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Asta+Sans:wght@400;600;700&display=swap">
 <style>
-  body { margin: 0; background: #0d121c; color: #e8ecf3; font-family: -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif; }
-  main { max-width: 1120px; margin: 0 auto; padding: 36px 20px 64px; }
-  h1 { font-size: 32px; margin: 0 0 6px; }
-  .one { color: #ffb347; font-size: 19px; font-weight: 600; margin: 0 0 24px; }
-  video { display: block; width: 100%; border-radius: 12px; background: #000; }
-  p, li { color: #b8c0d0; line-height: 1.75; font-size: 16px; }
-  a { color: #7fe3ff; }
-  .note { margin-top: 18px; }
-  .chapters { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 4px; }
-  .chapters button { font: inherit; font-size: 15px; color: #e8ecf3; background: #1c2430; border: 1px solid #2a3442; border-radius: 99px; padding: 8px 14px; cursor: pointer; }
-  .chapters button b { color: #ffb347; margin-right: 6px; }
-  .chapters button:hover { border-color: #ffb347; }
+  /* 앱과 같은 색: 현대자동차 CI 의 현대 블루(#002C5F), 액티브 블루(#00AAD2), 스카이 블루(#AACAE6) */
+  :root { --bg: #0E1015; --surface: #171A20; --raised: #22262E; --line: rgba(255,255,255,.10); --text: #F7F8FA; --text2: #C7C9CE; --brand: #002C5F; --accent: #00AAD2; --sky: #AACAE6; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; color: var(--text); font-family: "Asta Sans", -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    background: radial-gradient(1200px 640px at 12% -12%, rgba(0,44,95,.85), rgba(0,44,95,.2) 55%, transparent 80%), var(--bg); background-repeat: no-repeat; }
+  main { max-width: 1120px; margin: 0 auto; padding: 40px 20px 72px; }
+  header { display: flex; align-items: center; gap: 16px; margin-bottom: 26px; }
+  .mark { width: 56px; height: 56px; flex: none; border-radius: 17px; background: linear-gradient(135deg, #00468F, #002C5F 50%, #001A3A); display: grid; place-items: center; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+  h1 { font-size: 32px; line-height: 1.2; margin: 0; font-weight: 700; letter-spacing: -.01em; }
+  .one { color: var(--sky); font-size: 18px; font-weight: 600; margin: 4px 0 0; }
+  video { display: block; width: 100%; border-radius: 18px; background: #000; box-shadow: 0 10px 40px rgba(0,0,0,.45); }
+  p, li { color: var(--text2); line-height: 1.75; font-size: 16px; word-break: keep-all; }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  .note { margin-top: 20px; }
+  .chapters { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 4px; }
+  .chapters button { font: inherit; font-size: 15px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 14px; min-height: 44px; padding: 9px 14px; cursor: pointer; transition: border-color .15s, background .15s; }
+  .chapters button b { color: var(--accent); font-weight: 700; margin-right: 8px; font-variant-numeric: tabular-nums; }
+  .chapters button:hover, .chapters button:focus-visible { border-color: var(--accent); background: var(--raised); outline: none; }
 </style>
 </head>
 <body>
 <main>
-  <h1>구르는 가이드</h1>
-  <p class="one">버튼 하나면 차가 통째로 여행 어드벤처가 됩니다</p>
+  <header>
+    <div class="mark" aria-hidden="true">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="6" r="2.4"/>
+        <path d="M8.4 18H14.6C16.6 18 17.8 16.6 17.8 14.9C17.8 13.1 16.5 11.8 14.8 11.8H9.2C7.5 11.8 6.2 10.5 6.2 8.8C6.2 7.1 7.4 6 9.2 6H15.6"/>
+        <circle cx="21.2" cy="2.6" r="1.6" fill="#00AAD2" stroke="none"/>
+      </svg>
+    </div>
+    <div>
+      <h1>구르는 가이드</h1>
+      <p class="one">버튼 하나면 차가 통째로 여행 어드벤처가 됩니다</p>
+    </div>
+  </header>
   <video id="v" controls preload="metadata" poster="demo/poster.jpg" src="demo/gureuneun-guide-demo.mp4"></video>
   <div class="chapters" id="chapters">
     <button data-t="6"><b>0:06</b>장면 1. 경주, 가족 여행</button>

@@ -25,10 +25,13 @@ PHONE = (1441, 96, 431, 920)    # 휴대폰
 VCP = (48, 848, 256, 224)       # Virtual Console 에서 차 평면도(실내 조명 색, 창문) 부분
 VC_CROP = (696, 282, 256, 224)  # 960x540 Virtual Console 녹화에서 잘라 낼 자리
 CAP = (324, 848, 1004, 209)     # 자막 상자
-BG = (13, 18, 28)
-LINE = (48, 58, 80)
-SUB = (150, 160, 182)
-ACCENT = (255, 179, 71)
+# 앱과 같은 색: 바탕 #0E1015, 나눔선, 보조 글자 #9AA0AA, 강조는 현대자동차 CI 의 액티브 블루 #00AAD2
+BG = (14, 16, 21)
+LINE = (44, 49, 59)
+SUB = (154, 160, 170)
+ACCENT = (0, 170, 210)
+CARD = (23, 26, 32, 255)
+BRAND = (0, 44, 95, 255)
 REPO = 'github.com/AIKONG2024/gureuneun-guide'
 
 ORDER = ['gyeongju1', 'gyeongju2', 'jeju', 'record', 'seoul', 'care']
@@ -87,7 +90,7 @@ def base_image(title, path):
 def caption_image(title, body, path):
     im = Image.new('RGBA', (CAP[2], CAP[3]), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    d.rounded_rectangle((0, 0, CAP[2] - 1, CAP[3] - 1), radius=14, fill=(23, 30, 45, 255), outline=LINE, width=2)
+    d.rounded_rectangle((0, 0, CAP[2] - 1, CAP[3] - 1), radius=14, fill=CARD, outline=LINE, width=2)
     d.rounded_rectangle((0, 0, 9, CAP[3] - 1), radius=4, fill=ACCENT)
     tag = None
     m = re.search(r'\s*\(([A-Za-z][^()]*)\)\s*$', body)
@@ -98,7 +101,7 @@ def caption_image(title, body, path):
     if tag:
         cf = font(19, SEMI)
         cw = d.textlength(tag, font=cf) + 28
-        d.rounded_rectangle((CAP[2] - 24 - cw, 22, CAP[2] - 24, 54), radius=16, fill=(58, 46, 26, 255), outline=ACCENT, width=1)
+        d.rounded_rectangle((CAP[2] - 24 - cw, 22, CAP[2] - 24, 54), radius=16, fill=BRAND, outline=ACCENT, width=1)
         d.text((CAP[2] - 24 - cw + 14, 25), tag, font=cf, fill=ACCENT)
         title_w = maxw - cw - 16
     tf, bf = font(36, BOLD), font(26, REG)
@@ -109,7 +112,7 @@ def caption_image(title, body, path):
         y += 48
     y += 8
     for line in wrap(d, body, bf, maxw)[:3 if len(tl) == 1 else 2]:
-        d.text((x0, y), line, font=bf, fill=(204, 211, 224))
+        d.text((x0, y), line, font=bf, fill=(199, 201, 206))
         y += 37
     im.save(path)
 
