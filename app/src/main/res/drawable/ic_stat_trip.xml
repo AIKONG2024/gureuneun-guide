@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 상태 표시줄 알림 아이콘 (흰색 한 가지 색): 앱 표시의 길 모양 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M8.4,18 L14.6,18 C16.6,18 17.8,16.6 17.8,14.9 C17.8,13.1 16.5,11.8 14.8,11.8 L9.2,11.8 C7.5,11.8 6.2,10.5 6.2,8.8 C6.2,7.1 7.4,6 9.2,6 L15.6,6" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.2"
+        android:pathData="M6,15.6 a2.4,2.4 0 1,1 0,4.8 a2.4,2.4 0 1,1 0,-4.8z M18,3.6 a2.4,2.4 0 1,1 0,4.8 a2.4,2.4 0 1,1 0,-4.8z" />
+</vector>

@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg">#0E1116</color>
-    <color name="icon_bg">#0B2A4A</color>
+    <!-- 앱 바탕 (화면 토큰 C.bg 와 같음) -->
+    <color name="bg">#0E1015</color>
+    <!-- 현대 블루 (현대자동차 CI 전용색상) -->
+    <color name="icon_bg">#002C5F</color>
+    <color name="accent">#00AAD2</color>
 </resources>

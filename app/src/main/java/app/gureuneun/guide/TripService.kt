@@ -145,7 +145,8 @@ class TripService : Service() {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
             return NotificationCompat.Builder(ctx, CHANNEL)
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setSmallIcon(R.drawable.ic_stat_trip)
+                .setColor(ContextCompat.getColor(ctx, R.color.accent))
                 .setContentTitle(text)
                 .setContentText(if (en) "Stories and route alerts keep going on other screens." else "다른 화면을 보는 동안에도 이야기와 길 알림이 이어져요.")
                 .setContentIntent(open)

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 앱 표시 바탕: 현대 블루(#002C5F)를 가운데 두고 왼쪽 위는 밝게, 오른쪽 아래는 깊은 남색으로 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="108"
+                android:endY="108">
+                <item android:offset="0" android:color="#FF00468F" />
+                <item android:offset="0.5" android:color="#FF002C5F" />
+                <item android:offset="1" android:color="#FF001A3A" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

@@ -93,7 +93,6 @@ class TripEngine(private val app: GuideApp) {
         val demoRunning: Boolean = false,
         val demoFast: Int = 6,
         val followGear: Boolean = true,
-        val accent: Int = 0xFF7FE3FF.toInt(),
         val startedAt: Long = 0,
         val resumable: Boolean = false,
         val beltsConfirmed: Boolean = false,
@@ -368,7 +367,6 @@ class TripEngine(private val app: GuideApp) {
             entered = entered.toList(),
             routeLengthM = line.length,
             startedAt = System.currentTimeMillis(),
-            accent = 0xFFFFE2B0.toInt(),
             followGear = ui.value.followGear,
             kidManual = ui.value.kidManual,
             // 뒷좌석 착석으로 아이 모드를 켜는 건 가족 코스만 (택시 뒷좌석 손님, 친구들은 아이가 아니니까)
@@ -518,7 +516,7 @@ class TripEngine(private val app: GuideApp) {
                 PlaceKindSystem.NOTICE,
                 if (lang == "en") "Shall we end today's trip? I'll show today's record." else "오늘 여행을 끝낼까요? 끝내면 하루 기록을 보여 드려요.",
                 interject = true, stale = { !ui.value.confirmEnd }, title = if (lang == "en") "End trip" else "여행 끝",
-                onDone = { if (it) listenForAnswer() },
+                onDone = { afterQuestion(it) },
             )
         }
     }
@@ -947,7 +945,7 @@ class TripEngine(private val app: GuideApp) {
             interject = true,
             stale = { ui.value.windowAsk == null },
             title = if (lang == "en") "Windows" else "창문",
-            onDone = { if (it) listenForAnswer() },
+            onDone = { afterQuestion(it) },
         )
     }
 
@@ -1128,6 +1126,8 @@ class TripEngine(private val app: GuideApp) {
             fromCar = fromCar,
         )
         ui.update { it.copy(pick = pick) }
+        // 앞 물음의 30초 시계가 새 물음을 접지 않게 멈춤. 새 시계는 이 물음을 다 말한 뒤에 켬
+        promptJob?.cancel()
         val stop = defaultPickMode(pick) == "waypoint"
         say(
             PlaceKindSystem.NOTICE,
@@ -1138,10 +1138,11 @@ class TripEngine(private val app: GuideApp) {
                 else -> "${pick.by} 님이 ${spokenName(pick.name)}${eulReul(pick.name)} 골랐어요. " + if (stop) "가는 길에 들를까요?" else "그리로 안내할까요?"
             },
             front = true,
+            // 묻기도 전에 화면 단추로 답했으면 묻지 않음
+            stale = { ui.value.pick?.id != pick.id },
             title = if (lang == "en") "Picked place" else "고른 장소",
-            onDone = { if (it) listenForAnswer() },
+            onDone = { afterQuestion(it) },
         )
-        armPromptTimeout()
     }
 
     /** 휴대폰에서 고른 곳을 "응" 한마디로 넣을 때의 기본: 주차장은 목적지로, 카페나 볼거리는 가는 길에 들르기 */
@@ -1378,10 +1379,28 @@ class TripEngine(private val app: GuideApp) {
      * 물음을 다 말한 뒤 마이크를 잠깐 열어 "응", "나중에"를 들음 (글레오의 되묻기와 같은 흐름).
      * 운전자가 화면을 보지 않고도 답할 수 있게 하는 것이 목적이라, 듣지 못하면 조용히 닫고 화면 단추만 남김
      */
-    private fun listenForAnswer() {
+    /**
+     * 물음을 다 읽었으면 답을 들음. 다른 안내에 밀려 끝까지 못 읽었으면 화면 단추만 남김 (나중에 까닭을 알 수 있게 로그).
+     * 답을 기다리는 30초는 물음이 들린 뒤부터 셈. 앞 이야기가 길어 묻기가 늦어져도 묻기 전에 접히지 않게
+     */
+    private fun afterQuestion(completed: Boolean) {
+        if (hasPrompt()) armPromptTimeout()
+        if (completed) listenForAnswer() else if (hasPrompt()) GLog.i("Ask", "물음을 끝까지 읽지 못해 답 듣기를 열지 않음. 화면 단추로 답할 수 있음")
+    }
+
+    private fun listenForAnswer(attempt: Int = 0) {
         val u = ui.value
-        if (!hasPrompt() || u.listening || u.phase != Phase.DRIVING) return
-        if (app.listen.status.value != ListenBridge.Status.READY) return
+        if (!hasPrompt() || u.listening || u.phase != Phase.DRIVING) {
+            GLog.i("Ask", "답 듣기 안 엶 (물음 ${hasPrompt()}, 듣는 중 ${u.listening}, 단계 ${u.phase})")
+            return
+        }
+        val status = app.listen.status.value
+        if (status != ListenBridge.Status.READY) {
+            // 음성 인식이 앞의 듣기를 막 끝내는 중이면 잠깐 기다렸다가 다시 엶 (물음이 떠 있는 동안 2초까지)
+            if (attempt < 4) app.scope.launch { delay(500); listenForAnswer(attempt + 1) }
+            else GLog.w("Ask", "음성 인식이 준비되지 않아 답 듣기를 건너뜀 ($status). 화면 단추로 답할 수 있음")
+            return
+        }
         ui.update { it.copy(asking = true) }
         beginListening()
         app.listen.listen(lang, { onHeard(it) }, { onNotHeard(it) })
@@ -1712,7 +1731,7 @@ class TripEngine(private val app: GuideApp) {
         say(
             PlaceKindSystem.NOTICE, if (en) "You collected all the stars. Shall I open the treasure box?" else "별을 다 모았네요. 보물 상자를 열어 볼까요?",
             interject = true, stale = { ui.value.offer?.kind != OfferKind.TREASURE }, title = if (en) "Treasure box" else "보물 상자",
-            onDone = { if (it) listenForAnswer() },
+            onDone = { afterQuestion(it) },
         )
         return true
     }
@@ -1827,8 +1846,8 @@ class TripEngine(private val app: GuideApp) {
         val en = lang == "en"
         val body = if (en) "We've been driving for ${Ko.minutes(min, "en")}. Shall we take a break at a rest area?" else "${Ko.minutes(min, "ko")}째 달리고 있어요. 휴게소에서 잠깐 쉬어 갈까요?"
         ui.update { it.copy(offer = Offer(OfferKind.REST, if (en) "Time for a break" else "쉬어 갈 시간", body, if (en) "Find a rest area" else "휴게소 찾기", if (en) "Not now" else "괜찮아요")) }
-        say(PlaceKindSystem.NOTICE, body, interject = true, stale = { ui.value.offer?.kind != OfferKind.REST }, title = if (en) "Time for a break" else "쉬어 갈 시간", onDone = { if (it) listenForAnswer() })
-        armPromptTimeout()
+        promptJob?.cancel()
+        say(PlaceKindSystem.NOTICE, body, interject = true, stale = { ui.value.offer?.kind != OfferKind.REST }, title = if (en) "Time for a break" else "쉬어 갈 시간", onDone = { afterQuestion(it) })
         recorder.event("rest", null, if (en) "Break suggested" else "쉬어 가자고 함", min.toString())
     }
 
@@ -1863,8 +1882,8 @@ class TripEngine(private val app: GuideApp) {
         val body = chargeLine(v, remainKm)
         val offer = chargeOffer(v, body)
         ui.update { it.copy(offer = offer) }
-        say(PlaceKindSystem.NOTICE, body, interject = true, stale = { ui.value.offer?.kind != OfferKind.CHARGE }, title = offer.title, onDone = { if (it) listenForAnswer() })
-        armPromptTimeout()
+        promptJob?.cancel()
+        say(PlaceKindSystem.NOTICE, body, interject = true, stale = { ui.value.offer?.kind != OfferKind.CHARGE }, title = offer.title, onDone = { afterQuestion(it) })
         if (usesFuel(v)) recorder.event("fuel", null, if (en) "Fuel stop suggested" else "주유하자고 함", "${v.fuelPct ?: ""}")
         else recorder.event("charge", null, if (en) "Charging suggested" else "충전하자고 함", "${v.socPct ?: ""}")
     }
@@ -1969,7 +1988,7 @@ class TripEngine(private val app: GuideApp) {
         val name = spot.name.pick(lang)
         val body = if (en) "$name is where people once watched the sky. Shall I open the sunroof so we can look up too?" else "$name${Ko.eunNeun(name)} 옛사람들이 하늘을 보던 곳이에요. 선루프를 열어 우리도 하늘을 볼까요?"
         ui.update { it.copy(offer = Offer(OfferKind.SUNROOF, if (en) "Open the sky" else "하늘 열기", body, if (en) "Open sunroof" else "선루프 열기", if (en) "No thanks" else "괜찮아요", spot.id)) }
-        say(PlaceKindSystem.NOTICE, body, interject = true, stale = { ui.value.offer?.kind != OfferKind.SUNROOF }, title = if (en) "Open the sky" else "하늘 열기", onDone = { if (it) listenForAnswer() })
+        say(PlaceKindSystem.NOTICE, body, interject = true, stale = { ui.value.offer?.kind != OfferKind.SUNROOF }, title = if (en) "Open the sky" else "하늘 열기", onDone = { afterQuestion(it) })
     }
 
     private fun openSunroof(placeId: String?) {
@@ -2114,13 +2133,11 @@ class TripEngine(private val app: GuideApp) {
 
     private fun setAmbient(color: Int, brightness: Int) {
         app.vehicle.setAmbient(color, brightness)
-        ui.update { it.copy(accent = color) }
     }
 
     private fun restoreAmbient() {
         val (c, b) = savedAmbient ?: (0xFFFFFFFF.toInt() to 70)
         app.vehicle.setAmbient(c, b)
-        ui.update { it.copy(accent = 0xFF7FE3FF.toInt()) }
     }
 
     // ---------------------------------------------------------------- 기타
