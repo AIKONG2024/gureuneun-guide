@@ -2,29 +2,64 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0E1015">
+<meta name="color-scheme" content="dark">
 <title>구르는 가이드</title>
+<link rel="stylesheet" href="/vendor/fonts/asta-sans/asta-sans.css">
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-<div class="landing">
-  <div class="small">구르는 가이드 / Rolling Guide</div>
-  <h1>여행 그룹에 들어가기</h1>
-  <p class="small">차 화면의 QR을 찍으면 바로 들어와요. 그룹 번호로도 들어올 수 있어요.<br>Scan the QR on the car screen, or enter the 4-digit group code.</p>
-  <form id="join">
-    <input id="code" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="4" placeholder="0000" aria-label="그룹 번호 / Group code">
-    <button class="btn primary block" id="go" type="submit">들어가기 / Join</button>
-    <p class="small" id="err" role="alert"></p>
+<main class="landing">
+  <div class="landing-top">
+    <span class="mark" aria-hidden="true"><svg viewBox="33 27 49 49" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"><path d="M47.52 64.8H58.68C62.28 64.8 64.44 62.28 64.44 59.22C64.44 55.98 62.1 53.64 59.04 53.64H48.96C45.9 53.64 43.56 51.3 43.56 48.24C43.56 45.18 45.72 43.2 48.96 43.2H60.48"/><circle cx="43.2" cy="64.8" r="4.32"/><circle cx="64.8" cy="43.2" r="4.32"/><circle cx="73.5" cy="34.5" r="4.6" fill="#00AAD2" stroke="none"/></svg></span>
+    <button class="chip-btn" id="langBtn" type="button" lang="en" aria-label="English">EN</button>
+  </div>
+  <p class="landing-brand" id="brand">구르는 가이드</p>
+  <h1 id="h1">여행 그룹에 들어가기</h1>
+  <p class="lead" id="lead">차 화면의 QR을 찍으면 바로 들어와요. 그룹 번호 네 자리로도 들어올 수 있어요.</p>
+  <form id="join" class="join" novalidate>
+    <label for="code" id="codeLabel">그룹 번호</label>
+    <input id="code" class="code-input" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="4" placeholder="0000">
+    <p class="err" id="err" role="alert"></p>
+    <button class="btn primary block" id="go" type="submit">들어가기</button>
   </form>
-  <p class="small">번호로 들어오면 이야기·퀴즈·장소 고르기를 쓸 수 있어요. 사진과 기록은 QR로 들어오면 보여요.<br>With the code you can follow stories, quizzes and pick places. Scan the QR to see photos and the record.</p>
-</div>
+  <div class="landing-note">
+    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.6" y="3.6" width="6.6" height="6.6" rx="1.4"/><rect x="13.8" y="3.6" width="6.6" height="6.6" rx="1.4"/><rect x="3.6" y="13.8" width="6.6" height="6.6" rx="1.4"/><path class="d" d="M6 6H7.8V7.8H6ZM16.2 6H18V7.8H16.2ZM6 16.2H7.8V18H6ZM13.8 13.8H16V16H13.8ZM18.2 13.8H20.4V16H18.2ZM13.8 18.2H16V20.4H13.8ZM18.2 18.2H20.4V20.4H18.2Z"/></svg>
+    <p id="note">번호로 들어오면 이야기와 퀴즈, 장소 고르기를 같이 해요. 사진과 기록은 QR로 들어오면 보여요.</p>
+  </div>
+</main>
 <script>
-  document.getElementById('join').onsubmit = function (e) {
-    e.preventDefault();
-    var c = document.getElementById('code').value.replace(/\D/g, '');
-    if (c.length === 4) location.href = '/g/' + c;
-    else document.getElementById('err').textContent = '네 자리 숫자를 넣어 주세요 / Enter the 4-digit code';
-  };
+  (function () {
+    'use strict';
+    // 그룹을 모르는 첫 화면이라 휴대폰 언어를 따름. 고른 언어는 그룹 페이지와 같이 씀
+    var TXT = {
+      ko: { brand: '구르는 가이드', h1: '여행 그룹에 들어가기', lead: '차 화면의 QR을 찍으면 바로 들어와요. 그룹 번호 네 자리로도 들어올 수 있어요.', codeLabel: '그룹 번호', go: '들어가기',
+        note: '번호로 들어오면 이야기와 퀴즈, 장소 고르기를 같이 해요. 사진과 기록은 QR로 들어오면 보여요.', err: '네 자리 숫자를 넣어 주세요', other: 'EN', otherAria: 'English' },
+      en: { brand: 'Rolling Guide', h1: 'Join the trip group', lead: 'Scan the QR on the car screen to join right away, or enter the 4-digit group code.', codeLabel: 'Group code', go: 'Join',
+        note: 'With the code you can follow stories, quizzes and pick places. Scan the QR to see photos and the record.', err: 'Enter the 4-digit code', other: '한국어', otherAria: '한국어로 보기' }
+    };
+    var lang;
+    try { lang = localStorage.getItem('gg_lang'); } catch (e) {}
+    if (lang !== 'ko' && lang !== 'en') lang = /^ko\b/i.test(navigator.language || '') ? 'ko' : 'en';
+    function $(id) { return document.getElementById(id); }
+    function render() {
+      var d = TXT[lang];
+      document.documentElement.lang = lang;
+      ['brand', 'h1', 'lead', 'codeLabel', 'go', 'note'].forEach(function (k) { $(k).textContent = d[k]; });
+      $('langBtn').textContent = d.other; $('langBtn').setAttribute('aria-label', d.otherAria); $('langBtn').lang = lang === 'en' ? 'ko' : 'en';
+      if ($('err').textContent) $('err').textContent = d.err;
+    }
+    $('langBtn').onclick = function () { lang = lang === 'en' ? 'ko' : 'en'; try { localStorage.setItem('gg_lang', lang); } catch (e) {} render(); };
+    $('code').oninput = function () { var v = this.value.replace(/\D/g, '').slice(0, 4); if (v !== this.value) this.value = v; $('err').textContent = ''; };
+    $('join').onsubmit = function (e) {
+      e.preventDefault();
+      var c = $('code').value.replace(/\D/g, '');
+      if (c.length === 4) location.href = '/g/' + c;
+      else { $('err').textContent = TXT[lang].err; $('code').focus(); }
+    };
+    render();
+  })();
 </script>
 </body>
 </html>
