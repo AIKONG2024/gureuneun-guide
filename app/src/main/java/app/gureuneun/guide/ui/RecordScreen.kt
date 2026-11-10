@@ -48,6 +48,7 @@ import java.util.Locale
  * 여행이 끝나면 보는 하루 기록 카드. 엽서 한 장처럼 읽히게 만듦.
  * 왼쪽: 오늘 간 곳 장면, 숫자 넷, 있었던 일을 시간순으로.
  * 오른쪽: 할 일 하나(기록을 그룹 휴대폰으로 보낼지)와 지나온 길. [처음 화면으로]는 늘 맨 아래에 보임.
+ * 절반 창(세로)에서는 한 줄로 쌓되, 보낼지 묻는 카드를 엽서 바로 아래에 두고 [처음 화면으로]는 맨 아래에 붙여 둠.
  */
 @Composable
 fun RecordScreen(
@@ -89,14 +90,19 @@ fun RecordScreen(
                     }
                 }
             } else {
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                    Hero(sc, lang, recorder, Modifier.fillMaxWidth().height(360.dp))
-                    StatsCard(s, lang)
-                    Extras(s, sc, lang)
-                    ShareCard(ui, url, onShare, onKeepLocal)
-                    if (ui.windowOpened) WindowCard(lang, onCloseWindows)
-                    RouteCard(sc, ui, recorder, Modifier.height(420.dp))
-                    Timeline(shown, lang)
+                Column(Modifier.fillMaxSize()) {
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                        Hero(sc, lang, recorder, Modifier.fillMaxWidth().height(320.dp))
+                        // 내리기 전에 닫을 창문, 보낼지 묻는 것처럼 지금 할 일을 먼저
+                        if (ui.windowOpened) WindowCard(lang, onCloseWindows)
+                        if (asking) ShareCard(ui, url, onShare, onKeepLocal)
+                        StatsCard(s, lang, grid = true)
+                        Extras(s, sc, lang)
+                        if (!asking) ShareCard(ui, url, onShare, onKeepLocal)
+                        RouteCard(sc, ui, recorder, Modifier.height(400.dp))
+                        Timeline(shown, lang)
+                    }
+                    Spacer(Modifier.height(20.dp))
                     HomeButton(lang, primary = !asking, onHome)
                 }
             }
@@ -162,9 +168,9 @@ private fun Hero(sc: Scenario, lang: String, r: TripRecorder, modifier: Modifier
     }
 }
 
-/** 숫자 넷. 값은 크게, 단위는 작게 */
+/** 숫자 넷. 값은 크게, 단위는 작게. 좁은 창에서는 두 줄 두 칸 */
 @Composable
-private fun StatsCard(s: Summary, lang: String) {
+private fun StatsCard(s: Summary, lang: String, grid: Boolean = false) {
     val h = s.minutes / 60
     val m = s.minutes % 60
     val time = when {
@@ -173,14 +179,22 @@ private fun StatsCard(s: Summary, lang: String) {
         else -> listOf("${h}" to t(lang, "시간", "h"), "${m}" to t(lang, "분", "min"))
     }
     Card(Modifier.fillMaxWidth(), padding = 0.dp) {
-        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 28.dp)) {
-            Stat(Ic.Route, listOf("%.1f".format(s.distanceKm) to "km"), t(lang, "달린 거리", "Distance"), Modifier.weight(1f))
-            VLine()
-            Stat(Ic.Clock, time, t(lang, "여행 시간", "Time"), Modifier.weight(1f))
-            VLine()
-            Stat(Ic.Pin, listOf("${s.places}" to t(lang, "곳", "")), t(lang, "지난 명소", "Places"), Modifier.weight(1f))
-            VLine()
-            Stat(Ic.Speaker, listOf("${s.stories}" to t(lang, "편", "")), t(lang, "들은 이야기", "Stories"), Modifier.weight(1f))
+        val distance: @Composable (Modifier) -> Unit = { m -> Stat(Ic.Route, listOf("%.1f".format(s.distanceKm) to "km"), t(lang, "달린 거리", "Distance"), m) }
+        val duration: @Composable (Modifier) -> Unit = { m -> Stat(Ic.Clock, time, t(lang, "여행 시간", "Time"), m) }
+        val places: @Composable (Modifier) -> Unit = { m -> Stat(Ic.Pin, listOf("${s.places}" to t(lang, "곳", "")), t(lang, "지난 명소", "Places"), m) }
+        val stories: @Composable (Modifier) -> Unit = { m -> Stat(Ic.Speaker, listOf("${s.stories}" to t(lang, "편", "")), t(lang, "들은 이야기", "Stories"), m) }
+        if (grid) {
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(top = 28.dp, bottom = 22.dp)) {
+                distance(Modifier.weight(1f)); VLine(); duration(Modifier.weight(1f))
+            }
+            Box(Modifier.fillMaxWidth().padding(horizontal = 22.dp).height(2.dp).background(C.line))
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(top = 22.dp, bottom = 28.dp)) {
+                places(Modifier.weight(1f)); VLine(); stories(Modifier.weight(1f))
+            }
+        } else {
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 28.dp)) {
+                distance(Modifier.weight(1f)); VLine(); duration(Modifier.weight(1f)); VLine(); places(Modifier.weight(1f)); VLine(); stories(Modifier.weight(1f))
+            }
         }
     }
 }

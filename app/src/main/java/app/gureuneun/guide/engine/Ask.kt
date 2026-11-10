@@ -214,7 +214,8 @@ object Ask {
             val nextKo = next?.let { (n, d) -> " 조금 더 가면 ${n}${Ko.iGa(n)} 나와요. ${Ko.distance(d, "ko")} 남았어요." } ?: ""
             val nextEn = next?.let { (n, d) -> " $n is coming up in ${Ko.distance(d, "en")}." } ?: ""
             val text = if (lang == "en") {
-                (if (side != null) "Nothing to point out ${sideWordEn(side)} right now." else "Nothing to point out right now.") + nextEn
+                // "on your right right now"처럼 겹쳐 들리지 않게
+                (if (side != null) "Nothing to point out ${sideWordEn(side)} at the moment." else "Nothing to point out right now.") + nextEn
             } else {
                 (if (side != null) "지금 ${sideWordKo(side)}에는 따로 알려 드릴 곳이 안 보여요." else "지금은 창밖으로 알려 드릴 곳이 안 보여요.") + nextKo
             }

@@ -181,7 +181,18 @@ class VehicleBridge(private val context: Context, private val scope: CoroutineSc
 
     private fun fail(where: String, e: Throwable) {
         GLog.w("Vehicle", "$where 실패", e)
-        post { state.update { it.copy(lastError = "$where: ${e.message ?: e.javaClass.simpleName}") } }
+        post { state.update { it.copy(lastError = "$where: ${reason(e)}") } }
+    }
+
+    /** 점검 화면에 보일 짧은 까닭. 예외 전문은 로그에만 남김 */
+    private fun reason(e: Throwable): String {
+        val m = e.message.orEmpty()
+        return when {
+            "not in carPropertyConfig" in m || "not supported" in m.lowercase() -> "이 차가 지원하지 않는 항목"
+            e is SecurityException -> "권한이 없음"
+            m.isBlank() -> e.javaClass.simpleName
+            else -> m.take(80)
+        }
     }
 
     private fun readable(c: CapabilityConfig?) = c?.accessType == AccessType.READ || c?.accessType == AccessType.READ_WRITE

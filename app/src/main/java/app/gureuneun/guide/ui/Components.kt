@@ -132,6 +132,8 @@ fun Btn(
     iconSize: Dp = 34.dp,
     /** 글자 앞에 작은 색 점 (조명 색 고르기 등) */
     dot: Color? = null,
+    /** 좌우 안쪽 여백. 좁은 줄에 단추 여럿을 둘 때 줄임 */
+    hPad: Dp = 26.dp,
     onClick: () -> Unit,
 ) {
     val src = remember { MutableInteractionSource() }
@@ -154,7 +156,7 @@ fun Btn(
             .then(if (tone == Tone.Quiet) Modifier.border(2.dp, C.line, shape) else Modifier)
             .drawWithContent { drawContent(); if (pressed) drawRect(Color.White.copy(alpha = 0.12f)) }
             .clickable(interactionSource = src, indication = null, enabled = enabled, onClick = onClick)
-            .padding(horizontal = 26.dp, vertical = 10.dp),
+            .padding(horizontal = hPad, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -435,9 +437,10 @@ fun SeatMap(vehicle: VehicleBridge.State, lang: String, modifier: Modifier = Mod
 /** 차가 서 있을 때 화면 가운데 뜨는 물음 창 (Pleos System Popup: 아이콘, 제목, 설명, 단추 둘) */
 @Composable
 fun PopupFrame(icon: Ic, tint: Color = C.accent, width: Dp = 1000.dp, content: @Composable ColumnScope.() -> Unit) {
-    Box(Modifier.fillMaxSize().background(C.scrim).clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
+    // 절반 창(세로)에서도 창 가장자리에 붙지 않게 바깥 여백을 둠
+    Box(Modifier.fillMaxSize().background(C.scrim).clickable(enabled = false) {}.padding(32.dp), contentAlignment = Alignment.Center) {
         Column(
-            Modifier.widthIn(max = width).clip(RoundedCornerShape(36.dp)).background(Color(0xFF1B1F26)).padding(horizontal = 48.dp, vertical = 44.dp),
+            Modifier.widthIn(max = width).clip(RoundedCornerShape(36.dp)).background(Color(0xFF1B1F26)).padding(horizontal = 44.dp, vertical = 44.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(Modifier.size(96.dp).clip(CircleShape).background(tint.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) { Icon(icon, tint, 48.dp) }
@@ -458,7 +461,7 @@ fun ToastHost(message: String?, seq: Int, bottom: Dp) {
             visible = false
         }
     }
-    Box(Modifier.fillMaxSize().padding(bottom = bottom), contentAlignment = Alignment.BottomCenter) {
+    Box(Modifier.fillMaxSize().padding(start = 32.dp, end = 32.dp, bottom = bottom), contentAlignment = Alignment.BottomCenter) {
         AnimatedVisibility(visible, enter = fadeIn(tween(160)) + slideInVertically { it / 3 }, exit = fadeOut(tween(200)) + slideOutVertically { it / 3 }) {
             Row(
                 Modifier.widthIn(max = 1100.dp).clip(RoundedCornerShape(24.dp)).background(Color(0xF52C313B)).padding(horizontal = 34.dp, vertical = 22.dp),

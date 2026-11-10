@@ -276,7 +276,7 @@ fun DiagScreen(app: GuideApp, onBack: () -> Unit) {
                     Btn("돌아가기", icon = Ic.ChevronLeft, tone = Tone.Quiet, height = 76.dp, style = T.label, iconSize = 28.dp, onClick = onBack)
                     Column(Modifier.weight(1f)) {
                         Text("점검", style = T.titleL, color = C.text)
-                        Text("Pleos SDK 연결 상태를 보고 하나씩 눌러 확인해요", style = T.bodyS, color = C.text2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("Pleos SDK 연결 상태를 보고 하나씩 눌러 확인해요", style = T.bodyS.copy(lineBreak = T.balanced), color = C.text2, maxLines = if (wide) 1 else 2, overflow = TextOverflow.Ellipsis)
                     }
                     val ok = sdks.count { it.second == true }
                     Tag("SDK ${ok}/${sdks.size} 연결", if (ok == sdks.size) Ic.Check else Ic.Info, bg = if (ok == sdks.size) C.accentSoft else C.raised, fg = if (ok == sdks.size) C.accent else C.text2)

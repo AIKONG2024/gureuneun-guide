@@ -1101,7 +1101,8 @@ class TripEngine(private val app: GuideApp) {
             companion.incoming.collect { msg ->
                 when (msg.optString("type")) {
                     "pick" -> onPickMessage(msg)
-                    "phone_joined" -> toast(if (lang == "en") "A phone joined the trip group." else "휴대폰 한 대가 여행 그룹에 들어왔어요.")
+                    // 출발 전 점호 창은 QR 옆 휴대폰 수가 바로 늘어나므로 알림을 겹쳐 띄우지 않음 (QR과 그룹 번호를 가리지 않게)
+                    "phone_joined" -> if (ui.value.phase != Phase.ROLLCALL) toast(if (lang == "en") "A phone joined the trip group." else "휴대폰 한 대가 여행 그룹에 들어왔어요.")
                     "car_joined" -> toast(if (lang == "en") "${msg.optString("name")} joined the group." else "${msg.optString("name")}가 그룹에 들어왔어요.")
                     "report" -> {
                         recorder.event("report", msg.optString("placeId"), msg.optString("name"), msg.optString("note"))
@@ -1156,7 +1157,14 @@ class TripEngine(private val app: GuideApp) {
             // 달리는 동안 고르지 않은 곳은 버리지 않고 모아 두었다가 차가 서면 다시 보여 줌
             ui.update { it.copy(laterPicks = (it.laterPicks.filter { l -> l.id != p.id } + p).takeLast(5)) }
             companion.send("pick_ack", JSONObject().put("id", p.id).put("name", p.name).put("mode", "later").put("accepted", false))
-            toast(if (lang == "en") "Saved ${p.name} for later. It'll show up when we stop." else "${p.name}${eulReul(p.name)} 담아 뒀어요. 차를 세우면 다시 보여 드릴게요.")
+            // 이미 서 있으면 '담아 둔 장소' 카드에 바로 보이므로 그곳을 가리킴
+            toast(
+                if (parkedSince != null) {
+                    if (lang == "en") "Saved ${p.name}. Find it under Saved for later." else "${p.name}${eulReul(p.name)} 담아 뒀어요. 아래 담아 둔 장소에서 다시 고를 수 있어요."
+                } else {
+                    if (lang == "en") "Saved ${p.name} for later. It'll show up when we stop." else "${p.name}${eulReul(p.name)} 담아 뒀어요. 차를 세우면 다시 보여 드릴게요."
+                },
+            )
             return
         }
         applyPick(p, mode)

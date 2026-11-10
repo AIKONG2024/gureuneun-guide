@@ -1,6 +1,8 @@
 package app.gureuneun.guide.ui
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineBreak
@@ -74,6 +76,10 @@ object T {
     private val tight = (-0.4).sp
     private val heading = LineBreak(LineBreak.Strategy.Balanced, LineBreak.Strictness.Strict, LineBreak.WordBreak.Phrase)
     private val para = LineBreak(LineBreak.Strategy.HighQuality, LineBreak.Strictness.Strict, LineBreak.WordBreak.Phrase)
+    /** 두 줄로 나뉘는 짧은 소개 글을 줄 길이가 고르게 나눌 때 */
+    val balanced = heading
+    /** 사진 위 글자에 아주 옅은 그림자 (사진이 밝아도 읽히게) */
+    val onImage = Shadow(Color(0x99000000), Offset(0f, 2f), 10f)
     val headL = TextStyle(fontSize = 60.sp, lineHeight = 72.sp, fontWeight = FontWeight.Bold, letterSpacing = tight, lineBreak = heading)
     val headM = TextStyle(fontSize = 52.sp, lineHeight = 64.sp, fontWeight = FontWeight.Bold, letterSpacing = tight, lineBreak = heading)
     val titleL = TextStyle(fontSize = 40.sp, lineHeight = 52.sp, fontWeight = FontWeight.Bold, letterSpacing = tight, lineBreak = heading)
