@@ -66,21 +66,51 @@ class TripRecorder(private val context: Context) {
 
     fun passTime(placeId: String): Long? = events.firstOrNull { it.type == "pass" && it.placeId == placeId }?.time
 
-    fun toJson(): JSONObject = JSONObject().apply {
+    /**
+     * forUpload 면 그룹 페이지에 올릴 만큼만: 출발과 도착 근처 300m의 길은 빼고(집이나 숙소 위치가 드러나지 않게),
+     * 차에 말로 물어본 문장은 빼고 무엇을 알려 줬는지만 남김
+     */
+    fun toJson(forUpload: Boolean = false): JSONObject = JSONObject().apply {
         put("tripId", tripId)
         put("scenarioId", scenarioId)
         put("lang", lang)
         put("startedAt", startedAt)
         put("endedAt", if (endedAt == 0L) System.currentTimeMillis() else endedAt)
         put("distanceM", distanceM.toInt())
+        val shown = if (forUpload) trimmedRoute(PRIVACY_TRIM_M) else route
         put("route", JSONArray().apply {
-            route.forEach { (t, p) -> put(JSONArray().put(t).put(p.lat).put(p.lon)) }
+            shown.forEach { (t, p) -> put(JSONArray().put(t).put(p.lat).put(p.lon)) }
         })
         put("events", JSONArray().apply {
             events.forEach { e ->
-                put(JSONObject().put("t", e.time).put("type", e.type).put("placeId", e.placeId ?: "").put("title", e.title).put("detail", e.detail))
+                if (forUpload && e.type == "ask") return@forEach
+                val detail = if (forUpload && e.type == "qa") "" else e.detail
+                put(JSONObject().put("t", e.time).put("type", e.type).put("placeId", e.placeId ?: "").put("title", e.title).put("detail", detail))
             }
         })
+    }
+
+    /** 처음과 끝에서 각각 trimM 만큼의 길을 잘라 냄 */
+    fun trimmedRoute(trimM: Double): List<Pair<Long, LatLng>> = trimEnds(route, trimM)
+
+    companion object {
+        const val PRIVACY_TRIM_M = 300.0
+
+        /** 순수 함수라 단위 시험을 붙임. 길이가 trimM*2 보다 짧은 길은 통째로 뺌 */
+        fun trimEnds(route: List<Pair<Long, LatLng>>, trimM: Double): List<Pair<Long, LatLng>> {
+            if (route.size < 3) return emptyList()
+            fun cut(list: List<Pair<Long, LatLng>>): Int {
+                var acc = 0.0
+                for (i in 1 until list.size) {
+                    acc += Geo.distanceM(list[i - 1].second, list[i].second)
+                    if (acc >= trimM) return i
+                }
+                return list.size
+            }
+            val from = cut(route)
+            val to = route.size - cut(route.asReversed())
+            return if (from < to) route.subList(from, to).toList() else emptyList()
+        }
     }
 
     private fun save() {

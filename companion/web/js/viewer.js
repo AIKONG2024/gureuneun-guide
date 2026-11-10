@@ -7,7 +7,7 @@
   'use strict';
   var T = window.THREE;
   var GG = window.GG = {};
-  var renderer, scene, camera, root, host, titleEl, capEl, badgeEl;
+  var renderer, scene, camera, root, host, titleEl, capEl, badgeEl, hintEl;
   var mode = 'cinematic', current = null, mood = { rain: false, night: false };
   var view = { yaw: 0.7, pitch: 0.32, dist: 20, target: new T.Vector3(0, 3, 0), radius: 8 };
   var drag = null, lastInteract = 0, t0 = performance.now();
@@ -346,19 +346,35 @@
     titleEl = document.createElement('div'); titleEl.className = 'gg-title'; el.appendChild(titleEl);
     capEl = document.createElement('div'); capEl.className = 'gg-caption'; el.appendChild(capEl);
     badgeEl = document.createElement('div'); badgeEl.className = 'gg-badge'; el.appendChild(badgeEl);
+    hintEl = document.createElement('div'); hintEl.className = 'gg-hint'; el.appendChild(hintEl);
 
     var c = renderer.domElement;
-    c.addEventListener('pointerdown', function (e) { drag = { x: e.clientX, y: e.clientY }; lastInteract = performance.now(); if (mode === 'cinematic' && opts.tapToOrbit !== false) GG.setMode('orbit'); c.setPointerCapture(e.pointerId); });
+    // 영상처럼 도는 화면에서는 '움직이지 않고 톡 누르기'만 3D 돌려 보기로 바꿈. 끌면 화면이 위아래로 밀림(touch-action: pan-y)
+    var tap = null;
+    c.addEventListener('pointerdown', function (e) {
+      lastInteract = performance.now();
+      if (mode !== 'orbit') { tap = { x: e.clientX, y: e.clientY, t: performance.now() }; return; }
+      drag = { x: e.clientX, y: e.clientY };
+      try { c.setPointerCapture(e.pointerId); } catch (err) {}
+    });
     c.addEventListener('pointermove', function (e) {
+      if (tap && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 10) tap = null;
       if (!drag) return;
       view.yaw -= (e.clientX - drag.x) * 0.008; view.pitch = Math.max(0.05, Math.min(1.35, view.pitch + (e.clientY - drag.y) * 0.006));
       drag = { x: e.clientX, y: e.clientY }; lastInteract = performance.now();
     });
-    c.addEventListener('pointerup', function () { drag = null; });
-    c.addEventListener('wheel', function (e) { view.dist = Math.max(view.radius * 1.2, Math.min(view.radius * 5, view.dist * (1 + e.deltaY * 0.001))); lastInteract = performance.now(); e.preventDefault(); }, { passive: false });
+    c.addEventListener('pointerup', function () {
+      if (tap && mode !== 'orbit' && opts.tapToOrbit !== false && performance.now() - tap.t < 600) GG.setMode('orbit');
+      tap = null; drag = null;
+    });
+    c.addEventListener('pointercancel', function () { tap = null; drag = null; });
+    c.addEventListener('wheel', function (e) {
+      if (mode !== 'orbit') return;   // 영상일 때는 화면 스크롤을 막지 않음
+      view.dist = Math.max(view.radius * 1.2, Math.min(view.radius * 5, view.dist * (1 + e.deltaY * 0.001))); lastInteract = performance.now(); e.preventDefault();
+    }, { passive: false });
     var pinch = null;
     c.addEventListener('touchmove', function (e) {
-      if (e.touches.length === 2) {
+      if (e.touches.length === 2 && mode === 'orbit') {
         var d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
         if (pinch) view.dist = Math.max(view.radius * 1.2, Math.min(view.radius * 5, view.dist * pinch / d));
         pinch = d; drag = null; e.preventDefault();
@@ -430,7 +446,20 @@
     if (o.mode) GG.setMode(o.mode);
   };
   GG.caption = function (text) { if (!capEl) return; capEl.textContent = text || ''; capEl.style.opacity = text ? 1 : 0; };
-  GG.setMode = function (m) { mode = m === 'orbit' ? 'orbit' : 'cinematic'; if (badgeEl) badgeEl.textContent = mode === 'orbit' ? '3D' : ''; if (GG.onMode) GG.onMode(mode); };
+  // 3D 돌려 보기로 바뀌면 조작 방법을 2초 보여 줌 (글은 GG.setHint 로 언어에 맞게)
+  var hintText = '', hintTimer = null;
+  GG.setHint = function (text) { hintText = text || ''; };
+  GG.setMode = function (m) {
+    var was = mode;
+    mode = m === 'orbit' ? 'orbit' : 'cinematic';
+    if (badgeEl) badgeEl.textContent = mode === 'orbit' ? '3D' : '';
+    if (host) host.classList.toggle('orbit', mode === 'orbit');
+    if (hintEl && mode === 'orbit' && was !== 'orbit' && hintText) {
+      hintEl.textContent = hintText; hintEl.classList.add('show');
+      clearTimeout(hintTimer); hintTimer = setTimeout(function () { hintEl.classList.remove('show'); }, 2000);
+    } else if (hintEl && mode !== 'orbit') hintEl.classList.remove('show');
+    if (GG.onMode) GG.onMode(mode);
+  };
   GG.mode = function () { return mode; };
   GG.models = Object.keys(MODELS);
 })();

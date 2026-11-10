@@ -80,7 +80,7 @@ fun HomeScreen(
                     Spacer(Modifier.height(6.dp))
                     Text(t(lang, "버튼 하나면 차가 통째로 여행 어드벤처가 됩니다", "One button turns the whole car into a travel adventure"), color = G.muted, fontSize = 24.sp)
                 }
-                Pill(t(lang, "점검", "Check"), onClick = onDiag)
+                ChipButton(t(lang, "점검", "Check"), onClick = onDiag)
             }
 
             if (ui.resumable) {
@@ -116,15 +116,20 @@ fun HomeScreen(
                 }
                 Column(Modifier.weight(1f)) {
                     SectionTitle(t(lang, "다른 차 그룹에 합류", "Join another car's group"))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier.height(72.dp).width(220.dp).clip(RoundedCornerShape(20.dp)).background(G.surface2)
-                                .clickable { showPad = !showPad },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(joinCode.padEnd(4, '_').chunked(1).joinToString(" "), color = G.text, fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                    // 번호 입력은 차가 섰을 때만 (달리는 동안 키패드 입력 금지)
+                    if (vehicle.parked) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier.height(76.dp).width(220.dp).clip(RoundedCornerShape(20.dp)).background(G.surface2)
+                                    .clickable { showPad = !showPad },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(joinCode.padEnd(4, '_').chunked(1).joinToString(" "), color = G.text, fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                            }
+                            if (joinCode.isNotEmpty()) ChipButton(t(lang, "지우기", "Clear")) { joinCode = "" }
                         }
-                        if (joinCode.isNotEmpty()) Pill(t(lang, "지우기", "Clear"), onClick = { joinCode = "" })
+                    } else {
+                        Text(t(lang, "차를 세운 뒤에 그룹 번호를 넣을 수 있어요", "Enter a group code once the car is parked"), color = G.muted, fontSize = 22.sp)
                     }
                 }
                 Column(Modifier.weight(1f)) {
@@ -135,7 +140,7 @@ fun HomeScreen(
                     }
                 }
             }
-            if (showPad) NumberPad(onDigit = { d -> if (joinCode.length < 4) joinCode += d }, onBack = { joinCode = joinCode.dropLast(1) })
+            if (showPad && vehicle.parked) NumberPad(onDigit = { d -> if (joinCode.length < 4) joinCode += d }, onBack = { joinCode = joinCode.dropLast(1) })
 
             BigButton(
                 text = if (joinCode.length == 4) t(lang, "그룹 ${joinCode} 와 함께 여행 시작", "Start trip with group ${joinCode}") else t(lang, "여행 시작", "Start trip"),
@@ -195,7 +200,7 @@ private fun Status(name: String, ok: Boolean, maybeOk: Boolean = false) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Dot(if (ok) G.good else if (maybeOk) G.muted else G.bad, 12.dp)
-        Text(name, color = G.text, fontSize = 18.sp)
+        Text(name, color = G.text, fontSize = 20.sp)
     }
 }
 

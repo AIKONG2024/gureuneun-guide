@@ -11,13 +11,19 @@
   <div class="small">구르는 가이드 / Rolling Guide</div>
   <h1>여행 그룹에 들어가기</h1>
   <p class="small">차 화면의 QR을 찍으면 바로 들어와요. 그룹 번호로도 들어올 수 있어요.<br>Scan the QR on the car screen, or enter the 4-digit group code.</p>
-  <input id="code" type="text" inputmode="numeric" maxlength="4" placeholder="0000">
-  <button class="btn primary block" id="go">들어가기 / Join</button>
+  <form id="join">
+    <input id="code" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="4" placeholder="0000" aria-label="그룹 번호 / Group code">
+    <button class="btn primary block" id="go" type="submit">들어가기 / Join</button>
+    <p class="small" id="err" role="alert"></p>
+  </form>
+  <p class="small">번호로 들어오면 이야기·퀴즈·장소 고르기를 쓸 수 있어요. 사진과 기록은 QR로 들어오면 보여요.<br>With the code you can follow stories, quizzes and pick places. Scan the QR to see photos and the record.</p>
 </div>
 <script>
-  document.getElementById('go').onclick = function () {
+  document.getElementById('join').onsubmit = function (e) {
+    e.preventDefault();
     var c = document.getElementById('code').value.replace(/\D/g, '');
     if (c.length === 4) location.href = '/g/' + c;
+    else document.getElementById('err').textContent = '네 자리 숫자를 넣어 주세요 / Enter the 4-digit code';
   };
 </script>
 </body>

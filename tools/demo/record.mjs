@@ -3,6 +3,8 @@
 // 같은 시각 기준으로 녹화하고 장면별 자막 시각을 timeline.json 에 남긴다. 합치기는 compose.py 가 한다.
 //
 // 준비: Pleos Connect 에뮬레이터 실행, 앱 설치, adb forward tcp:8088 tcp:8088, companion 서버 실행
+//       서버는 companion 폴더에서 npm run demo 로 켠다 (DEMO_LOCAL_TRUST=1). 이 도구의 2호차 접속, 발화 기록 조회,
+//       키 없는 휴대폰 주소(/g/번호)는 이 컴퓨터에서 온 요청일 때만 그 설정으로 허용된다
 //       차 소리까지 담으려면 에뮬레이터를 소리 파일 출력으로 띄운다
 //       QEMU_AUDIO_DRV=wav QEMU_WAV_PATH=/tmp/rgdev/emu_audio.wav emulator -avd <AVD> -audio wav
 // 사용: node record.mjs ./out              모든 장면
@@ -33,6 +35,12 @@ fs.mkdirSync(path.join(OUT, 'phone'), { recursive: true });
 fs.mkdirSync(path.join(OUT, 'vc'), { recursive: true });
 fs.mkdirSync(path.join(OUT, 'audio'), { recursive: true });
 fs.mkdirSync(path.join(OUT, 'shots'), { recursive: true });
+
+// 새 규약(version 2) 서버는 차 키와 휴대폰 키를 요구함. 시연 예외(npm run demo)로 켰는지 미리 알려 줌
+try {
+  const info = await (await fetch(SRV + '/api/info')).json();
+  if (info.version >= 2) log('그룹 서버 v' + info.version + ': companion 폴더에서 npm run demo 로 켰는지 확인하세요 (키 없는 시연 접속 허용)');
+} catch { log('그룹 서버(' + SRV + ')에 닿지 않아요. companion 폴더에서 npm run demo 로 먼저 켜 주세요'); }
 
 // ------------------------------------------------------------ 차 안내 음성
 // 에뮬레이터는 소리가 날 때만 WAV 파일에 실시간으로 덧붙인다. 그래서 시각과 파일 크기를 짧은 간격으로 적어 두고

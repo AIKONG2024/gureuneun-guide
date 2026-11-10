@@ -6,6 +6,10 @@ import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import app.gureuneun.guide.sdk.GLog
 import kotlin.concurrent.thread
 import kotlin.math.PI
 import kotlin.math.exp
@@ -15,41 +19,80 @@ import kotlin.math.sin
 /**
  * 효과음은 파일 없이 코드로 만들어 재생함.
  * 시작 전에 180ms 무음을 두어(선행 묵음 가이드) 첫소리가 잘리지 않게 함.
+ * 소리 포커스를 받았을 때만 냄 (통화 중이거나 다른 앱이 포커스를 쥐고 있으면 건너뜀).
+ * 짧은 신호음은 USAGE_ASSISTANCE_SONIFICATION, 파도 소리는 USAGE_MEDIA 로 냄.
+ * 파도 소리는 포커스를 잃으면 멈추고, 잠깐 줄여 달라는 요청(CAN_DUCK)이면 소리를 줄였다가 되돌림.
  */
 class SoundFx(context: Context) {
 
     private val audioManager = context.getSystemService(AudioManager::class.java)
-    private val attrs = AudioAttributes.Builder()
-        .setUsage(AudioAttributes.USAGE_MEDIA)
+    /** 짧은 신호음 (듣기 시작, 별, 차임) */
+    private val fxAttrs = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+        .build()
+    /** 시연용 파도 소리 (배경 음원) */
+    private val waveAttrs = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_MEDIA)
+        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
         .build()
     private val rate = 44_100
     @Volatile private var wavesTrack: AudioTrack? = null
+    private val focusHandler = Handler(Looper.getMainLooper())
 
-    private fun focus(): AudioFocusRequest? = runCatching {
+    private val wavesFocus = AudioManager.OnAudioFocusChangeListener { change ->
+        val t = wavesTrack ?: return@OnAudioFocusChangeListener
+        when (change) {
+            AudioManager.AUDIOFOCUS_LOSS, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                GLog.i("Fx", "소리 포커스를 잃어 파도 소리 멈춤")
+                stopWaves()
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> runCatching { t.setVolume(DUCK_VOLUME) }
+            AudioManager.AUDIOFOCUS_GAIN -> runCatching { t.setVolume(1f) }
+        }
+    }
+
+    /** 포커스를 받았으면 그 요청을, 못 받았으면 null */
+    private fun focus(attrs: AudioAttributes, listener: AudioManager.OnAudioFocusChangeListener): AudioFocusRequest? = runCatching {
         val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
             .setAudioAttributes(attrs)
+            .setOnAudioFocusChangeListener(listener, focusHandler)
             .build()
-        audioManager.requestAudioFocus(req)
-        req
+        val r = audioManager.requestAudioFocus(req)
+        if (r == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) req else {
+            GLog.i("Fx", "소리 포커스를 받지 못해 건너뜀 ($r)")
+            null
+        }
     }.getOrNull()
 
+    private fun track(attrs: AudioAttributes, samples: ShortArray): AudioTrack = AudioTrack.Builder()
+        .setAudioAttributes(attrs)
+        .setAudioFormat(AudioFormat.Builder().setSampleRate(rate).setEncoding(AudioFormat.ENCODING_PCM_16BIT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
+        .setBufferSizeInBytes(samples.size * 2)
+        .setTransferMode(AudioTrack.MODE_STATIC)
+        .build()
+
+    /** 신호음 하나. 포커스를 못 받으면 소리 없이 넘어가되 after 는 늘 부름 */
     private fun play(samples: ShortArray, after: () -> Unit = {}) {
         thread(name = "fx") {
-            val req = focus()
-            runCatching {
-                val track = AudioTrack.Builder()
-                    .setAudioAttributes(attrs)
-                    .setAudioFormat(AudioFormat.Builder().setSampleRate(rate).setEncoding(AudioFormat.ENCODING_PCM_16BIT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
-                    .setBufferSizeInBytes(samples.size * 2)
-                    .setTransferMode(AudioTrack.MODE_STATIC)
-                    .build()
-                track.write(samples, 0, samples.size)
-                track.play()
-                Thread.sleep(samples.size * 1000L / rate + 150)
-                track.release()
+            var playing: AudioTrack? = null
+            // 통화 같은 더 중요한 소리가 오면 바로 멈춤
+            val listener = AudioManager.OnAudioFocusChangeListener { change ->
+                if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) runCatching { playing?.stop() }
             }
-            req?.let { r -> runCatching { audioManager.abandonAudioFocusRequest(r) } }
+            val req = focus(fxAttrs, listener)
+            if (req != null) {
+                runCatching {
+                    val t = track(fxAttrs, samples)
+                    playing = t
+                    t.write(samples, 0, samples.size)
+                    t.play()
+                    Thread.sleep(samples.size * 1000L / rate + 150)
+                    playing = null
+                    t.release()
+                }.onFailure { GLog.w("Fx", "효과음 재생 실패", it) }
+                runCatching { audioManager.abandonAudioFocusRequest(req) }
+            }
             after()
         }
     }
@@ -117,28 +160,31 @@ class SoundFx(context: Context) {
         }
         val samples = normalize(buf, 0.5)
         thread(name = "waves") {
-            val req = focus()
+            val req = focus(waveAttrs, wavesFocus) ?: return@thread
             runCatching {
-                val track = AudioTrack.Builder()
-                    .setAudioAttributes(attrs)
-                    .setAudioFormat(AudioFormat.Builder().setSampleRate(rate).setEncoding(AudioFormat.ENCODING_PCM_16BIT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
-                    .setBufferSizeInBytes(samples.size * 2)
-                    .setTransferMode(AudioTrack.MODE_STATIC)
-                    .build()
-                wavesTrack = track
-                track.write(samples, 0, samples.size)
-                track.play()
-                Thread.sleep(seconds * 1000L + 200)
-                runCatching { track.release() }
-                if (wavesTrack === track) wavesTrack = null
-            }
-            req?.let { r -> runCatching { audioManager.abandonAudioFocusRequest(r) } }
+                val t = track(waveAttrs, samples)
+                wavesTrack = t
+                t.write(samples, 0, samples.size)
+                t.play()
+                // 끝까지 기다리되, stopWaves 나 포커스를 잃어 멈추면 바로 나와 포커스를 돌려줌
+                val until = SystemClock.uptimeMillis() + seconds * 1000L + 200
+                while (wavesTrack === t && SystemClock.uptimeMillis() < until) Thread.sleep(100)
+                if (wavesTrack === t) {
+                    wavesTrack = null
+                    runCatching { t.release() }
+                }
+            }.onFailure { GLog.w("Fx", "파도 소리 재생 실패", it) }
+            runCatching { audioManager.abandonAudioFocusRequest(req) }
         }
     }
 
     fun stopWaves() {
-        wavesTrack?.let { runCatching { it.stop(); it.release() } }
+        val t = wavesTrack ?: return
         wavesTrack = null
+        runCatching {
+            t.stop()
+            t.release()
+        }
     }
 
     private fun normalize(buf: DoubleArray, peak: Double): ShortArray {
@@ -146,5 +192,10 @@ class SoundFx(context: Context) {
         buf.forEach { if (kotlin.math.abs(it) > max) max = kotlin.math.abs(it) }
         val k = peak / max * Short.MAX_VALUE
         return ShortArray(buf.size) { (buf[it] * k).toInt().coerceIn(-32767, 32767).toShort() }
+    }
+
+    private companion object {
+        /** 다른 소리가 잠깐 줄여 달라고 할 때 파도 소리 크기 */
+        const val DUCK_VOLUME = 0.3f
     }
 }

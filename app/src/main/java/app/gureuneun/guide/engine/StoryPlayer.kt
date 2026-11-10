@@ -1,8 +1,10 @@
 package app.gureuneun.guide.engine
 
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import app.gureuneun.guide.core.StoryLength
-import app.gureuneun.guide.sdk.SpeechBridge
+import app.gureuneun.guide.sdk.Speaker
 
 /**
  * 이야기를 문장 단위로 읽어 주는 재생기.
@@ -13,8 +15,18 @@ import app.gureuneun.guide.sdk.SpeechBridge
  * 사람 가이드처럼 움직이도록 두 가지를 더 함
  * - 새 명소가 나타나면 지금 하던 이야기는 이 문장까지만 하고 차례를 넘김 (yieldCurrent)
  * - 비, 전조등 같은 짧은 알림은 문장 사이에 끼워 말하고 하던 이야기로 돌아감 (interject)
+ *
+ * 문장마다 발화 번호(generation)를 붙여, 멈추거나 건너뛴 뒤에 늦게 온 지난 발화의 끝 알림은 버림.
+ * 음성 엔진 오류나 바깥에서 멈춘 문장은 잠깐 쉬었다가 같은 문장을 MAX_RETRIES 번까지 다시 읽고,
+ * 그래도 안 되면 다음 문장으로 넘어감. 감시 시간 초과(TIMEOUT)는 읽은 것으로 보고 넘어감 (같은 말을 되풀이하지 않게).
+ * clock, schedule 은 시험에서 바꿔 끼우려고 받음. 모든 함수는 메인 스레드에서 부름.
  */
-class StoryPlayer(private val speech: SpeechBridge, private val changed: () -> Unit) {
+class StoryPlayer(
+    private val speech: Speaker,
+    private val clock: () -> Long = { SystemClock.elapsedRealtime() },
+    private val schedule: (Long, () -> Unit) -> Unit = { ms, block -> mainHandler.postDelayed({ block() }, ms) },
+    private val changed: () -> Unit,
+) {
 
     /** 문장을 읽기 시작할 때마다 불림 (휴대폰 자막을 맞추는 데 씀) */
     var onSentence: ((Item, Int) -> Unit)? = null
@@ -50,9 +62,12 @@ class StoryPlayer(private val speech: SpeechBridge, private val changed: () -> U
     private val queue = ArrayDeque<Item>()
     private val holds = LinkedHashSet<String>()
     private var speakingNow = false
+    /** 발화 번호. 멈추거나 건너뛸 때마다 올려서 지난 발화의 늦은 끝 알림을 버림 */
     private var generation = 0
     private var sentenceStartedAt = 0L
     private var cutsAtIndex = 0
+    /** 지금 문장을 오류 때문에 다시 읽은 횟수 */
+    private var retries = 0
     private var cutAfterSentence = false
     // 끼워 말할 짧은 알림. 여러 개가 겹치면(퀴즈 정답과 질문의 답이 같이 오면) 차례로 모두 말함
     private val interjections = ArrayDeque<Item>()
@@ -128,6 +143,7 @@ class StoryPlayer(private val speech: SpeechBridge, private val changed: () -> U
         current = target
         index = 0
         cutsAtIndex = 0
+        retries = 0
         changed()
         pump()
         return true
@@ -139,6 +155,7 @@ class StoryPlayer(private val speech: SpeechBridge, private val changed: () -> U
         current = null
         index = 0
         cutsAtIndex = 0
+        retries = 0
         cutAfterSentence = false
         interjections.clear()
         interjecting = false
@@ -154,11 +171,12 @@ class StoryPlayer(private val speech: SpeechBridge, private val changed: () -> U
         val item = current ?: return
         if (index >= item.sentences.size) return
         cutsAtIndex++
-        val spoken = SystemClock.elapsedRealtime() - sentenceStartedAt
+        val spoken = clock() - sentenceStartedAt
         val expected = item.sentences[index].length * (if (item.lang == "en") 70L else 125L)
         if (spoken >= expected * 7 / 10 || cutsAtIndex >= 2) {
             index++
             cutsAtIndex = 0
+            retries = 0
         }
     }
 
@@ -182,6 +200,7 @@ class StoryPlayer(private val speech: SpeechBridge, private val changed: () -> U
             current = inter
             index = 0
             cutsAtIndex = 0
+            retries = 0
             interjecting = true
             inter.onStart?.invoke()
         }
@@ -191,6 +210,7 @@ class StoryPlayer(private val speech: SpeechBridge, private val changed: () -> U
             current = item
             index = 0
             cutsAtIndex = 0
+            retries = 0
             item.onStart?.invoke()
         }
         if (index >= item.sentences.size) {
@@ -202,28 +222,46 @@ class StoryPlayer(private val speech: SpeechBridge, private val changed: () -> U
             finishCurrent(false)
             return
         }
-        val gen = ++generation
+        val token = ++generation
+        val at = index
         speakingNow = true
-        sentenceStartedAt = SystemClock.elapsedRealtime()
+        sentenceStartedAt = clock()
         changed()
         onSentence?.invoke(item, index)
-        speech.speak(item.sentences[index], item.lang) { completed ->
-            if (gen != generation) return@speak
-            speakingNow = false
-            // 멈춤 사유 없이 실패한 문장은 건너뛰어 같은 문장에서 맴돌지 않게 함
-            if (completed || holds.isEmpty()) {
-                index++
-                cutsAtIndex = 0
-            }
-            if (cutAfterSentence) {
-                cutAfterSentence = false
-                finishCurrent(false)
-            } else if (index >= item.sentences.size) {
-                finishCurrent(true)
-            } else {
+        speech.utter(item.sentences[at], item.lang) { end -> sentenceEnded(token, item, at, end) }
+    }
+
+    private fun sentenceEnded(token: Int, item: Item, at: Int, end: Speaker.End) {
+        // 멈추거나 건너뛴 뒤에 온 지난 발화의 끝 알림
+        if (token != generation) return
+        speakingNow = false
+        val failed = end == Speaker.End.ERROR || end == Speaker.End.STOPPED
+        if (failed && !cutAfterSentence) {
+            if (holds.isNotEmpty()) {
+                // 멈춤 사유가 있으면 이 문장에서 기다렸다가, 풀리면 다시 읽음
                 changed()
-                pump()
+                return
             }
+            if (retries < MAX_RETRIES) {
+                retries++
+                changed()
+                val again = ++generation
+                schedule(RETRY_DELAY_MS) { if (again == generation && current === item && index == at) pump() }
+                return
+            }
+            // 여러 번 실패한 문장은 건너뛰어 같은 문장에서 맴돌지 않게 함
+        }
+        index = at + 1
+        cutsAtIndex = 0
+        retries = 0
+        if (cutAfterSentence) {
+            cutAfterSentence = false
+            finishCurrent(false)
+        } else if (index >= item.sentences.size) {
+            finishCurrent(true)
+        } else {
+            changed()
+            pump()
         }
     }
 
@@ -232,6 +270,7 @@ class StoryPlayer(private val speech: SpeechBridge, private val changed: () -> U
         current = null
         index = 0
         cutsAtIndex = 0
+        retries = 0
         cutAfterSentence = false
         if (interjecting) {
             interjecting = false
@@ -248,6 +287,9 @@ class StoryPlayer(private val speech: SpeechBridge, private val changed: () -> U
                 }
                 resumeTo = null
             }
+            // 끼워 말한 물음(창문, 쉬어 가기, 충전)도 끝났다고 알려 줌. 엔진은 이 알림을 받아 마이크를 열고 답을 들음.
+            // 상태를 먼저 맞춘 뒤 부르므로, 알림 안에서 멈추거나(듣기) 새 알림을 끼워도 순서가 꼬이지 않음
+            cur?.onDone?.invoke(completed)
         } else if (cur != null) {
             lastFinished = cur
             cur.onDone?.invoke(completed)
@@ -258,6 +300,11 @@ class StoryPlayer(private val speech: SpeechBridge, private val changed: () -> U
 
     companion object {
         private val SPLIT = Regex("(?<=[.!?。])\\s+")
+        /** 오류 난 문장을 다시 읽어 보는 횟수 */
+        const val MAX_RETRIES = 2
+        /** 다시 읽기 전에 쉬는 시간 */
+        const val RETRY_DELAY_MS = 700L
+        private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
 
         fun sentences(text: String): List<String> =
             text.trim().split(SPLIT).map { it.trim() }.filter { it.isNotEmpty() }

@@ -34,6 +34,11 @@ class AskTest {
     }
 
     @Test fun controlCommands() {
+        check("여행 끝내 줘", Intent.END_TRIP)
+        check("오늘은 여기까지 하자", Intent.END_TRIP)
+        // "그만"이 들어 있어도 여행을 끝내자는 말은 멈춤이 아님
+        check("여행 그만할래", Intent.END_TRIP)
+        check("end the trip", Intent.END_TRIP)
         check("다시 말해 줘", Intent.REPLAY)
         check("한 번 더", Intent.REPLAY)
         check("다시 시작해", Intent.RESUME)
@@ -109,5 +114,66 @@ class AskTest {
         // 지금 들려주는 명소를 물어보면 짧게 짚어 주기만 함
         val busy = Ask.whatIsThere(sc, nearDaereungwon, 0.0, Side.RIGHT, "ko", telling = "daereungwon")
         assertEquals("오른쪽으로 보이는 곳이 지금 이야기하는 대릉원이에요.", busy.text)
+    }
+
+    /** 차가 "가는 길에 들를까요?"처럼 물은 뒤 운전자가 화면을 누르지 않고 말로 답하는 경우 */
+    @Test fun shortReplies() {
+        fun r(text: String) = Ask.reply(text)
+        assertEquals(Ask.Reply.YES, r("응"))
+        assertEquals(Ask.Reply.YES, r("네"))
+        assertEquals(Ask.Reply.YES, r("응 그래"))
+        assertEquals(Ask.Reply.YES, r("좋아"))
+        assertEquals(Ask.Reply.YES, r("넣어 줘"))
+        assertEquals(Ask.Reply.YES, r("Yes please"))
+        assertEquals(Ask.Reply.YES, r("okay"))
+        assertEquals(Ask.Reply.NO, r("아니"))
+        assertEquals(Ask.Reply.NO, r("괜찮아요"))
+        assertEquals(Ask.Reply.NO, r("No thanks"))
+        assertEquals(Ask.Reply.LATER, r("나중에"))
+        assertEquals(Ask.Reply.LATER, r("not now"))
+        assertEquals(Ask.Reply.WAYPOINT, r("가는 길에 들렀다 가자"))
+        assertEquals(Ask.Reply.WAYPOINT, r("경유지로 넣어 줘"))
+        assertEquals(Ask.Reply.DESTINATION, r("목적지로 바꿔 줘"))
+        assertEquals(Ask.Reply.DESTINATION, r("take us there"))
+        // 대답이 아닌 질문은 그대로 질문으로 처리하게 null
+        assertNull(r("어디야"))
+        assertNull(r("오른쪽에 보이는 거 뭐야"))
+        assertNull(r("예쁘다"))
+        assertNull(r(""))
+    }
+
+    /** 물음이 떠 있을 때: 짧은 대답만 대답으로, 다른 부탁은 그대로 부탁으로 */
+    @Test fun answersDependOnThePrompt() {
+        fun a(text: String, p: Ask.Prompt) = Ask.answerFor(text, p)
+        assertEquals(Ask.Reply.YES, a("응", Ask.Prompt.PICK))
+        assertEquals(Ask.Reply.WAYPOINT, a("가는 길에 들렀다 가자", Ask.Prompt.PICK))
+        assertEquals(Ask.Reply.WAYPOINT, a("stop on the way", Ask.Prompt.PICK))
+        assertEquals(Ask.Reply.LATER, a("나중에", Ask.Prompt.PICK))
+        // 장소를 묻는 중에 "창문 열어 줘"는 장소 대답이 아님
+        assertNull(a("창문 열어 줘", Ask.Prompt.PICK))
+        // "다음에 보이는 거 뭐야"는 미루는 말이 아니라 질문
+        assertNull(a("다음에 보이는 거 뭐야", Ask.Prompt.PICK))
+        // 창문을 묻는 중에는 "창문 열어 줘"가 그 물음의 대답
+        assertEquals(Ask.Reply.YES, a("창문 열어 줘", Ask.Prompt.WINDOW))
+        assertEquals(Ask.Reply.NO, a("창문 열지 마", Ask.Prompt.WINDOW))
+        assertEquals(Ask.Reply.YES, a("휴게소 찾아 줘", Ask.Prompt.REST))
+        assertEquals(Ask.Reply.YES, a("충전소 보여 줘", Ask.Prompt.CHARGE))
+        assertEquals(Ask.Reply.NO, a("아니 그만해", Ask.Prompt.REST))
+        assertEquals(Ask.Reply.YES, a("응 여행 끝내 줘", Ask.Prompt.END))
+        // 질문은 질문으로
+        assertNull(a("얼마나 남았어", Ask.Prompt.REST))
+        assertNull(a("오른쪽에 보이는 거 뭐야", Ask.Prompt.OFFER))
+    }
+
+    @Test fun windowCommandsAreNotFlipped() {
+        check("창문 열어 줘", Intent.WINDOW_OPEN)
+        check("창문 좀 내려 줘", Intent.WINDOW_OPEN)
+        check("창문 열지 마", Intent.WINDOW_KEEP)
+        check("열린 창문 닫아 줘", Intent.WINDOW_CLOSE)
+        check("창문 올려 줘", Intent.WINDOW_CLOSE)
+        check("창문 열려 있어?", Intent.WINDOW_STATUS)
+        check("Close the windows", Intent.WINDOW_CLOSE)
+        check("Open the window", Intent.WINDOW_OPEN)
+        check("Don't open the window", Intent.WINDOW_KEEP)
     }
 }

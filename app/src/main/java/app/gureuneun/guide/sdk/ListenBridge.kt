@@ -8,7 +8,9 @@ import ai.pleos.playground.stt.listener.ResultListener
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -17,6 +19,9 @@ import java.util.concurrent.TimeUnit
  * SpeechToText SDK 연결부. ON_DEVICE 모드라 앱 등록 없이 차 안에서 인식함.
  * - listen(): 차 마이크로 듣기 (request)
  * - feed(): 앱이 가진 PCM(16kHz, 16비트, 모노)을 실시간 속도로 넣어 인식 (sendAudio, 시연과 시험용)
+ * 한 문장을 받으면 문서대로 stop() 을 불러 인식을 끝냄. 그 뒤에 오는 콜백은 무시함.
+ * 마이크를 쓸 수 없거나(MIC_ERROR) 권한이 없으면(PERMISSION_DENIED) problem 으로 알림 (화면에서 안내).
+ * 초기화에 실패하면 3초, 10초, 30초 뒤에 다시 시도함.
  */
 class ListenBridge(private val context: Context) {
 
@@ -28,6 +33,9 @@ class ListenBridge(private val context: Context) {
     /** 입력 소리 크기. 듣는 중 표시에 씀 */
     val level = MutableStateFlow(0.0)
     val lastError = MutableStateFlow<String?>(null)
+    private val _problem = MutableStateFlow<String?>(null)
+    /** 듣기를 막는 문제: "MIC_ERROR"(마이크, 센서 개인정보 보호 설정 확인), "PERMISSION_DENIED"(STT_SERVICE 권한). 한 번 알아들으면 null */
+    val problem: StateFlow<String?> = _problem
 
     private var stt: SpeechToText? = null
     private val main = Handler(Looper.getMainLooper())
@@ -36,6 +44,9 @@ class ListenBridge(private val context: Context) {
     private var done = true
     private var session = 0
     private var startedLogged = 0
+    private var initTries = 0
+    /** 결과를 받고 stop() 을 부른 때. 그 직후에 오는 요청 상태 오류는 stop 때문으로 봄 */
+    private var stoppedAt = 0L
     // 인식기가 소리를 받을 준비가 되면 열림 (feed 가 그때부터 음성을 흘려 넣음)
     @Volatile private var readyLatch: CountDownLatch? = null
 
@@ -82,6 +93,14 @@ class ListenBridge(private val context: Context) {
         override fun onError(errorType: ErrorType) = post {
             GLog.w("STT", "오류 $errorType")
             lastError.value = errorType.name
+            when (errorType.name) {
+                "MIC_ERROR", "PERMISSION_DENIED" -> _problem.value = errorType.name
+                // 결과를 받고 stop() 을 부른 직후의 요청 상태 오류는 새로 시작한 듣기와 관계없음
+                "INVALID_REQUEST_ERROR" -> if (SystemClock.uptimeMillis() - stoppedAt < STOP_ECHO_MS) {
+                    GLog.i("STT", "stop 뒤에 온 오류라 무시")
+                    return@post
+                }
+            }
             if (!done) fail(errorType.name)
         }
     }
@@ -90,6 +109,10 @@ class ListenBridge(private val context: Context) {
         val cb = onFinal
         GLog.i("STT", "인식: $text")
         finish()
+        _problem.value = null
+        // 문서: 인식이 끝나면 stop() 을 호출. 다음 듣기를 시작하기 전에 부름
+        stoppedAt = SystemClock.uptimeMillis()
+        runCatching { stt?.stop() }
         cb?.invoke(text.trim())
     }
 
@@ -109,27 +132,50 @@ class ListenBridge(private val context: Context) {
 
     fun start() {
         if (stt != null) return
-        val s = SpeechToText(context.applicationContext, Mode.ON_DEVICE)
+        val s = runCatching { SpeechToText(context.applicationContext, Mode.ON_DEVICE) }.getOrElse {
+            status.value = Status.ERROR
+            lastError.value = it.message
+            GLog.w("STT", "음성 인식을 만들지 못함", it)
+            retryInit()
+            return
+        }
         stt = s
         runCatching {
             s.initialize(object : OnInitializeListener {
                 override fun onSuccess() = post {
                     s.addListener(listener)
                     status.value = Status.READY
+                    initTries = 0
                     GLog.i("STT", "Pleos 음성 인식 준비됨 (ON_DEVICE)")
                 }
 
                 override fun onFailure(errorType: ErrorType) = post {
                     status.value = Status.ERROR
                     lastError.value = errorType.name
+                    if (errorType.name == "PERMISSION_DENIED") _problem.value = errorType.name
                     GLog.w("STT", "음성 인식 초기화 실패: $errorType")
+                    retryInit()
                 }
             })
         }.onFailure {
             status.value = Status.ERROR
             lastError.value = it.message
             GLog.w("STT", "음성 인식 초기화 예외", it)
+            retryInit()
         }
+    }
+
+    /** 초기화 실패 뒤 다시 시도 (3초, 10초, 30초) */
+    private fun retryInit() {
+        val wait = INIT_RETRY_MS.getOrNull(initTries) ?: return
+        initTries++
+        GLog.i("STT", "${wait / 1000}초 뒤 음성 인식 다시 준비")
+        main.postDelayed({
+            if (status.value != Status.ERROR) return@postDelayed
+            runCatching { stt?.release() }
+            stt = null
+            start()
+        }, wait)
     }
 
     val ready: Boolean get() = status.value == Status.READY || status.value == Status.LISTENING
@@ -203,5 +249,10 @@ class ListenBridge(private val context: Context) {
         }
         stt = null
         status.value = Status.OFF
+    }
+
+    private companion object {
+        val INIT_RETRY_MS = listOf(3_000L, 10_000L, 30_000L)
+        const val STOP_ECHO_MS = 1_000L
     }
 }

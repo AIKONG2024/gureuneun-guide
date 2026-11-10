@@ -16,7 +16,13 @@ import kotlin.math.abs
  */
 object Ask {
 
-    enum class Intent { WHAT, WHERE, REPLAY, NEXT, PAUSE, RESUME, REMAIN, QUIZ, REST, CHARGE, HOT, COLD, WINDOW_OPEN, WINDOW_CLOSE, KID_ON, KID_OFF, SHARE_PARKING, SHARE_CAFE, UNKNOWN }
+    enum class Intent { WHAT, WHERE, REPLAY, NEXT, PAUSE, RESUME, REMAIN, QUIZ, REST, CHARGE, HOT, COLD, WINDOW_OPEN, WINDOW_CLOSE, WINDOW_KEEP, WINDOW_STATUS, KID_ON, KID_OFF, SHARE_PARKING, SHARE_CAFE, END_TRIP, UNKNOWN }
+
+    /** 차가 먼저 물어본 것(장소 넣기, 쉬어 가기, 창문, 여행 끝)에 대한 짧은 대답 */
+    enum class Reply { YES, NO, LATER, DESTINATION, WAYPOINT }
+
+    /** 지금 떠 있는 물음의 종류. 같은 일을 말로 시키면("창문 열어 줘") 그 물음에 대한 대답으로 봄 */
+    enum class Prompt { PICK, WINDOW, REST, CHARGE, OFFER, END }
 
     enum class Side { LEFT, RIGHT, AHEAD, BEHIND }
 
@@ -38,8 +44,11 @@ object Ask {
             // 그룹 여행: "다른 차에 주차장 보내 줘"
             has(t, "보내", "공유", "알려줘다른", "share", "send") && has(t, "주차", "parking") -> Intent.SHARE_PARKING
             has(t, "보내", "공유", "share", "send") && has(t, "카페", "cafe", "coffee") -> Intent.SHARE_CAFE
-            has(t, "창문", "window") && has(t, "열", "내려", "open", "down") -> Intent.WINDOW_OPEN
-            has(t, "창문", "window") && has(t, "닫", "올려", "close", "up") -> Intent.WINDOW_CLOSE
+            // 창문: 하지 말라는 말, 닫기, 열렸는지 묻는 말을 먼저 거르고 남은 것만 열기 ("열린 창문 닫아 줘"는 닫기)
+            has(t, "창문", "window") && has(t, "열지마", "열지말", "열면안", "열지않", "그대로둬", "dontopen", "donotopen", "keepthewindow", "keepwindows") -> Intent.WINDOW_KEEP
+            has(t, "창문", "window") && has(t, "닫", "올려", "close", "shut", "rollup", "windowup", "windowsup") -> Intent.WINDOW_CLOSE
+            has(t, "창문", "window") && has(t, "열려있", "열렸어", "열렸나", "열려있나", "isthewindowopen", "arethewindowsopen", "windowsopen", "windowopen") && !has(t, "열어", "내려") -> Intent.WINDOW_STATUS
+            has(t, "창문", "window") && has(t, "열", "내려", "open", "rolldown", "lower", "windowdown", "windowsdown") -> Intent.WINDOW_OPEN
             has(t, "아이모드", "어린이모드", "아이버전", "kidmode", "kidsmode", "kidversion") && has(t, "꺼", "끄", "그만", "off") -> Intent.KID_OFF
             has(t, "아이모드", "어린이모드", "아이버전", "kidmode", "kidsmode", "kidversion") -> Intent.KID_ON
             has(t, "충전", "배터리", "주유", "기름", "charg", "battery", "fuel", "gasstation") -> Intent.CHARGE
@@ -47,6 +56,8 @@ object Ask {
             has(t, "더워", "덥다", "덥네", "더운데", "덥지", "toohot", "itshot", "sohot", "warm") -> Intent.HOT
             has(t, "추워", "춥다", "춥네", "추운데", "춥지", "toocold", "itscold", "socold", "chilly") -> Intent.COLD
             has(t, "퀴즈", "문제내", "문제줘", "quiz") -> Intent.QUIZ
+            // "그만"이 들어 있어도 여행 전체를 끝내자는 말이면 멈춤이 아니라 여행 끝
+            has(t, "여행끝", "여행마치", "여행그만", "여행종료", "오늘은여기까지", "endtrip", "endthetrip", "finishthetrip", "finishtrip", "endourtrip") -> Intent.END_TRIP
             has(t, "계속", "이어서", "이어줘", "다시시작", "continue", "resume", "goon", "keepgoing") -> Intent.RESUME
             has(t, "다시", "한번더", "못들었", "뭐라고", "again", "repeat", "replay", "saythat") -> Intent.REPLAY
             has(t, "다음이야기", "다음거", "다음으로", "넘겨", "건너", "스킵", "nextstory", "skip") || t == "다음" || t == "next" -> Intent.NEXT
@@ -58,6 +69,52 @@ object Ask {
             else -> Intent.UNKNOWN
         }
         return Parsed(intent, side, raw.trim())
+    }
+
+    // 한 글자 대답은 "어디야", "예쁘다"처럼 다른 말의 첫 글자와 겹치므로 그 말만 했을 때만 대답으로 봄
+    private val YES_KO = setOf("응", "응응", "네", "네네", "예", "넹", "웅", "어어")
+    private val YES_EN = listOf("yes", "yeah", "yep", "ok", "okay", "sure")
+
+    /**
+     * 차가 물어본 직후의 짧은 대답을 알아들음. 물음과 상관없는 말이면 null (그때는 parse 로 넘김).
+     * "괜찮아요"는 우리말에서 거절이라 NO 로 봄
+     */
+    fun reply(raw: String): Reply? {
+        val t = raw.lowercase().replace(Regex("[\\s.,!?~'\"]"), "")
+        if (t.isEmpty()) return null
+        return when {
+            has(t, "목적지", "바로가", "거기로가", "그리로가", "destination", "gothere", "takeusthere", "navigatethere") -> Reply.DESTINATION
+            has(t, "경유", "들렀다", "들러", "들르", "들렀가", "가는길에", "waypoint", "addastop", "asastop", "ontheway") -> Reply.WAYPOINT
+            // "다음에 보이는 거"처럼 질문에도 쓰이는 '다음에'는 빼고 미루는 말만
+            has(t, "나중에", "다음에할", "다음에하", "이따", "later", "notnow", "maybelater") -> Reply.LATER
+            has(t, "아니", "아뇨", "싫", "괜찮아", "됐어", "필요없", "안할래", "안해", "안좋", "nothanks", "nope") || t == "no" -> Reply.NO
+            has(t, "그래", "좋아", "알았어", "알겠어", "넣어", "열어", "해줘", "해주세요", "부탁", "오케이", "그렇게", "please", "doit", "goahead", "letsgo") -> Reply.YES
+            t in YES_KO -> Reply.YES
+            YES_EN.any { w -> t == w || (t.startsWith(w) && t.length <= w.length + 6) } -> Reply.YES
+            else -> null
+        }
+    }
+
+    /**
+     * 물음이 떠 있을 때 들은 말을 그 물음의 대답으로 볼지 정함. null 이면 보통 질문으로 처리.
+     * "응", "좋아"처럼 짧은 대답은 다른 뜻이 없을 때만 대답으로 보고
+     * (물음이 떠 있는데 "창문 열어 줘"라고 했다고 장소를 넣으면 안 되니까),
+     * "목적지로", "나중에"처럼 물음에만 쓰는 말은 언제나 대답으로 봄
+     */
+    fun answerFor(raw: String, prompt: Prompt): Reply? {
+        val r = reply(raw)
+        val q = parse(raw).intent
+        return when {
+            r == Reply.DESTINATION || r == Reply.WAYPOINT || r == Reply.LATER -> if (prompt == Prompt.PICK || r == Reply.LATER) r else Reply.YES
+            r == Reply.NO && (q == Intent.UNKNOWN || q == Intent.PAUSE) -> Reply.NO
+            r == Reply.YES && q == Intent.UNKNOWN -> Reply.YES
+            prompt == Prompt.WINDOW && q == Intent.WINDOW_OPEN -> Reply.YES
+            prompt == Prompt.WINDOW && (q == Intent.WINDOW_CLOSE || q == Intent.WINDOW_KEEP) -> Reply.NO
+            prompt == Prompt.REST && q == Intent.REST -> Reply.YES
+            prompt == Prompt.CHARGE && q == Intent.CHARGE -> Reply.YES
+            prompt == Prompt.END && q == Intent.END_TRIP -> Reply.YES
+            else -> null
+        }
     }
 
     // ------------------------------------------------------------ "저거 뭐야?"

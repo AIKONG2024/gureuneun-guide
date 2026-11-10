@@ -1,11 +1,16 @@
 package app.gureuneun.guide.ui
 
 import android.graphics.Bitmap
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,18 +20,21 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -60,15 +68,49 @@ fun Panel(modifier: Modifier = Modifier, accent: Color? = null, padding: Dp = 24
 }
 
 @Composable
-fun Pill(text: String, color: Color = G.surface2, textColor: Color = G.text, size: TextUnit = 20.sp, onClick: (() -> Unit)? = null) {
+fun Pill(text: String, color: Color = G.surface2, textColor: Color = G.text, size: TextUnit = 22.sp, onClick: (() -> Unit)? = null) {
     Box(
         Modifier
             .clip(RoundedCornerShape(50))
             .background(color)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 18.dp, vertical = 10.dp),
+            .padding(horizontal = 18.dp, vertical = 11.dp),
     ) {
         Text(text, color = textColor, fontSize = size, fontWeight = FontWeight.Medium)
+    }
+}
+
+/** 누르는 동안 95%로 살짝 줄어드는 효과 (Pleos 버튼 인터랙션 가이드의 shrink effect) */
+@Composable
+fun pressScale(src: MutableInteractionSource): Float {
+    val pressed by src.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.95f else 1f, tween(90), label = "press")
+    return scale
+}
+
+/** 누를 수 있는 작은 단추. 운전 중에도 한 번에 누를 수 있게 높이 76dp 이상 (Android for Cars 최소 터치 영역) */
+@Composable
+fun ChipButton(
+    text: String,
+    color: Color = G.surface2,
+    textColor: Color = G.text,
+    size: TextUnit = 24.sp,
+    minHeight: Dp = 76.dp,
+    onClick: () -> Unit,
+) {
+    val src = remember { MutableInteractionSource() }
+    val scale = pressScale(src)
+    Box(
+        Modifier
+            .heightIn(min = minHeight)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(24.dp))
+            .background(color)
+            .clickable(interactionSource = src, indication = LocalIndication.current, onClick = onClick)
+            .padding(horizontal = 26.dp, vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, color = textColor, fontSize = size, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
     }
 }
 
@@ -83,12 +125,15 @@ fun BigButton(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
+    val src = remember { MutableInteractionSource() }
+    val scale = pressScale(src)
     Box(
         modifier
             .height(height)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(28.dp))
             .background(if (enabled) color else G.surface2)
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(interactionSource = src, indication = LocalIndication.current, enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(text, color = if (enabled) textColor else G.muted, fontSize = size, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
@@ -96,13 +141,16 @@ fun BigButton(
 }
 
 @Composable
-fun GhostButton(text: String, modifier: Modifier = Modifier, height: Dp = 88.dp, size: TextUnit = 26.sp, onClick: () -> Unit) {
+fun GhostButton(text: String, modifier: Modifier = Modifier, height: Dp = 96.dp, size: TextUnit = 28.sp, onClick: () -> Unit) {
+    val src = remember { MutableInteractionSource() }
+    val scale = pressScale(src)
     Box(
         modifier
             .height(height)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(24.dp))
             .background(G.surface2)
-            .clickable(onClick = onClick),
+            .clickable(interactionSource = src, indication = LocalIndication.current, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(text, color = G.text, fontSize = size, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
@@ -111,7 +159,7 @@ fun GhostButton(text: String, modifier: Modifier = Modifier, height: Dp = 88.dp,
 
 @Composable
 fun SectionTitle(text: String, color: Color = G.muted) {
-    Text(text, color = color, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 10.dp))
+    Text(text, color = color, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 10.dp))
 }
 
 @Composable
