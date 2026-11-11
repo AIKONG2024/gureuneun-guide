@@ -614,3 +614,5 @@ clearInterval(hb);
 clearInterval(wavPoll);
 await browser.close();
 log('녹화 끝', OUT);
+// 가속 페달 반복(pedalLoop)이 계속 돌고 있으므로 여기서 끝냄
+process.exit(0);
