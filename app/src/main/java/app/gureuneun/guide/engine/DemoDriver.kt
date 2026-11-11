@@ -20,7 +20,6 @@ class DemoDriver(private val scope: CoroutineScope, private val onTick: (Tick) -
 
     val running = MutableStateFlow(false)
     var fastForward = 6
-    var cityKmh = 40.0
 
     /** 이야기가 나오는 중이면 true 를 돌려줌 (그동안은 실제 속도) */
     var storyPlaying: () -> Boolean = { false }
@@ -50,7 +49,7 @@ class DemoDriver(private val scope: CoroutineScope, private val onTick: (Tick) -
                 val dt = (now - last) / 1000.0
                 last = now
                 val factor = if (storyPlaying()) 1.0 else fastForward.toDouble()
-                progressM += cityKmh / 3.6 * factor * dt
+                progressM += CITY_KMH / 3.6 * factor * dt
                 if (progressM >= lengthM) {
                     progressM = lengthM
                     emit()
@@ -73,11 +72,14 @@ class DemoDriver(private val scope: CoroutineScope, private val onTick: (Tick) -
         emit()
     }
 
-    fun projectOnRoute(p: LatLng): Double = line?.project(p) ?: 0.0
-
     private fun emit() {
         val l = line ?: return
         val (p, h) = l.at(progressM)
-        onTick(Tick(p, h, progressM, l.length, if (running.value) cityKmh else 0.0))
+        onTick(Tick(p, h, progressM, l.length, if (running.value) CITY_KMH else 0.0))
+    }
+
+    private companion object {
+        /** 시연 주행 속도 (시내 평균) */
+        const val CITY_KMH = 40.0
     }
 }

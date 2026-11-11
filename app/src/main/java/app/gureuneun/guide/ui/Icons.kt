@@ -26,8 +26,8 @@ import kotlin.math.sin
  */
 enum class Ic {
     Replay, Pause, Play, Next, Mic, Pin, Star, StarOutline, Car, Users, Phone, Qr, Window, Check, Close,
-    ChevronRight, ChevronLeft, Globe, Sliders, Rain, Moon, Clock, Kid, Wind, Flag, Route, Gift, Cup, Parking,
-    Speaker, Send, Bolt, Fuel, Plus, Backspace, Bookmark, Navigation, Info, Home, Sun,
+    ChevronLeft, Sliders, Rain, Moon, Clock, Kid, Flag, Route, Gift, Cup, Parking,
+    Speaker, Send, Plus, Backspace, Bookmark, Navigation, Info, Home,
 }
 
 @Composable
@@ -127,13 +127,7 @@ fun DrawScope.drawIcon(ic: Ic, c: Color) {
         }
         Ic.Check -> stroke(pathOf { m(5f, 12.6f); l(9.8f, 17.2f); l(19f, 7.2f) })
         Ic.Close -> { line(6.2f, 6.2f, 17.8f, 17.8f); line(17.8f, 6.2f, 6.2f, 17.8f) }
-        Ic.ChevronRight -> stroke(pathOf { m(9f, 5.5f); l(15.5f, 12f); l(9f, 18.5f) })
         Ic.ChevronLeft -> stroke(pathOf { m(15f, 5.5f); l(8.5f, 12f); l(15f, 18.5f) })
-        Ic.Globe -> {
-            ring(12f, 12f, 9f)
-            drawOval(c, o(8f, 3f), Size(8f * u, 18f * u), style = st)
-            line(3.2f, 12f, 20.8f, 12f)
-        }
         Ic.Sliders -> {
             line(4f, 7f, 20f, 7f); line(4f, 12f, 20f, 12f); line(4f, 17f, 20f, 17f)
             dot(15f, 7f, 2.6f); dot(8.5f, 12f, 2.6f); dot(13f, 17f, 2.6f)
@@ -156,11 +150,6 @@ fun DrawScope.drawIcon(ic: Ic, c: Color) {
             ring(12f, 12f, 8.8f)
             dot(9f, 10.4f, 1.25f); dot(15f, 10.4f, 1.25f)
             arc(12f, 12.6f, 4f, 25f, 130f)
-        }
-        Ic.Wind -> {
-            stroke(pathOf { m(3f, 9f); l(14f, 9f); cc(16.2f, 9f, 17.6f, 7.8f, 17.6f, 6.2f); cc(17.6f, 4.8f, 16.4f, 3.7f, 15f, 3.7f); cc(13.8f, 3.7f, 12.8f, 4.5f, 12.6f, 5.6f) })
-            stroke(pathOf { m(3f, 13f); l(18.4f, 13f); cc(20.3f, 13f, 21.5f, 14.3f, 21.5f, 15.9f); cc(21.5f, 17.5f, 20.2f, 18.6f, 18.8f, 18.6f); cc(17.6f, 18.6f, 16.6f, 17.9f, 16.3f, 16.8f) })
-            line(3f, 17f, 10.5f, 17f)
         }
         Ic.Flag -> {
             line(6f, 21f, 6f, 3.6f)
@@ -196,15 +185,6 @@ fun DrawScope.drawIcon(ic: Ic, c: Color) {
             stroke(pathOf { m(3.4f, 11.2f); l(20.6f, 3.8f); l(14.6f, 20.4f); l(11.4f, 12.8f); close() })
             line(11.4f, 12.8f, 20.4f, 4f)
         }
-        Ic.Bolt -> {
-            val p = pathOf { m(13.4f, 2.6f); l(5.6f, 13.6f); l(11.4f, 13.6f); l(10.6f, 21.4f); l(18.4f, 10.2f); l(12.6f, 10.2f); close() }
-            fill(p); stroke(p)
-        }
-        Ic.Fuel -> {
-            box(4.4f, 3.6f, 13.6f, 20.6f, 1.6f)
-            box(6.8f, 6.2f, 11.2f, 10.4f, 0.6f, true)
-            stroke(pathOf { m(13.6f, 8.6f); l(16.4f, 8.6f); cc(17.5f, 8.6f, 18.2f, 9.4f, 18.2f, 10.4f); l(18.2f, 16.8f); cc(18.2f, 17.8f, 18.9f, 18.5f, 19.8f, 18.5f); cc(20.7f, 18.5f, 21.4f, 17.8f, 21.4f, 16.8f); l(21.4f, 8.2f); l(19f, 5.6f) })
-        }
         Ic.Plus -> { line(12f, 5f, 12f, 19f); line(5f, 12f, 19f, 12f) }
         Ic.Backspace -> {
             stroke(pathOf { m(8.6f, 5f); l(19.6f, 5f); cc(20.7f, 5f, 21.4f, 5.7f, 21.4f, 6.8f); l(21.4f, 17.2f); cc(21.4f, 18.3f, 20.7f, 19f, 19.6f, 19f); l(8.6f, 19f); l(2.6f, 12f); close() })
@@ -220,13 +200,6 @@ fun DrawScope.drawIcon(ic: Ic, c: Color) {
             stroke(pathOf { m(3.6f, 11f); l(12f, 4f); l(20.4f, 11f) })
             stroke(pathOf { m(6f, 9.4f); l(6f, 20f); l(18f, 20f); l(18f, 9.4f) })
             stroke(pathOf { m(10f, 20f); l(10f, 14.4f); l(14f, 14.4f); l(14f, 20f) })
-        }
-        Ic.Sun -> {
-            ring(12f, 12f, 4.2f)
-            for (i in 0 until 8) {
-                val a = i * PI / 4
-                line(12f + 7f * cos(a).toFloat(), 12f + 7f * sin(a).toFloat(), 12f + 9.6f * cos(a).toFloat(), 12f + 9.6f * sin(a).toFloat())
-            }
         }
     }
 }

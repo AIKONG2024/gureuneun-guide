@@ -67,6 +67,8 @@ fun RecordScreen(
     // 보낼지 묻는 동안은 [보내기]가 이 화면의 주인공, 답한 뒤에는 [처음 화면으로]
     val asking = url != null && ui.recordShared == null
     val shown = recorder.events.filter { it.type in SHOWN }
+    // 창문을 닫는다는 알림, 기록을 보내지 못했다는 알림
+    val toast = rememberToast(ui.toast, ui.toastSeq)
 
     BrandBackground {
         BoxWithConstraints(Modifier.fillMaxSize().padding(32.dp)) {
@@ -106,6 +108,8 @@ fun RecordScreen(
                     HomeButton(lang, primary = !asking, onHome)
                 }
             }
+            // [처음 화면으로] 단추 바로 위에
+            Box(Modifier.fillMaxSize().padding(bottom = 128.dp), contentAlignment = Alignment.BottomCenter) { ToastBubble(toast) }
         }
     }
 }
@@ -115,7 +119,6 @@ private class Summary(
     val minutes: Long,
     val places: Int,
     val stories: Int,
-    val asked: Int,
     val stars: Int,
     val quizzes: Int,
     val treasure: Boolean,
@@ -129,8 +132,6 @@ private fun summarize(sc: Scenario, r: TripRecorder): Summary {
         places = r.events.filter { it.type == "pass" && it.placeId != null && sc.findPlace(it.placeId)?.kind != PlaceKind.CITY }
             .map { it.placeId }.distinct().size,
         stories = r.events.count { it.type == "story" },
-        // 말로 물어본 것은 진짜 물음만 셈 (차가 물은 것에 "응", "나중에"로 답한 것은 빼고)
-        asked = r.events.count { it.type == "ask" && !it.detail.startsWith("REPLY_") },
         stars = r.events.filter { it.type == "quiz_ok" }.map { it.placeId }.distinct().size,
         quizzes = r.events.count { it.type == "quiz" },
         treasure = r.events.any { it.type == "treasure" },
@@ -225,21 +226,15 @@ private fun VLine() {
     Box(Modifier.width(2.dp).fillMaxHeight().background(C.line))
 }
 
-/** 물어본 것, 퀴즈 별, 보물 상자. 있을 때만 */
+/** 퀴즈 별과 보물 상자. 보물 상자 코스이거나 맞힌 퀴즈가 있을 때만 (맞힌 것이 없는 0/2 는 띄우지 않음) */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Extras(s: Summary, sc: Scenario, lang: String) {
-    val quiz = s.quizzes > 0 || sc.treasureStars > 0
-    if (s.asked == 0 && !quiz) return
+    if (s.stars == 0 && sc.treasureStars == 0) return
     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (s.asked > 0) {
-            Tag(t(lang, "말로 물어본 것 ${s.asked}번", if (s.asked == 1) "Asked 1 question" else "Asked ${s.asked} questions"), Ic.Mic, bg = C.surface)
-        }
-        if (quiz) {
-            val total = maxOf(s.quizzes, s.stars)
-            // 맞힌 퀴즈 / 휴대폰으로 보낸 퀴즈
-            Tag(t(lang, "퀴즈 별 ${s.stars}/${total}", "Quiz stars ${s.stars}/${total}"), Ic.Star, bg = C.surface, fg = C.sand)
-        }
+        val total = maxOf(s.quizzes, s.stars)
+        // 맞힌 퀴즈 / 휴대폰으로 보낸 퀴즈
+        Tag(t(lang, "퀴즈 별 ${s.stars}/${total}", "Quiz stars ${s.stars}/${total}"), Ic.Star, bg = C.surface, fg = C.sand)
         if (sc.treasureStars > 0) {
             Tag(
                 if (s.treasure) t(lang, "보물 상자 열었어요", "Opened the treasure box") else t(lang, "보물 상자는 다음에", "Treasure box next time"),
@@ -292,22 +287,13 @@ private fun eventIcon(type: String): Pair<Ic, Color> = when (type) {
     "story" -> Ic.Speaker to C.text2
     "kid" -> Ic.Kid to C.text2
     "pick" -> Ic.Bookmark to C.text2
-    "share" -> Ic.Send to C.text2
     "window" -> Ic.Window to C.text2
-    "air" -> Ic.Wind to C.text2
-    "sunroof" -> Ic.Sun to C.text2
     "rain" -> Ic.Rain to C.text2
     "night" -> Ic.Moon to C.text2
     "qa" -> Ic.Mic to C.text2
     "quiz" -> Ic.Phone to C.text2
     "quiz_ok" -> Ic.Star to C.sand
     "treasure" -> Ic.Gift to C.sand
-    "jam" -> Ic.Clock to C.text2
-    "rest" -> Ic.Cup to C.text2
-    "charge" -> Ic.Bolt to C.text2
-    "fuel" -> Ic.Fuel to C.text2
-    "rest_nav", "charge_nav", "fuel_nav" -> Ic.Navigation to C.text2
-    "climate" -> Ic.Sliders to C.text2
     else -> Ic.Info to C.text2
 }
 
@@ -349,11 +335,7 @@ private fun ShareCard(ui: TripEngine.Ui, url: String?, onShare: () -> Unit, onKe
                     Text(t(lang, "기록을 휴대폰으로 가져가세요", "Take the record with you"), style = T.titleM, color = C.text)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        t(
-                            lang,
-                            "사진을 올리면 찍은 시각에 맞춰 길 위에 붙고, 빌트인 캠 영상을 올리면 명소를 지난 장면만 모아 짧은 영상으로 만들어요.",
-                            "Upload photos to pin them on the route by time. Upload built-in cam video to get a short highlight of the places.",
-                        ),
+                        t(lang, "QR을 찍어 사진을 올리면 찍은 시각에 맞춰 지나온 길 위에 붙어요.", "Scan the QR and add photos. They are pinned on the route by the time they were taken."),
                         style = T.bodyS, color = C.text2,
                     )
                 }
@@ -420,9 +402,8 @@ private fun describe(e: TripRecorder.Event, lang: String): String = when (e.type
     "depart" -> t(lang, "출발", "Departed")
     "pass" -> if (e.placeId == null || e.placeId in CITY_IDS) t(lang, "${e.title}에 들어섬", "Arrived in ${e.title}") else t(lang, "${e.title} 지남", "Passed ${e.title}")
     "story" -> t(lang, "${e.title} 이야기 들음 (${lenWord(e.detail, lang)})", "Heard about ${e.title} (${lenWord(e.detail, lang)})")
-    "pick" -> t(lang, "${e.detail} 님이 고른 ${e.title} 안내", "Navigated to ${e.title}, picked by ${e.detail}")
-    "share" -> t(lang, "${e.title} 다른 차에 보냄", "Sent ${e.title} to the other cars")
-    "window" -> t(lang, "${e.title}에서 창문 열고 바다 소리 들음", "Opened the windows at ${e.title}")
+    "pick" -> if (e.detail.isBlank()) t(lang, "휴대폰에서 고른 ${e.title} 안내", "Navigated to ${e.title}, picked on a phone") else t(lang, "${e.detail} 님이 고른 ${e.title} 안내", "Navigated to ${e.title}, picked by ${e.detail}")
+    "window" -> t(lang, "${e.title}에서 창문 열고 파도 소리 들음", "Opened the windows at ${e.title} to hear the waves")
     "rain" -> t(lang, "비가 와서 비 오는 날 이야기로 바꿈", "Switched to rain stories")
     "night" -> t(lang, "밤이 되어 밤 이야기로 바꿈", "Switched to night stories")
     "arrive" -> t(lang, "목적지 도착", "Arrived")
@@ -432,24 +413,11 @@ private fun describe(e: TripRecorder.Event, lang: String): String = when (e.type
     "quiz_ok" -> if (e.detail.isBlank()) t(lang, "${e.title} 퀴즈 정답, 별 하나", "Got the ${e.title} quiz right, one star") else t(lang, "${e.detail} 님이 ${e.title} 퀴즈를 맞혀 별 하나", "${e.detail} got the ${e.title} quiz right")
     "treasure" -> t(lang, "별 ${e.detail}개로 보물 상자 열림", "Opened the treasure box with ${e.detail} stars")
     "kid" -> t(lang, "${e.title}에서 뒷자리 친구들 이야기", "A story for the back seat at ${e.title}")
-    "air" -> t(lang, "${e.title}에서 바깥 공기 들임", "Let in the air at ${e.title}")
-    "jam" -> t(lang, "길이 막혀 긴 이야기로 바꿈", "Traffic, switched to longer stories")
-    "rest" -> t(lang, "오래 달려서 쉬어 가자고 함", "Suggested a break")
-    "rest_nav" -> t(lang, "내비게이션에 가까운 ${e.title} 띄움", "Showed nearby ${e.title} in navigation")
-    "charge" -> t(lang, "배터리가 빠듯해 충전하자고 함", "Suggested charging")
-    "charge_nav" -> t(lang, "내비게이션에 가까운 충전소 띄움", "Showed chargers nearby in navigation")
-    "fuel" -> t(lang, "기름이 빠듯해 주유하자고 함", "Suggested a fuel stop")
-    "fuel_nav" -> t(lang, "내비게이션에 가까운 주유소 띄움", "Showed gas stations nearby in navigation")
-    "sunroof" -> t(lang, "${e.title}에서 선루프 열고 하늘 봄", "Opened the sunroof at ${e.title}")
-    "climate" -> t(lang, "말로 온도를 ${e.detail}도로 맞춤", "Set the temperature to ${e.detail} by voice")
     else -> e.title
 }
 
-private val SHOWN = setOf(
-    "depart", "pass", "story", "pick", "share", "window", "rain", "night", "arrive", "end",
-    "qa", "quiz", "quiz_ok", "treasure", "kid", "air", "jam", "rest", "rest_nav",
-    "charge", "charge_nav", "fuel", "fuel_nav", "sunroof", "climate",
-)
+/** 기록 카드에 보이는 일. 말로 한 조작("다음", "멈춰")이나 짧은 대답은 기록에 남아도 여기에는 띄우지 않음 */
+private val SHOWN = setOf("depart", "pass", "story", "pick", "window", "rain", "night", "arrive", "end", "qa", "quiz", "quiz_ok", "treasure", "kid")
 
 private val CITY_IDS = setOf("gyeongju", "jejucity", "yeouido")
 

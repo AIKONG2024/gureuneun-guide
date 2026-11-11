@@ -211,7 +211,7 @@ fun Segmented(options: List<String>, selected: Int, modifier: Modifier = Modifie
     }
 }
 
-/** 켜고 끄는 줄 (아이 모드 등). 줄 전체를 눌러도 됨 */
+/** 켜고 끄는 줄 (점검 화면의 시연 명령 받기). 줄 전체를 눌러도 됨 */
 @Composable
 fun SwitchRow(icon: Ic, title: String, sub: String?, on: Boolean, modifier: Modifier = Modifier, onToggle: () -> Unit) {
     Row(
@@ -450,27 +450,41 @@ fun PopupFrame(icon: Ic, tint: Color = C.accent, width: Dp = 1000.dp, content: @
     }
 }
 
-/** 짧은 알림. 4초 뒤 사라지고, 큰 단추를 가리지 않게 아래 단추 줄 위에 뜸 */
+/** 짧은 알림 하나: 지금 보이는지와 그 글 */
+class ToastState(val visible: Boolean, val message: String)
+
+/**
+ * 알림이 올 때마다(seq 가 바뀔 때마다) 4초 동안 보이게 함.
+ * 놓일 자리가 화면마다 달라서(달리는 동안은 이야기 카드 안 한 줄, 서 있을 때는 장면 위) 상태만 따로 둠
+ * 화면이 처음 그려질 때 이미 와 있던 알림(앞 화면에서 본 것)은 다시 띄우지 않음
+ */
 @Composable
-fun ToastHost(message: String?, seq: Int, bottom: Dp) {
+fun rememberToast(message: String?, seq: Int): ToastState {
     var visible by remember { mutableStateOf(false) }
+    val first = remember { seq }
     LaunchedEffect(seq) {
-        if (message != null && seq > 0) {
+        if (message != null && seq != first) {
             visible = true
             delay(4000)
             visible = false
         }
     }
-    Box(Modifier.fillMaxSize().padding(start = 32.dp, end = 32.dp, bottom = bottom), contentAlignment = Alignment.BottomCenter) {
-        AnimatedVisibility(visible, enter = fadeIn(tween(160)) + slideInVertically { it / 3 }, exit = fadeOut(tween(200)) + slideOutVertically { it / 3 }) {
-            Row(
-                Modifier.widthIn(max = 1100.dp).clip(RoundedCornerShape(24.dp)).background(Color(0xF52C313B)).padding(horizontal = 34.dp, vertical = 22.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                Icon(Ic.Info, C.accent, 30.dp)
-                Text(message ?: "", style = T.bodyM, color = C.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
+    return ToastState(visible && message != null, message ?: "")
+}
+
+/** 알림 풍선. 읽고 있는 글과 큰 단추, QR 을 가리지 않는 자리를 부르는 쪽이 정함. fromTop 이면 위에서 내려옴 */
+@Composable
+fun ToastBubble(toast: ToastState, modifier: Modifier = Modifier, fromTop: Boolean = false) {
+    val enter = fadeIn(tween(160)) + slideInVertically { if (fromTop) -it / 3 else it / 3 }
+    val exit = fadeOut(tween(200)) + slideOutVertically { if (fromTop) -it / 3 else it / 3 }
+    AnimatedVisibility(toast.visible, modifier, enter = enter, exit = exit) {
+        Row(
+            Modifier.widthIn(max = 1100.dp).clip(RoundedCornerShape(24.dp)).background(Color(0xF52C313B)).padding(horizontal = 34.dp, vertical = 22.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Icon(Ic.Info, C.accent, 30.dp)
+            Text(toast.message, style = T.bodyM, color = C.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }

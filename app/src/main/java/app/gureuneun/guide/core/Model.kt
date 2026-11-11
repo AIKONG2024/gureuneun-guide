@@ -6,7 +6,7 @@ import org.json.JSONObject
 data class LatLng(val lat: Double, val lon: Double)
 
 enum class PlaceKind {
-    CITY, LANDMARK, SEA, FOREST, CAFE, PARKING;
+    CITY, LANDMARK, SEA, CAFE, PARKING;
 
     companion object {
         fun of(s: String?): PlaceKind = entries.firstOrNull { it.name.equals(s, ignoreCase = true) } ?: LANDMARK
@@ -45,12 +45,11 @@ data class Place(
     val ambience: String?,
     val stop: Boolean,
     val source: String,
-    /** 하늘과 이어지는 곳(예: 별을 보던 첨성대). 선루프가 있는 차는 세웠을 때 하늘을 열어 보자고 물어봄 */
-    val sky: Boolean = false,
 ) {
     fun story(lang: String): Story? = stories[lang] ?: stories["ko"] ?: stories.values.firstOrNull()
+    /** 가까이 가면 차가 먼저 이야기를 꺼내는 곳 (카페, 주차장은 휴대폰에서 고르는 곳이라 아님) */
     val triggers: Boolean
-        get() = kind == PlaceKind.CITY || kind == PlaceKind.LANDMARK || kind == PlaceKind.SEA || kind == PlaceKind.FOREST
+        get() = kind == PlaceKind.CITY || kind == PlaceKind.LANDMARK || kind == PlaceKind.SEA
 }
 
 /** 이야기 정류장은 아니지만 창밖으로 보이는 곳. "저거 뭐야?"에 답할 때 씀 */
@@ -97,7 +96,7 @@ data class Scenario(
     val quiz: Map<String, Quiz> = emptyMap(),
     /** 퀴즈 별을 이만큼 모으면 글로브 박스 보물 상자를 열어 줌 (0 이면 보물 상자 없음) */
     val treasureStars: Int = 0,
-    /** 뒷좌석에 사람이 앉으면 아이 모드를 저절로 켤지 (가족 코스) */
+    /** 가족 코스: 뒷좌석에 사람이 앉아 있으면 명소 이야기 끝에 아이 이야기를 덧붙임 */
     val kidAuto: Boolean = false,
 ) {
     fun findPlace(id: String?): Place? = places.firstOrNull { it.id == id } ?: pickables.firstOrNull { it.id == id }
@@ -195,7 +194,6 @@ object ScenarioParser {
             ambience = o.optString("ambience").ifBlank { null },
             stop = o.optBoolean("stop", false),
             source = o.optString("source"),
-            sky = o.optBoolean("sky", false),
         )
     }
 }

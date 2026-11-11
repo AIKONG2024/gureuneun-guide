@@ -3,16 +3,12 @@ package app.gureuneun.guide.sdk
 import ai.pleos.playground.navi.constants.NaviErrorCode
 import ai.pleos.playground.navi.constants.NavigationStatus
 import ai.pleos.playground.navi.constants.WaypointIndex
-import ai.pleos.playground.navi.data.CameraAlert
-import ai.pleos.playground.navi.data.CautionPoint
 import ai.pleos.playground.navi.data.CurrentLocationInfo
 import ai.pleos.playground.navi.data.DestinationArrivedInfo
 import ai.pleos.playground.navi.data.DrivingInfo
-import ai.pleos.playground.navi.data.NavigationScreenRequest
 import ai.pleos.playground.navi.data.RequestWaypointInfo
 import ai.pleos.playground.navi.data.RouteInfo
 import ai.pleos.playground.navi.data.RouteStartInfo
-import ai.pleos.playground.navi.data.RouteStateInfo
 import ai.pleos.playground.navi.data.RouteWithWaypointsRequest
 import ai.pleos.playground.navi.data.TBTInfo
 import ai.pleos.playground.navi.data.WaypointArrivedInfo
@@ -43,12 +39,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * NaviHelper SDK 연결부.
  * 순정 내비게이션에 목적지와 경유지를 넣고, 다음 길 안내(TBT)까지 남은 거리를 받아
- * 이야기가 길 안내와 겹치지 않게 하는 데 씀.
- * 막히는 구간(교통 정보), 단속 카메라와 어린이 보호구역 같은 주의 지점도 받아서
- * 막히면 긴 이야기를 고르고, 주의 지점 앞에서는 이야기를 잠시 쉼.
- * 쉬어 갈 곳, 충전소, 주유소는 순정 내비 화면(검색, 주변 충전소)을 띄워 운전자가 고르게 함.
+ * 이야기 길이를 고르고 이야기가 길 안내와 겹치지 않게 하는 데 씀. 남은 거리와 시간, 도착 알림도 받음.
  *
- * 연결 전에 들어온 경로 요청은 대기열(최대 8개)에 두었다가 연결되면 보냄. 화면 띄우기는 연결 전이면 false.
+ * 연결 전에 들어온 경로 요청은 대기열(최대 8개)에 두었다가 연결되면 보냄.
  * 연결이 안 되면 1초에서 30초까지 간격을 늘려 다시 시도함. 오류는 errors 로 알림.
  * 길 안내 정보는 여행 중이고 경로 안내 중일 때(또는 경로를 요청한 뒤 1분 동안)만 1.5초마다 물어봄.
  */
@@ -64,16 +57,6 @@ class NaviBridge(private val context: Context, private val scope: CoroutineScope
         val remainSeconds: Int? = null,
         val destinationName: String? = null,
         val navPos: LatLng? = null,
-        /** 지금 도로 제한 속도(km/h) */
-        val speedLimit: Int? = null,
-        /** 남은 경로의 막히는 구간 합계 */
-        val jamDistM: Double? = null,
-        val jamTimeS: Long? = null,
-        /** 가장 가까운 단속 카메라까지 거리 */
-        val cameraAheadM: Int? = null,
-        /** 가장 가까운 주의 지점(어린이 보호구역 등)까지 거리와 종류 */
-        val cautionAheadM: Int? = null,
-        val cautionType: String? = null,
         /** 내비가 마지막으로 알려 준 경유지 수 (모르면 null) */
         val waypointCount: Int? = null,
         val lastEvent: String? = null,
@@ -88,7 +71,7 @@ class NaviBridge(private val context: Context, private val scope: CoroutineScope
 
     /**
      * 내비 오류. code 는 NaviErrorCode 이름(CAUSE_SEARCH_ROUTE 등)이거나
-     * CONNECT_FAILED(연결 실패), NOT_CONNECTED(연결 전이라 못 함), WAYPOINTS_FULL(경유지 두 곳이 다 참), REQUEST_FAILED(요청 중 예외).
+     * CONNECT_FAILED(연결 실패), WAYPOINTS_FULL(경유지 두 곳이 다 참), REQUEST_FAILED(요청 중 예외).
      * what 은 무엇을 하다가 났는지 (장소 이름, 요청 이름)
      */
     data class Failure(val code: String, val what: String?)
@@ -126,19 +109,14 @@ class NaviBridge(private val context: Context, private val scope: CoroutineScope
     }
 
     /**
-     * 내비 호출을 전용 스레드에서 실행. 연결 전이면 queue 일 때 대기열에 넣고 true, 아니면 NOT_CONNECTED 로 알리고 false.
+     * 내비 호출을 전용 스레드에서 실행. 연결 전이면 대기열에 넣었다가 연결되면 보냄.
      * true 는 '요청을 받았다'는 뜻
      */
-    private fun send(what: String, queue: Boolean = true, block: (NaviHelper) -> Unit): Boolean {
+    private fun send(what: String, block: (NaviHelper) -> Unit): Boolean {
         val h = helper
         if (h != null && connected) {
             dispatch(h, what, block)
             return true
-        }
-        if (!queue) {
-            GLog.w("Navi", "내비 연결 전이라 못 함: $what")
-            report("NOT_CONNECTED", what)
-            return false
         }
         synchronized(pending) {
             if (pending.size >= MAX_PENDING) pending.removeFirst()
@@ -234,25 +212,6 @@ class NaviBridge(private val context: Context, private val scope: CoroutineScope
             GLog.w("Navi", "오류 $errorCode")
             report(errorCode.name, null)
         }
-
-        override fun onRouteStateInfo(routeStateInfo: RouteStateInfo) {
-            val s = runCatching { routeStateInfo.trafficStatus?.summary }.getOrNull()
-            post { state.update { it.copy(jamDistM = s?.totalCongestionDist, jamTimeS = s?.totalCongestionTime) } }
-        }
-
-        override fun onCameraAlert(cameraAlertList: List<CameraAlert>) {
-            val near = cameraAlertList.filter { it.status }.minOfOrNull { it.remainDistance }
-            post { state.update { it.copy(cameraAheadM = near) } }
-        }
-
-        override fun onCautionPointInfo(cautionPointList: List<CautionPoint>) {
-            val near = cautionPointList.minByOrNull { it.remainDistance }
-            post { state.update { it.copy(cautionAheadM = near?.remainDistance, cautionType = near?.type?.toString()) } }
-        }
-
-        override fun onCurrentRoadSpeedLimit(speedLimit: Int) {
-            post { state.update { it.copy(speedLimit = speedLimit) } }
-        }
     }
 
     fun start() {
@@ -343,18 +302,14 @@ class NaviBridge(private val context: Context, private val scope: CoroutineScope
     private fun ensurePolling() {
         if (!connected || pollJob?.isActive == true || pollDelay() == null) return
         pollJob = scope.launch {
-            var n = 0
             while (isActive) {
                 val wait = pollDelay() ?: break
                 val h = helper ?: break
                 if (!connected) break
-                val every = n++
                 io.execute {
                     runCatching {
                         h.getTBTInfo()
                         h.getCurrentLocationInfo()
-                        // 교통 정보는 자주 바뀌지 않아 열 번에 한 번
-                        if (every % 10 == 0) h.getRouteStateInfo()
                     }
                 }
                 delay(wait)
@@ -468,24 +423,6 @@ class NaviBridge(private val context: Context, private val scope: CoroutineScope
     fun cancelRoute(): Boolean = send("경로 취소") {
         it.cancelRoute()
         knownWaypoints = 0
-    }
-
-    /** 순정 내비의 주변 충전소 화면을 띄움. 연결 전이면 false */
-    fun openChargers(): Boolean = send("충전소 화면 요청", queue = false) { h ->
-        h.requestNavigationScreen(NavigationScreenRequest.NearbyChargingStations)
-        GLog.i("Navi", "주변 충전소 화면 요청")
-    }
-
-    /**
-     * 주유소 찾기. NaviHelper 3.0.5 에는 주유소 전용 화면이 없어서 순정 내비의 장소 검색 화면을 '주유소'로 띄움.
-     * 연결 전이면 false
-     */
-    fun openGasStations(lang: String = "ko"): Boolean = searchNearby(if (lang == "en") "gas station" else "주유소")
-
-    /** 순정 내비의 장소 검색 화면을 검색어와 함께 띄움 (예: 휴게소, 화장실). 연결 전이면 false */
-    fun searchNearby(keyword: String): Boolean = send("검색 화면 요청 $keyword", queue = false) { h ->
-        h.requestNavigationScreen(NavigationScreenRequest.SearchPlace(keyword))
-        GLog.i("Navi", "장소 검색 화면 요청: $keyword")
     }
 
     fun release() {

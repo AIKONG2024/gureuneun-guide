@@ -46,7 +46,7 @@ import app.gureuneun.guide.sdk.VehicleBridge
 /**
  * SDK 연결 상태를 한눈에 보고 하나씩 눌러 확인하는 점검 화면 (PT 시연용).
  * 왼쪽은 SDK 별 상태 카드, 오른쪽은 시연 설정과 시험 단추, 로그.
- * 차를 움직이는 단추(창문, 글로브 박스, 공조, 되돌리기)는 차가 P 로 서 있고 주행 규제가 없을 때만 동작함.
+ * 차를 움직이는 단추(창문, 글로브 박스, 되돌리기)는 차가 P 로 서 있고 주행 규제가 없을 때만 동작함.
  * 나머지 단추도 주행 규제 중에는 동작하지 않음 (점검 화면은 서 있을 때 쓰는 화면).
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -118,17 +118,7 @@ fun DiagScreen(app: GuideApp, onBack: () -> Unit) {
                     "착석" to seatsOn(v.occupied), "벨트" to seatsOn(v.belts), "창문" to windowsOf(v.windows),
                     "조명 색" to (v.ambientColor?.let { "#%06X".format(it and 0xFFFFFF) } ?: "-"), "밝기" to (v.ambientBrightness?.toString() ?: "-"),
                 ),
-                "주행과 에너지" to listOf(
-                    "이번 주행" to (v.drivingMin?.let { "${it}분" } ?: "-"), "동력원" to v.powertrain,
-                    "배터리" to (v.socPct?.let { "${it}%" } ?: "-"), "연료" to (v.fuelPct?.let { "${it}%" } ?: "-"),
-                    "갈 수 있는 거리" to (v.rangeKm?.let { "%.1fkm".format(it) } ?: "-"),
-                ),
-                "공조, 글로브 박스, 선루프" to listOf(
-                    "내기 순환" to yn(v.recirc), "바람" to "${v.fanSpeed ?: "-"}/${v.fanMax ?: "-"}",
-                    "온도" to (v.tempC?.let { "${it}℃ (${v.tempMin ?: "-"}~${v.tempMax ?: "-"})" } ?: "-"),
-                    "글로브 박스 잠금 지원" to yn(v.gloveSupported), "잠김" to yn(v.gloveLocked),
-                    "선루프" to yn(v.sunroof), "위치" to (v.sunroofPos?.toString() ?: "-"),
-                ),
+                "글로브 박스 (보물 상자)" to listOf("잠금을 앱이 바꿀 수 있음" to yn(v.gloveSupported), "잠김" to yn(v.gloveLocked)),
                 "되돌리기와 오류" to listOf(
                     "앱이 바꾼 차 상태" to (if (app.vehicle.hasChanges) "있음" else "없음"), "마지막 오류" to (v.lastError ?: "-"),
                 ),
@@ -143,12 +133,6 @@ fun DiagScreen(app: GuideApp, onBack: () -> Unit) {
                     "남은 거리" to (n.remainDistanceM?.let { formatDist(it.toDouble()) } ?: "-"),
                     "목적지" to (n.destinationName ?: "-"), "경유지" to (n.waypointCount?.let { "${it}곳" } ?: "-"),
                     "마지막 오류" to (naviErr ?: n.lastError ?: "-"),
-                ),
-                "길 상황" to listOf(
-                    "제한 속도" to (n.speedLimit?.let { "${it}km/h" } ?: "-"),
-                    "막히는 구간" to (n.jamDistM?.let { "${formatDist(it)} ${n.jamTimeS ?: 0}초" } ?: "-"),
-                    "단속 카메라" to (n.cameraAheadM?.let { "${it}m" } ?: "-"),
-                    "주의 지점" to (n.cautionType?.let { "${it} ${n.cautionAheadM ?: "-"}m" } ?: "-"),
                 ),
             ),
         )
@@ -227,13 +211,9 @@ fun DiagScreen(app: GuideApp, onBack: () -> Unit) {
             act("별빛", canUse, useWhy, Color(0xFF6C5CE7)) { app.vehicle.setAmbient(0xFF6C5CE7.toInt(), 60) }
             act("흰색", canUse, useWhy, Color.White) { app.vehicle.setAmbient(0xFFFFFFFF.toInt(), 70) }
         }
-        ActGroup("창문, 공조, 글로브 박스", canMove, if (canMove) "P 단, 주행 규제 없음" else "P 단에서만 (지금 기어 ${v.gear})") {
+        ActGroup("앞 창문과 글로브 박스", canMove, if (canMove) "P 단, 주행 규제 없음" else "P 단에서만 (지금 기어 ${v.gear})") {
             act("앞 창문 조금 열기", canMove, moveWhy, null) { app.vehicle.setWindows(2, VehicleBridge.FRONT_WINDOWS) }
             act("앞 창문 닫기", canMove, moveWhy, null) { app.vehicle.setWindows(0, VehicleBridge.FRONT_WINDOWS) }
-            act("바깥 공기", canMove, moveWhy, null) { app.vehicle.setRecirculation(false) }
-            act("내기 순환", canMove, moveWhy, null) { app.vehicle.setRecirculation(true) }
-            act("온도 -1", canMove, moveWhy, null) { app.vehicle.nudgeTemperature(-1f) }
-            act("온도 +1", canMove, moveWhy, null) { app.vehicle.nudgeTemperature(1f) }
             act("글로브 박스 풀기", canMove, moveWhy, null) { app.vehicle.setGloveBoxLock(false) { ok -> GLog.i("Diag", "글로브 박스 풀기 ${if (ok) "됨" else "안 됨"}") } }
             act("글로브 박스 잠금", canMove, moveWhy, null) { app.vehicle.setGloveBoxLock(true) { ok -> GLog.i("Diag", "글로브 박스 잠금 ${if (ok) "됨" else "안 됨"}") } }
             act("바꾼 것 되돌리기", canMove, moveWhy, null) { app.vehicle.restoreAll { ok -> GLog.i("Diag", if (ok) "되돌리기 끝" else "되돌리기: 아직 남은 것 있음") } }
@@ -241,9 +221,6 @@ fun DiagScreen(app: GuideApp, onBack: () -> Unit) {
         ActGroup("내비게이션", canUse, "주행 규제가 없을 때") {
             act("첨성대로 길 안내", canUse, useWhy, null) { app.navi.routeTo("첨성대", LatLng(35.83470, 129.21898)) }
             act("길 안내 취소", canUse, useWhy, null) { app.navi.cancelRoute() }
-            act("충전소 화면", canUse, useWhy, null) { app.navi.openChargers() }
-            act("주유소 찾기", canUse, useWhy, null) { app.navi.openGasStations() }
-            act("휴게소 검색", canUse, useWhy, null) { app.navi.searchNearby("휴게소") }
             act("위치 차단 안내", canUse, useWhy, null) { app.location.showBlockedPopup() }
         }
         ActGroup("그룹 서버", canUse, g.baseUrl) {

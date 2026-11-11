@@ -64,8 +64,6 @@ class TripRecorder(private val context: Context) {
         save()
     }
 
-    fun passTime(placeId: String): Long? = events.firstOrNull { it.type == "pass" && it.placeId == placeId }?.time
-
     /**
      * forUpload 면 그룹 페이지에 올릴 만큼만: 출발과 도착 근처 300m의 길은 빼고(집이나 숙소 위치가 드러나지 않게),
      * 차에 말로 물어본 문장은 빼고 무엇을 알려 줬는지만 남김

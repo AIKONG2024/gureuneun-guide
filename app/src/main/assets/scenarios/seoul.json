@@ -56,11 +56,6 @@
      "fact": {"ko": "파크원 타워예요. 서울국제금융센터와 함께 마포대교 남쪽에 서 있어요.", "en": "Those are the Parc.1 towers. They stand south of Mapo Bridge along with IFC Seoul."},
      "source": "위키백과 마포대교"}
   ],
-  "kid": {
-    "building63": {"ko": "뒷자리 친구들, 63빌딩은 땅 위로 60층, 땅 밑으로 3층이라서 이름이 63이래요.", "en": "Hey, back seat! The 63 Building has 60 floors above ground and 3 below. Sixty plus three makes sixty-three!"},
-    "hangang": {"ko": "뒷자리 친구들, 한강공원에서는 자전거도 타고 소풍도 해요. 서울세계불꽃축제도 이 강 위에서 열린대요.", "en": "Hey, back seat! People ride bikes and have picnics in Hangang Park. The Seoul International Fireworks Festival happens right over this river."},
-    "assembly": {"ko": "뒷자리 친구들, 국회의사당을 둘러싼 기둥이 몇 개인지 세어 볼까요? 정답은 퀴즈로 내 볼게요.", "en": "Hey, back seat! Can you count the columns around the National Assembly building? I'll ask you in a quiz."}
-  },
   "quiz": {
     "building63": {"q": {"ko": "63빌딩의 63은 무슨 뜻일까요?", "en": "What does 63 mean in the 63 Building?"}, "choices": {"ko": ["땅 위 60층과 땅 밑 3층을 더한 수", "지은 해", "엘리베이터 수"], "en": ["60 floors up plus 3 below", "The year it was built", "Number of elevators"]}, "answer": 0},
     "assembly": {"q": {"ko": "국회의사당을 둘러싼 기둥은 몇 개일까요?", "en": "How many columns surround the National Assembly building?"}, "choices": {"ko": ["24개", "6개", "100개"], "en": ["24", "6", "100"]}, "answer": 0}

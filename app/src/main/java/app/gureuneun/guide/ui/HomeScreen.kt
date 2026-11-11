@@ -69,7 +69,6 @@ fun HomeScreen(
     onStart: (scenarioId: String, joinCode: String?) -> Unit,
     onResume: () -> Unit,
     onLang: (String) -> Unit,
-    @Suppress("UNUSED_PARAMETER") onDemo: (Boolean) -> Unit,
     onDiag: () -> Unit,
 ) {
     val lang = ui.lang

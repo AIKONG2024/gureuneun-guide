@@ -36,8 +36,8 @@
     "en": "Back on the road. Next chapter: {next}."
   },
   "finale": {
-    "ko": "오늘 바닷길은 여기까지예요. 명소 {count}곳을 함께 지나왔어요. 사진과 빌트인 캠 영상을 그룹 페이지에 올리면 오늘 여행을 짧은 영상 한 편으로 묶어 드릴게요.",
-    "en": "That's the end of today's coastal drive. We passed {count} places together. Upload photos and built-in cam videos to the group page, and I'll put today together as one short video."
+    "ko": "오늘 바닷길은 여기까지예요. 명소 {count}곳을 함께 지나왔어요. 사진을 그룹 페이지에 올리면 찍은 시각에 맞춰 오늘 지나온 길 위에 붙여 드릴게요.",
+    "en": "That's the end of today's coastal drive. We passed {count} places together. Add your photos on the group page, and I'll pin them along today's route by the time they were taken."
   },
   "sights": [
     {"id": "airport", "name": {"ko": "제주국제공항", "en": "Jeju International Airport"}, "lat": 33.50707, "lon": 126.49164, "visible": 2500,
@@ -47,12 +47,6 @@
      "fact": {"ko": "바다 건너 보이는 섬은 비양도예요. 약 2만 7천 년 전 화산이 터져서 생긴 작은 섬이에요.", "en": "The island across the water is Biyangdo. It was formed by a volcanic eruption about 27,000 years ago."},
      "source": "위키백과 비양도"}
   ],
-  "kid": {
-    "iho": {"ko": "뒷자리 친구들, 바다 쪽에 말 모양 등대 보여요? 빨간 말과 하얀 말이 한 마리씩 서 있어요.", "en": "Hey, back seat! See the lighthouses shaped like horses? There's a red one and a white one."},
-    "aewol": {"ko": "뒷자리 친구들, 창밖으로 바다가 쭉 이어져요. 바다 색이 몇 가지로 보이는지 찾아볼까요?", "en": "Hey, back seat! The sea goes on and on outside. How many colors can you find in the water?"},
-    "hyeopjae": {"ko": "뒷자리 친구들, 협재 바다는 하얀 모래 사이에 까만 돌이 섞여 있어요. 바다 건너 작은 섬도 보이죠? 비양도래요.", "en": "Hey, back seat! Hyeopjae Beach has white sand with black volcanic rocks. See the little island across the water? That's Biyangdo."}
-  },
-  "treasure": {"stars": 2},
   "quiz": {
     "iho": {"q": {"ko": "이호테우 등대가 빨간색과 하얀색인 까닭은 무엇일까요?", "en": "Why are the Iho Tewoo lighthouses red and white?"}, "choices": {"ko": ["배가 나아갈 방향을 정하게 도우려고", "말이 좋아하는 색이라서", "그냥 예뻐 보이려고"], "en": ["To help boats choose their direction", "Horses like those colors", "Just to look pretty"]}, "answer": 0},
     "hyeopjae": {"q": {"ko": "협재 바다 건너 보이는 섬의 이름은 무엇일까요?", "en": "What's the name of the island you can see from Hyeopjae?"}, "choices": {"ko": ["비양도", "독도", "마라도"], "en": ["Biyangdo", "Dokdo", "Marado"]}, "answer": 0}

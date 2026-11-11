@@ -73,7 +73,6 @@ class MainActivity : ComponentActivity() {
                     onStart = { id, code -> engine.startTrip(id, ui.lang, code, ui.demoMode) },
                     onResume = { engine.resumeTrip() },
                     onLang = { engine.setLang(it) },
-                    onDemo = { engine.setDemoMode(it) },
                     onDiag = { diag = true },
                 )
                 ui.phase == TripEngine.Phase.ENDED -> RecordScreen(
@@ -137,6 +136,8 @@ class MainActivity : ComponentActivity() {
             "prev" -> engine.onMediaCommand(MediaKeys.Command.PREVIOUS)
             "pick" -> engine.answerPick(intent.getStringExtra("mode") ?: "destination")
             "window" -> engine.answerWindow(intent.getBooleanExtra("open", true))
+            // [앞 창문 닫기] 단추 (앱이 내려 둔 앞 창문을 닫음. 서 있을 때만)
+            "closewindows" -> engine.closeWindows()
             "end" -> engine.endTrip()
             "clear" -> engine.forgetSavedTrip()
             "home" -> engine.goHome()
@@ -154,12 +155,10 @@ class MainActivity : ComponentActivity() {
             "ask" -> engine.askDemo(intent.getStringExtra("file"))
             // 음성 인식 없이 문장만 넣어 답 확인 (시험용)
             "asktext" -> engine.onHeardTyped(intent.getStringExtra("q") ?: "")
-            "kid" -> engine.setKidMode(intent.getBooleanExtra("on", true))
-            "jam" -> engine.setDemoJam(intent.getBooleanExtra("on", true))
-            "offer" -> engine.answerOffer(intent.getStringExtra("answer") != "no")
-            "drivetime" -> engine.setDemoDrivingTime(intent.getIntExtra("min", 125))
             // 말로 답하기 시험: 차가 물은 뒤 "응", "나중에" 같은 답을 넣음 (음성 인식 결과와 같은 길로 감)
             "answer" -> engine.onHeardTyped(intent.getStringExtra("q") ?: "응")
+            // 보물 상자를 열지 묻는 창의 단추 ([열어 주세요], [나중에])
+            "treasure" -> engine.answerTreasure(intent.getStringExtra("answer") != "no")
             // 여행 끝내기 확인 창을 띄움 ([여행 끝] 단추와 같음)
             "endask" -> engine.requestEndTrip()
             // 기록 화면: 그룹에 보내기 / 차에만 두기

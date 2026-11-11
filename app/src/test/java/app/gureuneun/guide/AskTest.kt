@@ -5,6 +5,7 @@ import app.gureuneun.guide.engine.Ask
 import app.gureuneun.guide.engine.Ask.Intent
 import app.gureuneun.guide.engine.Ask.Side
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -52,31 +53,32 @@ class AskTest {
         check("pause", Intent.PAUSE)
     }
 
-    @Test fun tripAndCarQuestions() {
+    @Test fun tripQuestions() {
         check("얼마나 남았어?", Intent.REMAIN)
         check("언제 도착해", Intent.REMAIN)
-        // "얼마나 남았어"가 들어 있어도 배터리 이야기면 충전으로
-        check("배터리 얼마나 남았어", Intent.CHARGE)
-        check("충전소 어디 있어", Intent.CHARGE)
-        check("화장실 가고 싶어", Intent.REST)
-        check("졸려", Intent.REST)
-        check("너무 더워", Intent.HOT)
-        check("좀 추운데", Intent.COLD)
-        check("퀴즈 내 줘", Intent.QUIZ)
-        check("창문 열어 줘", Intent.WINDOW_OPEN)
-        check("창문 닫아", Intent.WINDOW_CLOSE)
         check("여기 어디야", Intent.WHERE)
-        check("아이 모드 켜 줘", Intent.KID_ON)
-        check("아이 모드 꺼", Intent.KID_OFF)
-        check("다른 차에 주차장 보내 줘", Intent.SHARE_PARKING)
-        check("뒤차한테 카페 공유해", Intent.SHARE_CAFE)
-        check("Send the parking lot to the other car", Intent.SHARE_PARKING)
         check("How long until we arrive?", Intent.REMAIN)
         // 영어 left 가 들어 있어도 남은 시간 질문
         check("How much time left", Intent.REMAIN)
-        check("Is there a restroom nearby", Intent.REST)
-        check("It's too hot", Intent.HOT)
+        check("Where are we?", Intent.WHERE)
         check("음", Intent.UNKNOWN)
+    }
+
+    /** 여행 안내 밖의 부탁(차 상태, 온도, 창문)은 받지 않음. 비슷한 낱말 때문에 엉뚱한 일을 하지 않는지 */
+    @Test fun requestsOutsideTheGuideAreNotActedOn() {
+        // "얼마나 남았어"가 들어 있어도 배터리 이야기면 남은 길을 답하지 않음
+        check("배터리 얼마나 남았어", Intent.UNKNOWN)
+        check("충전소 어디 있어", Intent.UNKNOWN)
+        check("화장실 가고 싶어", Intent.UNKNOWN)
+        check("너무 더워", Intent.UNKNOWN)
+        check("It's too hot", Intent.UNKNOWN)
+        // 창문을 움직여 달라는 말: '그만', '다시'가 들어 있어도 이야기 멈춤, 다시 듣기로 듣지 않음
+        check("창문 열어 줘", Intent.UNKNOWN)
+        check("창문 그만 올려", Intent.UNKNOWN)
+        check("창문 다시 닫아 줘", Intent.UNKNOWN)
+        check("Close the windows", Intent.UNKNOWN)
+        // 창밖을 묻는 말은 그대로 질문
+        check("창문 밖에 저거 뭐야", Intent.WHAT)
     }
 
     @Test fun answersFromTheSideAsked() {
@@ -129,6 +131,8 @@ class AskTest {
         assertEquals(Ask.Reply.NO, r("아니"))
         assertEquals(Ask.Reply.NO, r("괜찮아요"))
         assertEquals(Ask.Reply.NO, r("No thanks"))
+        assertEquals(Ask.Reply.NO, r("No thank you"))
+        assertEquals(Ask.Reply.NO, r("그대로 둬"))
         assertEquals(Ask.Reply.LATER, r("나중에"))
         assertEquals(Ask.Reply.LATER, r("not now"))
         assertEquals(Ask.Reply.WAYPOINT, r("가는 길에 들렀다 가자"))
@@ -140,6 +144,17 @@ class AskTest {
         assertNull(r("오른쪽에 보이는 거 뭐야"))
         assertNull(r("예쁘다"))
         assertNull(r(""))
+    }
+
+    /** 물은 게 없을 때 들어온 "응", "괜찮아요"는 대답만 한 말로 알아봄 (길게 되묻지 않게) */
+    @Test fun bareReplies() {
+        assertTrue(Ask.isBareReply("응"))
+        assertTrue(Ask.isBareReply("괜찮아요"))
+        assertTrue(Ask.isBareReply("나중에"))
+        assertTrue(Ask.isBareReply("Yes please"))
+        assertFalse(Ask.isBareReply("오른쪽에 보이는 거 뭐야"))
+        assertFalse(Ask.isBareReply("가는 길에 들렀다 가자고 했잖아"))
+        assertFalse(Ask.isBareReply(""))
     }
 
     /** 물음이 떠 있을 때: 짧은 대답만 대답으로, 다른 부탁은 그대로 부탁으로 */
@@ -156,24 +171,16 @@ class AskTest {
         // 창문을 묻는 중에는 "창문 열어 줘"가 그 물음의 대답
         assertEquals(Ask.Reply.YES, a("창문 열어 줘", Ask.Prompt.WINDOW))
         assertEquals(Ask.Reply.NO, a("창문 열지 마", Ask.Prompt.WINDOW))
-        assertEquals(Ask.Reply.YES, a("휴게소 찾아 줘", Ask.Prompt.REST))
-        assertEquals(Ask.Reply.YES, a("충전소 보여 줘", Ask.Prompt.CHARGE))
-        assertEquals(Ask.Reply.NO, a("아니 그만해", Ask.Prompt.REST))
+        assertEquals(Ask.Reply.NO, a("창문 닫아 줘", Ask.Prompt.WINDOW))
+        // 보물 상자를 묻는 중
+        assertEquals(Ask.Reply.YES, a("응 열어 줘", Ask.Prompt.TREASURE))
+        assertEquals(Ask.Reply.LATER, a("나중에", Ask.Prompt.TREASURE))
+        assertEquals(Ask.Reply.NO, a("아니 그만해", Ask.Prompt.TREASURE))
+        // 보물 상자를 묻는 중에 "창문 열어 줘"는 그 대답이 아님
+        assertNull(a("창문 열어 줘", Ask.Prompt.TREASURE))
         assertEquals(Ask.Reply.YES, a("응 여행 끝내 줘", Ask.Prompt.END))
         // 질문은 질문으로
-        assertNull(a("얼마나 남았어", Ask.Prompt.REST))
-        assertNull(a("오른쪽에 보이는 거 뭐야", Ask.Prompt.OFFER))
-    }
-
-    @Test fun windowCommandsAreNotFlipped() {
-        check("창문 열어 줘", Intent.WINDOW_OPEN)
-        check("창문 좀 내려 줘", Intent.WINDOW_OPEN)
-        check("창문 열지 마", Intent.WINDOW_KEEP)
-        check("열린 창문 닫아 줘", Intent.WINDOW_CLOSE)
-        check("창문 올려 줘", Intent.WINDOW_CLOSE)
-        check("창문 열려 있어?", Intent.WINDOW_STATUS)
-        check("Close the windows", Intent.WINDOW_CLOSE)
-        check("Open the window", Intent.WINDOW_OPEN)
-        check("Don't open the window", Intent.WINDOW_KEEP)
+        assertNull(a("얼마나 남았어", Ask.Prompt.TREASURE))
+        assertNull(a("오른쪽에 보이는 거 뭐야", Ask.Prompt.END))
     }
 }

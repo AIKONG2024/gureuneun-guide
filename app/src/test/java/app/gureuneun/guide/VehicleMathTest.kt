@@ -8,7 +8,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** 창문 눈금 환산, 선루프 닫힘 값, 기어 판정, 동력원 판정 (안드로이드 없이) */
+/** 창문 눈금 환산과 닫힘 값, 기어 판정, 되돌리기 값 (안드로이드 없이) */
 class VehicleMathTest {
 
     @Test
@@ -29,14 +29,12 @@ class VehicleMathTest {
     }
 
     @Test
-    fun tiltRangeClosesAtZeroNotAtMin() {
-        // 최소값이 음수(틸트)인 차: 닫힘은 0
+    fun negativeRangeClosesAtZeroNotAtMin() {
+        // 최소값이 음수인 차: 닫힘은 0
         assertEquals(0, VehicleMath.closedValue(-10, 10))
         assertEquals(0, VehicleMath.windowValue(0, -10, 10))
         assertEquals(2, VehicleMath.windowValue(2, -10, 10))
-        assertEquals(0, VehicleMath.sunroofValue(0, -10, 10))
-        assertEquals(5, VehicleMath.sunroofValue(50, -10, 10))
-        assertEquals(10, VehicleMath.sunroofValue(100, -10, 10))
+        assertEquals(10, VehicleMath.windowValue(10, -10, 10))
     }
 
     @Test
@@ -47,13 +45,6 @@ class VehicleMathTest {
         assertEquals(20, VehicleMath.windowValue(10, 5, 20))
         // 잘못된 범위는 움직이지 않는 값으로
         assertEquals(3, VehicleMath.windowValue(5, 3, 3))
-    }
-
-    @Test
-    fun sunroofPercent() {
-        assertEquals(0, VehicleMath.sunroofValue(0, 0, 100))
-        assertEquals(100, VehicleMath.sunroofValue(100, 0, 100))
-        assertEquals(1, VehicleMath.sunroofValue(1, 0, 1))
     }
 
     @Test
@@ -77,16 +68,6 @@ class VehicleMathTest {
         assertTrue(VehicleBridge.State(gear = "P").parked)
         // 기어를 못 받은 처음 상태는 정차가 아님
         assertFalse(VehicleBridge.State().parked)
-    }
-
-    @Test
-    fun powertrainFromSignals() {
-        assertEquals("EV", VehicleMath.powertrain(ev = true, fuel = false))
-        assertEquals("HEV", VehicleMath.powertrain(ev = true, fuel = true))
-        assertEquals("ICE", VehicleMath.powertrain(ev = false, fuel = true))
-        assertEquals("UNKNOWN", VehicleMath.powertrain(ev = false, fuel = false))
-        assertEquals("UNKNOWN", VehicleMath.powertrain(ev = null, fuel = true))
-        assertEquals("UNKNOWN", VehicleBridge.State().powertrain)
     }
 
     @Test
