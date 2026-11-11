@@ -47,9 +47,6 @@
           <p id="kidText"></p>
         </div>
         <button class="btn on-brand block hidden" id="toRecord" type="button"><span id="toRecordL"></span><i data-ic="chevron"></i></button>
-        <div class="hero-foot">
-          <button class="link hidden" id="report" type="button"><i data-ic="flag"></i><span id="reportL"></span></button>
-        </div>
       </div>
     </article>
 
@@ -58,14 +55,6 @@
       <h3 id="problemTitle"></h3>
       <p class="small" id="problemText"></p>
       <a class="btn primary block" href="/" id="problemBtn"></a>
-    </article>
-
-    <article class="card handoff hidden" id="handoffCard">
-      <div class="eyebrow"><i data-ic="phone"></i><span id="handoffEyebrow"></span></div>
-      <h3 id="handoffTitle"></h3>
-      <p class="text" id="handoffText"></p>
-      <button class="btn primary block" id="handoffBtn" type="button"></button>
-      <p class="note" id="handoffNote"></p>
     </article>
 
     <article class="card treasure hidden" id="treasureCard">
@@ -99,7 +88,7 @@
     </article>
   </section>
 
-  <!-- 장소 고르기: 지도와 목록에서 골라 차 내비게이션으로 -->
+  <!-- 장소 고르기: 지도나 가 볼 만한 곳 목록에서 골라 차 내비게이션으로 -->
   <section id="tab-pick" class="hidden" aria-labelledby="tPick">
     <div class="page-head">
       <h2 id="pickTitle"></h2>
@@ -113,7 +102,7 @@
     </div>
   </section>
 
-  <!-- 기록: 지나온 길, 사진, 빌트인 캠 하이라이트 -->
+  <!-- 기록: 지나온 길과 사진 -->
   <section id="tab-record" class="hidden" aria-labelledby="tRecord">
     <article class="hero rec-hero" id="recHero">
       <div class="eyebrow"><i data-ic="route"></i><span id="recEyebrow"></span></div>
@@ -133,23 +122,9 @@
       </div>
       <p class="small" id="photoHelp"></p>
       <div class="photos" id="photos"></div>
-      <div class="btn-col">
-        <label class="btn primary block" for="photoInput" id="photoBtn" role="button" tabindex="0"><i data-ic="camera"></i><span id="photoBtnL"></span></label>
-      </div>
+      <label class="btn primary block" for="photoInput" id="photoBtn" role="button" tabindex="0"><i data-ic="camera"></i><span id="photoBtnL"></span></label>
       <input type="file" id="photoInput" accept="image/*" multiple class="hidden">
       <p class="status" id="photoStatus" role="status"></p>
-    </article>
-    <article class="card" id="camCard">
-      <div class="eyebrow"><i data-ic="video"></i><span id="camTitle"></span></div>
-      <p class="small" id="camHelp"></p>
-      <video id="hl" controls playsinline class="hidden"></video>
-      <p class="status" id="camStatus" role="status"></p>
-      <div class="btn-col">
-        <a class="btn block hidden" id="hlDown" download="trip-highlight.mp4"><i data-ic="download"></i><span id="hlDownL"></span></a>
-        <button class="btn block hidden" id="camRetry" type="button"><i data-ic="video"></i><span id="camRetryL"></span></button>
-        <label class="btn block" for="camInput" id="camBtn" role="button" tabindex="0"><i data-ic="video"></i><span id="camBtnL"></span></label>
-      </div>
-      <input type="file" id="camInput" accept="video/*" class="hidden">
     </article>
     <p class="keep hidden" id="keepNote"><i data-ic="lock"></i><span id="keepNoteL"></span></p>
   </section>

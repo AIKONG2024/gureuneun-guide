@@ -1,10 +1,10 @@
 /* 구르는 가이드 동승자 그룹 페이지 (휴대폰)
  * 앱 설치 없이 QR로 들어와, 차가 이야기를 시작하면 같은 순간 영상과 3D 모형을 보여 준다.
  * 탭은 셋.
- *  - 지금: 장면(영상·3D)과 차가 들려주는 이야기가 주인공. 이어 듣기, 보물 상자, 퀴즈, 차에 물어본 것은 생길 때만 뜨고
+ *  - 지금: 장면(영상·3D)과 차가 들려주는 이야기가 주인공. 보물 상자, 퀴즈, 차에 물어본 것은 생길 때만 뜨고
  *          맨 아래에 오늘 코스가 작게 붙음
- *  - 장소 고르기: 지도와 목록에서 골라 그룹의 차 내비게이션으로 보냄 (운전자가 확인)
- *  - 기록: 여행이 끝나면 지나온 길, 사진, 빌트인 캠 하이라이트 영상
+ *  - 장소 고르기: 지도나 가 볼 만한 곳 목록에서 골라 그룹의 차 내비게이션으로 보냄 (운전자가 확인)
+ *  - 기록: 지나온 길과 사진 (여행이 끝나면 달린 거리, 시간, 지난 명소 수도)
  * 색·글꼴·아이콘은 차 화면(Theme.kt, Components.kt, Icons.kt)과 같은 현대자동차 CI 색, Asta Sans, 선 아이콘을 쓴다.
  */
 (function () {
@@ -16,14 +16,14 @@
   var startTab = /\/record\/?$/.test(location.pathname) || /\/record\/?$/.test(carParam) ? 'record' : 'now';
   // 이 휴대폰이 따르는 차 번호. 0 이면 네 자리 번호만 넣고 들어온 것이라 가장 최근 이야기를 따름
   var myCar = parseInt(carParam, 10) || 0;
-  // QR 의 k(휴대폰 키)가 있으면 사진·기록·하이라이트까지 봄. 한 번 받은 키는 이 휴대폰에 두어 번호로 다시 들어와도 이어 씀
+  // QR 의 k(휴대폰 키)가 있으면 사진·기록까지 봄. 한 번 받은 키는 이 휴대폰에 두어 번호로 다시 들어와도 이어 씀
   var urlKey = qs.get('k') || '';
   var key = urlKey || store('gg_k_' + code) || '';
   if (urlKey && code) store('gg_k_' + code, urlKey);
   var S = {
     lang: store('gg_lang'), group: null, scenario: null, story: null, lines: [], lineIdx: -1, storyDone: false, passes: [], picks: [], acks: [],
-    record: null, photos: [], highlight: null, cars: [], phones: 0, selected: null, online: false, tab: startTab, ended: false, fatal: null,
-    quizzes: [], answers: [], scores: {}, qa: [], handoff: null, treasure: null, stars: null, kid: null, level: key ? 'full' : 'basic',
+    record: null, photos: [], cars: [], phones: 0, selected: null, online: false, tab: startTab, ended: false, fatal: null,
+    quizzes: [], answers: [], scores: {}, qa: [], treasure: null, stars: null, kid: null, level: key ? 'full' : 'basic',
     pending: null, pickWait: null, pickMsg: null, quizPending: null, nowBadge: false
   };
   var me = store('gg_me') || '';
@@ -44,37 +44,29 @@
       nextStop: '다음 명소', waitText: '가까워지면 차가 이야기를 들려줘요. 그때 여기서 영상과 3D 모형을 같이 봐요.',
       allDone: '오늘 코스를 다 돌았어요', allDoneText: '여행이 끝나면 지나온 길과 사진을 기록에서 모아 봐요.',
       telling: '차가 들려주는 이야기', coming: '곧 보여요', told: '방금 들은 이야기',
-      endedText: '지나온 길과 사진, 여행 영상을 기록에서 모아 볼 수 있어요.', seeRecord: '기록 보기',
+      endedText: '지나온 길과 사진을 기록에서 모아 볼 수 있어요.', seeRecord: '기록 보기',
       video: '영상', orbit: '3D', tapPlay: '눌러서 영상 보기', orbitHint: '한 손가락으로 끌어 돌리고, 두 손가락으로 벌려 크게 봐요',
-      report: '틀린 내용 알리기', reportAsk: '어떤 점이 틀렸나요?', reported: '알려 주셔서 고마워요', reportFail: '보내지 못했어요. 잠시 뒤에 다시 해 주세요',
       name: '이름', meTitle: '내 이름', mePh: '예: 민지', meHint: '장소를 보내거나 퀴즈를 맞히면 차가 이 이름을 불러 줘요', meDone: '완료',
       introTitle: '반가워요!', introLead: '차가 들려주는 여행 이야기를 휴대폰으로 같이 봐요.', introOk: '알겠어요',
       intro1: '명소에 가까워지면 영상과 3D 모형이 여기 떠요', intro2: '퀴즈를 맞혀 별을 모아요', intro2t: '퀴즈를 맞혀 별을 다 모으면 보물 상자가 열려요', intro3: '가고 싶은 곳을 골라 차로 보낼 수 있어요',
       courseTitle: '오늘 코스', courseMeta: '{n}/{m}곳 지남', passed: '지남', nowAt: '지금', next: '다음',
       pickTitle: '다음에 갈 곳', pickHelp: '고른 곳은 운전자가 확인하면 내비게이션에 들어가요.', pickHint: '지도나 목록에서 골라 주세요',
-      groupPick: '가 볼 만한 곳', groupCourse: '오늘 코스',
       send1: '차 내비게이션으로 보내기', send2: '모든 차 내비게이션으로 보내기', custom: '지도에서 고른 곳',
       sent: '보냈어요. 운전자가 확인하고 있어요', acked: '내비게이션에 들어갔어요',
       pickLater: '운전자가 나중에 보기로 했어요. 차가 서면 다시 보여요', pickSoon: '{s}초 뒤에 다시 보낼 수 있어요',
       pickBusy: '운전자가 “{name}” 확인 중이에요. 답이 오면 보내 주세요', pickNoCar: '지금 연결된 차가 없어요', pickNoCarYet: '차가 연결되면 보낼 수 있어요', pickBad: '보낼 수 없는 곳이에요. 코스 근처를 골라 주세요',
-      pickOther: '{by} 님이 고른 곳: {name}', sentFrom: '{car}에서 보낸 장소: {name}',
+      pickOther: '{by} 님이 고른 곳: {name}',
       recEyebrow: '오늘의 여행 기록', recPlanned: '오늘 갈 길', recEmpty: '여행이 끝나면 지나온 길과 사진이 여기 모여요.', recRange: '{a}부터 {b}까지',
       statKm: '달린 거리', statTime: '여행 시간', statPlaces: '지난 명소', unitPlaces: '곳', unitMin: '분', unitH: '시간',
       photoTitle: '사진', photoCount: '{n}장', photoHelp: '사진을 올리면 찍은 시각에 맞춰 지나온 길 위에 붙어요.', photoBtn: '사진 올리기', uploading: '올리는 중', photoFail: '사진을 올리지 못했어요',
-      camTitle: '빌트인 캠 하이라이트', camHelp: '차의 빌트인 캠(순정 블랙박스) 영상을 올리면 명소를 지난 장면만 골라 짧은 여행 영상으로 만들어요.',
-      camBtn: '영상 올리기', making: '여행 영상을 만드는 중이에요', made: '여행 영상이 나왔어요', down: '영상 내려받기', camFail: '영상을 만들지 못했어요', retry: '다시 올리기',
-      byOrder: '촬영 시각이 기록과 맞지 않아 지나온 순서대로 나눴어요',
-      camErr: { 403: 'QR로 들어온 휴대폰만 올릴 수 있어요', 409: '다른 영상을 만드는 중이에요. 끝나면 다시 올려 주세요', 413: '영상이 너무 커요. {mb}MB보다 작은 영상을 올려 주세요', 415: 'MP4나 MOV 영상만 올릴 수 있어요', net: '올리지 못했어요. 와이파이를 확인하고 다시 올려 주세요' },
       basicTitle: '사진과 기록은 QR로 들어오면 보여요', basicNote: '번호로 들어오면 이야기와 퀴즈, 장소 고르기만 쓸 수 있어요. 차 화면의 QR을 찍어 다시 들어와 주세요.',
       keep: '이 그룹 사람만 보고, 여행이 끝나고 {d}일 뒤 지워져요', keepOff: '이 그룹 사람만 봐요',
       tripEnd: '오늘 여행이 끝났어요', window: '창문이 조금 내려갔어요. 바깥 소리를 들어 보세요',
-      kind: { cafe: '카페', parking: '주차장', landmark: '명소', sea: '바다', city: '도시', forest: '숲', place: '장소' },
+      kind: { cafe: '카페', parking: '주차장', landmark: '명소', sea: '바다', city: '도시', place: '장소' },
       quiz: '{name} 퀴즈', newQuiz: '새 퀴즈가 왔어요', right: '정답이에요! 별 하나 모았어요', wrong: '아쉬워요. 정답은 “{a}”{josa}', wrongShort: '아쉬워요. 다음 퀴즈에서 맞혀 봐요', gotIt: '{by} 님이 맞혔어요',
       treasureOpen: '보물 상자가 열렸어요!', treasureOpenText: '조수석 앞 글로브 박스를 열어 보세요', treasureHand: '글로브 박스를 직접 열어 보세요',
       treasureReady: '별을 다 모았어요!', treasureReadyText: '차를 세우면 보물 상자를 열어 줘요',
       qaTitle: '차에 물어본 것', asked: '차에 물어봤어요: {q}',
-      handoffEyebrow: '휴대폰으로 이어 듣기', handoffTitle: '{name} 이야기', handoffPlay: '이어 듣기', handoffStop: '그만 듣기',
-      handoffNew: '휴대폰으로 이어 들을 수 있어요', handoffNote: '화면을 켜 두어야 끝까지 들을 수 있어요',
       kidTitle: '뒷자리 친구들에게',
       reconnecting: '연결이 끊겼어요. 다시 연결하는 중…', tooMany: '잠시 뒤에 다시 연결해요 ({s}초)',
       problemTitle: '여행 그룹을 열 수 없어요', noGroup: '끝난 지 오래된 여행이거나 번호가 달라요.', badKey: 'QR 주소가 맞지 않아요. 차 화면의 QR을 다시 찍어 주세요.', again: '번호 다시 넣기',
@@ -87,37 +79,29 @@
       nextStop: 'Next stop', waitText: "When we get close, the car tells the story. You'll see the video and 3D model here.",
       allDone: "We've passed every stop", allDoneText: 'When the trip ends, your route and photos are collected in Record.',
       telling: 'The car is telling', coming: 'Coming up', told: 'Story you just heard',
-      endedText: 'See your route, photos and trip video in Record.', seeRecord: 'Open Record',
+      endedText: 'See your route and photos in Record.', seeRecord: 'Open Record',
       video: 'Video', orbit: '3D', tapPlay: 'Tap to play', orbitHint: 'Drag with one finger to turn, pinch to zoom',
-      report: 'Report a mistake', reportAsk: 'What was wrong?', reported: 'Thanks for letting us know', reportFail: "Couldn't send it. Try again in a moment",
       name: 'Name', meTitle: 'Your name', mePh: 'e.g. Alex', meHint: 'The car calls you by this name when you send a place or get a quiz right', meDone: 'Done',
       introTitle: 'Welcome aboard', introLead: "Follow the car's travel stories on your phone.", introOk: 'Got it',
       intro1: 'Near a landmark, its video and 3D model show up here', intro2: 'Answer quizzes to collect stars', intro2t: 'Collect every quiz star to open the treasure box', intro3: 'Pick where to go next and send it to the car',
       courseTitle: "Today's course", courseMeta: '{n} of {m} passed', passed: 'Passed', nowAt: 'Now', next: 'Next',
       pickTitle: 'Where to next?', pickHelp: 'Your pick goes into the navigation once the driver confirms.', pickHint: 'Pick on the map or from the list',
-      groupPick: 'Worth a stop', groupCourse: "Today's course",
       send1: 'Send to the car navigation', send2: 'Send to every car navigation', custom: 'Spot picked on the map',
       sent: 'Sent. The driver is checking it', acked: 'Added to the navigation',
       pickLater: 'The driver saved it for later. It shows up again when the car stops', pickSoon: 'You can send again in {s} s',
       pickBusy: 'The driver is checking “{name}”. Send yours after they answer', pickNoCar: 'No car is connected right now', pickNoCarYet: 'You can send once a car connects', pickBad: "Can't send that spot. Pick somewhere near the course",
-      pickOther: '{by} picked: {name}', sentFrom: '{car} sent a place: {name}',
+      pickOther: '{by} picked: {name}',
       recEyebrow: "Today's trip record", recPlanned: "Today's route", recEmpty: 'Your route and photos are collected here when the trip ends.', recRange: '{a} to {b}',
       statKm: 'Distance', statTime: 'Time', statPlaces: 'Places', unitPlaces: '', unitMin: 'min', unitH: 'h',
       photoTitle: 'Photos', photoCount: '{n}', photoHelp: 'Photos are pinned on the route by the time they were taken.', photoBtn: 'Upload photos', uploading: 'Uploading', photoFail: "Couldn't upload the photo",
-      camTitle: 'Built-in cam highlight', camHelp: "Upload the car's built-in cam video. We'll pick the moments you passed each landmark and make a short trip video.",
-      camBtn: 'Upload video', making: 'Making your trip video', made: 'Your trip video is ready', down: 'Download video', camFail: "Couldn't make the video", retry: 'Upload again',
-      byOrder: "The video time didn't match the record, so it was split in route order",
-      camErr: { 403: 'Only phones that joined with the QR can upload', 409: 'Another video is being made. Upload again when it finishes', 413: 'The video is too large. Upload one under {mb} MB', 415: 'Only MP4 or MOV videos can be uploaded', net: "Couldn't upload. Check the Wi-Fi and try again" },
       basicTitle: 'Scan the QR to see photos and the record', basicNote: 'With the code you can follow stories, quizzes and pick places. Scan the QR on the car screen to join again.',
       keep: "Only people in this group can see these. They're deleted {d} days after the trip ends.", keepOff: 'Only people in this group can see these.',
       tripEnd: "Today's trip is over", window: 'The windows are down a little. Listen to the outside',
-      kind: { cafe: 'Cafe', parking: 'Parking', landmark: 'Landmark', sea: 'Sea', city: 'City', forest: 'Forest', place: 'Place' },
+      kind: { cafe: 'Cafe', parking: 'Parking', landmark: 'Landmark', sea: 'Sea', city: 'City', place: 'Place' },
       quiz: '{name} quiz', newQuiz: 'A new quiz arrived', right: 'Correct! You earned a star', wrong: 'Not quite. The answer is “{a}”', wrongShort: 'Not quite. Try the next one', gotIt: '{by} answered correctly',
       treasureOpen: 'The treasure box is open!', treasureOpenText: 'Open the glove box in front of the passenger seat', treasureHand: 'Open the glove box by hand',
       treasureReady: 'All stars collected!', treasureReadyText: 'Park the car and the treasure box opens',
       qaTitle: 'Asked in the car', asked: 'Asked the car: {q}',
-      handoffEyebrow: 'Keep listening on your phone', handoffTitle: 'The {name} story', handoffPlay: 'Keep listening', handoffStop: 'Stop',
-      handoffNew: 'Keep listening on your phone', handoffNote: 'Keep the screen on to hear it to the end',
       kidTitle: 'For the back seat',
       reconnecting: 'Connection lost. Reconnecting…', tooMany: 'Reconnecting in {s} s',
       problemTitle: "Can't open the trip group", noGroup: 'The trip may have ended a while ago, or the code is different.', badKey: "This QR link doesn't match. Scan the QR on the car screen again.", again: 'Enter the code again',
@@ -161,7 +145,6 @@
     star: '<path class="f" d="' + STAR + '"/>',
     starOff: '<path d="' + STAR + '"/>',
     user: '<circle cx="12" cy="8.2" r="3.8"/><path d="M4.6 20.2C4.6 16.2 7.9 13.6 12 13.6C16.1 13.6 19.4 16.2 19.4 20.2"/>',
-    phone: '<rect x="7" y="2.6" width="10" height="18.8" rx="2.6"/><path d="M10.6 18.2H13.4"/>',
     qr: '<rect x="3.6" y="3.6" width="6.6" height="6.6" rx="1.4"/><rect x="13.8" y="3.6" width="6.6" height="6.6" rx="1.4"/><rect x="3.6" y="13.8" width="6.6" height="6.6" rx="1.4"/><path class="d" d="M6 6H7.8V7.8H6ZM16.2 6H18V7.8H16.2ZM6 16.2H7.8V18H6ZM13.8 13.8H16V16H13.8ZM18.2 13.8H20.4V16H18.2ZM13.8 18.2H16V20.4H13.8ZM18.2 18.2H20.4V20.4H18.2Z"/>',
     check: '<path d="M5 12.6L9.8 17.2L19 7.2"/>',
     close: '<path d="M6.2 6.2L17.8 17.8M17.8 6.2L6.2 17.8"/>',
@@ -176,20 +159,17 @@
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11V16.6"/><circle class="d" cx="12" cy="7.6" r="1.3"/>',
     mic: '<rect class="f" x="9" y="2.8" width="6" height="11.4" rx="3"/><path d="M18.2 11A6.2 6.2 0 0 1 5.8 11M12 17.2V20.6M8.6 20.6H15.4"/>',
     play: '<path class="f" d="M8 5L19 12L8 19Z"/>',
-    pause: '<rect class="d" x="6.5" y="5" width="3.5" height="14" rx="1.4"/><rect class="d" x="14" y="5" width="3.5" height="14" rx="1.4"/>',
     cube: '<path d="M12 3L19.8 7.4V16.6L12 21L4.2 16.6V7.4Z"/><path d="M4.2 7.4L12 11.8L19.8 7.4M12 11.8V21"/>',
     camera: '<rect x="2.8" y="7" width="18.4" height="12.8" rx="2.8"/><path d="M8.2 7L9.6 4.4H14.4L15.8 7"/><circle cx="12" cy="13.4" r="3.6"/>',
-    video: '<rect x="2.8" y="6.2" width="12.6" height="11.6" rx="2.6"/><path d="M15.4 10.2L21.2 7.2V16.8L15.4 13.8Z"/>',
     image: '<rect x="3.2" y="4.2" width="17.6" height="15.6" rx="2.8"/><circle cx="8.8" cy="9.4" r="1.8"/><path d="M3.8 17.2L9 12.4L12.6 15.6L15.4 13L20.2 17.4"/>',
-    download: '<path d="M12 4V15M7.4 10.6L12 15.2L16.6 10.6M4.8 19.6H19.2"/>',
     lock: '<rect x="5" y="10.4" width="14" height="10.2" rx="2.6"/><path d="M8.4 10.4V7.8A3.6 3.6 0 0 1 15.6 7.8V10.4"/>',
-    alert: '<path d="M12 3.8L21.2 19.8H2.8Z"/><path d="M12 9.8V14.2"/><circle class="d" cx="12" cy="17" r="1.25"/>'
-    , globe: '<circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3.2 12H20.8"/>'
-    , car: '<path d="M5 13.2L6.6 8.4C7 7.3 8 6.6 9.2 6.6H14.8C16 6.6 17 7.3 17.4 8.4L19 13.2"/><rect x="3.5" y="12.6" width="17" height="5.6" rx="2.2"/><path d="M6.2 18.6V20.4M17.8 18.6V20.4"/><circle class="d" cx="7.4" cy="15.4" r="1.2"/><circle class="d" cx="16.6" cy="15.4" r="1.2"/>'
+    alert: '<path d="M12 3.8L21.2 19.8H2.8Z"/><path d="M12 9.8V14.2"/><circle class="d" cx="12" cy="17" r="1.25"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3.2 12H20.8"/>',
+    car: '<path d="M5 13.2L6.6 8.4C7 7.3 8 6.6 9.2 6.6H14.8C16 6.6 17 7.3 17.4 8.4L19 13.2"/><rect x="3.5" y="12.6" width="17" height="5.6" rx="2.2"/><path d="M6.2 18.6V20.4M17.8 18.6V20.4"/><circle class="d" cx="7.4" cy="15.4" r="1.2"/><circle class="d" cx="16.6" cy="15.4" r="1.2"/>'
   };
   function icon(name, cls) { return '<svg class="ic' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + (ICON[name] || '') + '</svg>'; }
   Array.prototype.forEach.call(document.querySelectorAll('i[data-ic]'), function (el) { el.outerHTML = icon(el.getAttribute('data-ic')); });
-  var KIND_IC = { cafe: 'cup', parking: 'parking', landmark: 'pin', sea: 'pin', city: 'pin', forest: 'pin', place: 'pin' };
+  var KIND_IC = { cafe: 'cup', parking: 'parking', landmark: 'pin', sea: 'pin', city: 'pin', place: 'pin' };
 
   // 알림. onTap 을 주면 눌러서 그쪽으로 갈 수 있음 (퀴즈가 와도 탭을 억지로 바꾸지 않음)
   var toastTimer, toastTap = null;
@@ -290,7 +270,7 @@
     if (tab === 'record') setTimeout(drawRecord, 50);
   }
   Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function (b) { b.onclick = function () { setTab(b.dataset.tab); }; });
-  // 다른 탭에 있는 동안 지금 탭에 새 소식(이야기, 퀴즈, 보물 상자, 이어 듣기)이 오면 작은 점
+  // 다른 탭에 있는 동안 지금 탭에 새 소식(이야기, 퀴즈, 보물 상자)이 오면 작은 점
   function renderBadges() { $('tNow').querySelector('.badge').classList.toggle('hidden', !(S.nowBadge && S.tab !== 'now')); }
   function nowNews() { if (S.tab !== 'now') { S.nowBadge = true; renderBadges(); } }
   function toggleLang() { S.lang = lang() === 'en' ? 'ko' : 'en'; store('gg_lang', S.lang); renderAll(); }
@@ -351,18 +331,15 @@
     document.documentElement.lang = lang();
     $('tNowL').textContent = t('now'); $('tPickL').textContent = t('pick'); $('tRecordL').textContent = t('record');
     $('mVideoL').textContent = t('video'); $('mOrbitL').textContent = t('orbit'); $('playBtnL').textContent = t('tapPlay');
-    $('reportL').textContent = t('report'); $('toRecordL').textContent = t('seeRecord');
+    $('toRecordL').textContent = t('seeRecord');
     $('kidTitle').textContent = t('kidTitle'); $('qaTitle').textContent = t('qaTitle'); $('courseTitle').textContent = t('courseTitle');
-    $('handoffEyebrow').textContent = t('handoffEyebrow'); $('handoffNote').textContent = t('handoffNote');
     $('pickTitle').textContent = t('pickTitle'); $('pickHelp').textContent = t('pickHelp');
     $('photoTitle').textContent = t('photoTitle'); $('photoHelp').textContent = t('photoHelp'); $('photoBtnL').textContent = t('photoBtn');
-    $('camTitle').textContent = t('camTitle'); $('camHelp').textContent = t('camHelp'); $('camBtnL').textContent = t('camBtn');
-    $('hlDownL').textContent = t('down'); $('camRetryL').textContent = t('retry');
     $('basicTitle').textContent = t('basicTitle'); $('basicNote').textContent = t('basicNote');
     var days = S.group && typeof S.group.keepDays === 'number' ? S.group.keepDays : 3;
     $('keepNoteL').textContent = days > 0 ? f('keep', { d: days }) : t('keepOff');
-    // 번호로만 들어온 휴대폰(basic)에는 사진·영상 올리기 대신 QR 안내
-    $('photoCard').classList.toggle('hidden', !full()); $('camCard').classList.toggle('hidden', !full());
+    // 번호로만 들어온 휴대폰(basic)에는 사진 올리기 대신 QR 안내
+    $('photoCard').classList.toggle('hidden', !full());
     $('keepNote').classList.toggle('hidden', !full()); $('basicCard').classList.toggle('hidden', full());
     $('me').placeholder = t('mePh'); $('meHint').textContent = t('meHint');
     $('sheetLangL').textContent = t('langBtn'); $('langBtnL').textContent = t('langShort');
@@ -441,7 +418,6 @@
     $('nowName').textContent = name;
     if (mode === 'story' || mode === 'done' || mode === 'announce') renderLines();
     else { $('segs').innerHTML = ''; $('lines').innerHTML = body ? '<span class="soft">' + esc(body) + '</span>' : ''; }
-    $('report').classList.toggle('hidden', !(mode === 'story' || mode === 'done'));
     $('toRecord').classList.toggle('hidden', mode !== 'ended');
     renderKid();
   }
@@ -479,20 +455,13 @@
     var model = m.model || (place && place.model) || 'generic';
     // 새 명소면 영상부터 다시. 같은 명소의 '곧 보여요' 다음 이야기는 돌려 보던 3D 를 그대로 둠
     setScene(model, !!m.night, !!m.rain, !prev || prev.placeId !== m.placeId);
-    renderNow(); renderCourse(); renderHandoff();
+    renderNow(); renderCourse();
     if (quiet) return;
     if (S.tab !== 'now') { toast(t('telling') + ': ' + (place ? nm(place.name) : m.name), function () { setTab('now'); }); nowNews(); }
     if (navigator.vibrate) navigator.vibrate(40);
   }
 
   $('toRecord').onclick = function () { setTab('record'); };
-  $('report').onclick = function () {
-    if (!S.story) return;
-    var note = prompt(t('reportAsk'));
-    if (!note || !note.trim()) return;
-    fetch('/api/groups/' + code + '/report', { method: 'POST', headers: keyHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ placeId: S.story.placeId, name: S.story.name, note: note.slice(0, 500), by: me }) })
-      .then(function (r) { toast(r.ok ? t('reported') : t('reportFail')); }, function () { toast(t('reportFail')); });
-  };
 
   // 오늘 코스: 지난 곳(파랑), 지금(파랑과 빛), 다음(흰 테두리), 남은 곳(회색)
   function renderCourse() {
@@ -584,7 +553,7 @@
     } else card.classList.add('hidden');
   }
 
-  // ---------------------------------------------------------------- 차에 물어본 것, 이어 듣기
+  // ---------------------------------------------------------------- 차에 물어본 것
   function renderQa() {
     var card = $('qaCard'), list = S.qa.filter(function (x) { return mineCar(x); });
     if (!list.length) { card.classList.add('hidden'); return; }
@@ -593,32 +562,6 @@
       return '<li><div class="t">' + hhmm(x.at) + (x.title ? ' · ' + esc(x.title) : '') + '</div>' + (x.q ? '<div class="q">“' + esc(x.q) + '”</div>' : '') + '<div class="a">' + esc(x.a) + '</div></li>';
     }).join('');
   }
-
-  var speaking = false;
-  function renderHandoff() {
-    var card = $('handoffCard'), h = S.handoff;
-    // 그 뒤에 다른 명소 이야기가 시작됐으면 지난 이어 듣기는 감춤 (듣는 중이면 그대로)
-    var stale = h && S.story && (S.story.at || 0) > (h.at || 0) && S.story.placeId !== h.placeId;
-    if (!h || (stale && !speaking)) { card.classList.add('hidden'); return; }
-    card.classList.remove('hidden');
-    $('handoffTitle').textContent = f('handoffTitle', { name: h.name || '' });
-    $('handoffText').textContent = h.text;
-    $('handoffBtn').innerHTML = icon(speaking ? 'pause' : 'play') + '<span>' + esc(speaking ? t('handoffStop') : t('handoffPlay')) + '</span>';
-    $('handoffBtn').classList.toggle('hidden', !window.speechSynthesis);
-  }
-  $('handoffBtn').onclick = function () {
-    var h = S.handoff;
-    if (!h || !window.speechSynthesis) return;
-    if (speaking) { speechSynthesis.cancel(); speaking = false; renderHandoff(); return; }
-    var u = new SpeechSynthesisUtterance(h.text);
-    u.lang = h.lang === 'en' ? 'en-US' : 'ko-KR';
-    u.rate = 1.0;
-    u.onend = u.onerror = function () { speaking = false; renderHandoff(); };
-    speechSynthesis.cancel();
-    speechSynthesis.speak(u);
-    speaking = true;
-    renderHandoff();
-  };
 
   // ---------------------------------------------------------------- 장소 고르기
   var ACCENT = '#00AAD2';
@@ -642,11 +585,11 @@
     });
     return best;
   }
+  // 길: 어두운 테두리 위에 지난 데(cut 번째 점)까지는 파랑, 남은 길은 회색
   function routeLines(layer, pts, cut) {
     L.polyline(pts, { color: '#05070A', weight: 10, opacity: 0.55, interactive: false }).addTo(layer);
-    var rest = L.polyline(cut > 0 ? pts.slice(cut) : pts, { color: '#9AA0AA', weight: 5, opacity: 0.9, interactive: false }).addTo(layer);
+    if (cut < pts.length - 1) L.polyline(cut > 0 ? pts.slice(cut) : pts, { color: '#9AA0AA', weight: 5, opacity: 0.9, interactive: false }).addTo(layer);
     if (cut > 0) L.polyline(pts.slice(0, cut + 1), { color: ACCENT, weight: 6, opacity: 1, interactive: false }).addTo(layer);
-    return rest;
   }
 
   function drawPickMap() {
@@ -698,21 +641,15 @@
     if (pickMap && S.tab === 'pick') { drawPickMarkers(); pickMap.panTo([p.lat, p.lon], { animate: true }); }
   }
 
+  // 목록에는 가 볼 만한 곳(pickables)만 둠. 코스 명소는 이미 내비게이션에 들어 있고, 지도의 번호 점을 눌러 고를 수는 있음
   function renderPickList() {
     var sc = S.scenario; if (!sc) return;
-    var passed = passedMap(), sel = S.selected && S.selected.id, kinds = t('kind'), nx = nextStop();
-    var nowId = S.story && !S.storyDone && S.story.kind !== 'announce' && !S.ended ? S.story.placeId : null;
-    function row(p, lead, sub) {
+    var sel = S.selected && S.selected.id, kinds = t('kind');
+    $('picklist').innerHTML = (sc.pickables || []).map(function (p) {
       var on = sel === p.id;
-      return '<button type="button" class="pick-row' + (on ? ' sel' : '') + '" data-id="' + esc(p.id) + '" aria-pressed="' + on + '"><span class="pick-ic">' + lead + '</span>' +
-        '<span class="pick-txt"><b>' + esc(nm(p.name)) + '</b>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span><span class="pick-check">' + icon('check') + '</span></button>';
-    }
-    // 코스 명소는 종류 대신 지금 어디쯤인지 (지남 시각, 지금, 다음)
-    function stopSub(p) { return p.id === nowId ? t('nowAt') : passed[p.id] ? t('passed') + ' ' + hhmm(passed[p.id]) : nx && nx.id === p.id ? t('next') : ''; }
-    var html = '';
-    if ((sc.pickables || []).length) html += '<h3 class="group-title">' + esc(t('groupPick')) + '</h3>' + sc.pickables.map(function (p) { return row(p, icon(KIND_IC[p.kind] || 'pin'), kinds[p.kind] || ''); }).join('');
-    html += '<h3 class="group-title">' + esc(t('groupCourse')) + '</h3>' + courseStops().map(function (p, i) { return row(p, String(i + 1), stopSub(p)); }).join('');
-    $('picklist').innerHTML = html;
+      return '<button type="button" class="pick-row' + (on ? ' sel' : '') + '" data-id="' + esc(p.id) + '" aria-pressed="' + on + '"><span class="pick-ic">' + icon(KIND_IC[p.kind] || 'pin') + '</span>' +
+        '<span class="pick-txt"><b>' + esc(nm(p.name)) + '</b>' + (kinds[p.kind] ? '<small>' + esc(kinds[p.kind]) + '</small>' : '') + '</span><span class="pick-check">' + icon('check') + '</span></button>';
+    }).join('');
     Array.prototype.forEach.call($('picklist').querySelectorAll('button[data-id]'), function (b) { b.onclick = function () { select(placeById(b.dataset.id)); }; });
     renderPickButton();
   }
@@ -728,6 +665,8 @@
   function renderPickInfo() {
     var el = $('pickStatus'), m = S.pickMsg, kind, text, ic;
     var busy = S.pending && Date.now() - S.pending.at < 90000;
+    // 기다리는 글(보냈어요, 확인 중)은 기다림이 끝나면 거둠: 운전자 답 없이 90초, 서버 답 없이 8초가 지났을 때
+    if (m && m.kind === 'wait' && !busy && !(S.pickWait && Date.now() - S.pickWait.at < 8000)) m = S.pickMsg = null;
     if (m) { kind = m.kind; text = m.text; ic = { ok: 'check', warn: 'alert', info: 'info' }[kind] || 'clock'; }
     else if (busy && !(S.myPicks && S.myPicks[S.pending.id])) { kind = 'wait'; text = f('pickBusy', { name: S.pending.name || '' }); ic = 'clock'; }
     else if (S.group && !S.cars.length) { kind = 'hint'; text = t('pickNoCarYet'); ic = 'car'; }
@@ -805,14 +744,14 @@
 
   function drawRecord() {
     var sc = S.scenario; if (!sc) return;
-    renderRecHero(); renderPhotos(); renderHighlight();
+    renderRecHero(); renderPhotos();
     if (!window.L || S.tab !== 'record') return;
     if (!recMap) { recMap = L.map('recMap', { zoomControl: false }); tiles(recMap); recLayer = L.layerGroup().addTo(recMap); }
     recLayer.clearLayers();
     var r = routeFromRecord();
     var pts = r ? r.map(function (p) { return [p.lat, p.lon]; }) : sc.route.map(function (p) { return [p[0], p[1]]; });
-    // 끝난 여행은 지나온 길 전체를 파랑으로, 끝나기 전에는 오늘 갈 길을 회색으로
-    var line = r ? (L.polyline(pts, { color: '#05070A', weight: 10, opacity: 0.55, interactive: false }).addTo(recLayer), L.polyline(pts, { color: ACCENT, weight: 6, opacity: 1, interactive: false }).addTo(recLayer)) : routeLines(recLayer, pts, traveledIndex(pts));
+    // 끝난 여행은 지나온 길 전체를 파랑으로, 끝나기 전에는 오늘 갈 길(지난 데까지 파랑, 남은 길은 회색)
+    routeLines(recLayer, pts, r ? pts.length - 1 : traveledIndex(pts));
     var passed = passedMap();
     courseStops().forEach(function (p, i) {
       L.marker([p.lat, p.lon], { icon: stopIcon(i + 1, passed[p.id] ? 'done' : 'todo'), interactive: false, keyboard: false }).addTo(recLayer);
@@ -823,7 +762,8 @@
     });
     recMap.invalidateSize();
     var fitKey = sc.id + (r ? ':' + r.length : '');
-    if (recFitFor !== fitKey) { recFitFor = fitKey; recMap.fitBounds(line.getBounds(), { padding: [24, 24] }); }
+    // 길 전체가 보이게 맞춤 (여행 중에 열어도 지나온 길과 지난 명소가 화면 안에 들어오게)
+    if (recFitFor !== fitKey) { recFitFor = fitKey; recMap.fitBounds(L.latLngBounds(pts), { padding: [24, 24] }); }
   }
 
   function nearestPlaceName(time) {
@@ -838,21 +778,6 @@
     $('photos').innerHTML = S.photos.map(function (p) {
       return '<figure><img src="' + esc(withKey(p.url)) + '" loading="lazy" alt=""><figcaption>' + hhmm(p.takenAt) + ' ' + esc(nearestPlaceName(p.takenAt)) + '</figcaption></figure>';
     }).join('');
-  }
-
-  function renderHighlight() {
-    var h = S.highlight, st = $('camStatus'), v = $('hl'), a = $('hlDown');
-    var busy = !!(h && h.status === 'processing');
-    $('camBtn').setAttribute('aria-disabled', busy ? 'true' : 'false');
-    if (!h) { if (!lastCamMsg) st.textContent = ''; v.classList.add('hidden'); a.classList.add('hidden'); return; }
-    lastCamMsg = false;
-    st.classList.remove('warn'); $('camRetry').classList.add('hidden');
-    if (h.status === 'processing') { st.textContent = t('making'); v.classList.add('hidden'); a.classList.add('hidden'); }
-    else if (h.status === 'done') {
-      st.textContent = t('made') + (h.mode === 'order' ? '. ' + t('byOrder') : '');
-      if (v.getAttribute('src') !== withKey(h.url)) v.src = withKey(h.url);
-      v.classList.remove('hidden'); a.href = withKey(h.url); a.classList.remove('hidden');
-    } else { st.textContent = t('camFail'); st.classList.add('warn'); $('camRetry').classList.toggle('hidden', !lastCam); }
   }
 
   // EXIF 촬영 시각(DateTimeOriginal) 읽기. 없으면 파일 수정 시각
@@ -909,10 +834,7 @@
   }
 
   // 단추처럼 보이는 label 은 키보드(Enter, Space)로도 누를 수 있게
-  ['photoBtn', 'camBtn'].forEach(function (id) {
-    $(id).onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(id).click(); } };
-  });
-  $('camBtn').onclick = function (e) { if ($('camBtn').getAttribute('aria-disabled') === 'true') e.preventDefault(); };
+  $('photoBtn').onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('photoBtn').click(); } };
 
   // 캔버스로 다시 그려 올리므로 사진의 EXIF(GPS 위치, 기기 정보)는 빠짐. 촬영 시각만 따로 읽어 보냄
   $('photoInput').onchange = function () {
@@ -935,39 +857,6 @@
     });
   };
 
-  // 빌트인 캠 영상: 실패하면 까닭을 알려 주고 '다시 올리기' 단추를 띄움 (같은 파일을 다시 고르지 않아도 됨)
-  var lastCam = null, lastCamMsg = false;
-  function camFailed(msg) {
-    var st = $('camStatus');
-    lastCamMsg = true;
-    st.textContent = msg; st.classList.add('warn');
-    $('camRetry').classList.toggle('hidden', !lastCam);
-  }
-  function uploadCam(file) {
-    var mb = (S.group && S.group.maxUploadMB) || 400;
-    var err = t('camErr');
-    lastCam = file;
-    $('camRetry').classList.add('hidden');
-    if (file.size > mb * 1024 * 1024) { lastCam = null; return camFailed(err[413].replace('{mb}', mb)); }
-    var st = $('camStatus');
-    lastCamMsg = true;
-    st.classList.remove('warn');
-    st.textContent = t('uploading') + ' 0%';
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/groups/' + code + '/dashcam?name=' + encodeURIComponent(file.name) + '&lastModified=' + file.lastModified);
-    if (key) xhr.setRequestHeader('X-Group-Key', key);
-    xhr.upload.onprogress = function (e) { if (e.lengthComputable) st.textContent = t('uploading') + ' ' + Math.round(e.loaded / e.total * 100) + '%'; };
-    xhr.onload = function () {
-      if (xhr.status === 200) { if (!S.highlight || S.highlight.status !== 'done') st.textContent = t('making'); return; }
-      if (xhr.status === 413 || xhr.status === 415 || xhr.status === 403) lastCam = null;   // 같은 파일로 다시 해도 안 됨
-      camFailed((err[xhr.status] || err.net).replace('{mb}', mb));
-    };
-    xhr.onerror = xhr.ontimeout = function () { camFailed(err.net); };
-    xhr.send(file);
-  }
-  $('camInput').onchange = function () { var file = (this.files || [])[0]; this.value = ''; if (file) uploadCam(file); };
-  $('camRetry').onclick = function () { if (lastCam) uploadCam(lastCam); };
-
   // ---------------------------------------------------------------- 연결
   function apply(summary) {
     S.group = summary;
@@ -980,12 +869,10 @@
     S.record = summary.record || null;
     S.ended = !!summary.ended;
     S.photos = summary.photos || [];
-    S.highlight = summary.highlight || null;
     S.quizzes = summary.quizzes || [];
     S.answers = summary.answers || [];
     S.scores = summary.scores || {};
     S.qa = summary.qa || [];
-    S.handoff = summary.handoff && mineCar(summary.handoff) ? summary.handoff : null;
     S.treasure = summary.treasure && mineCar(summary.treasure) ? summary.treasure : null;
     S.stars = summary.stars && mineCar(summary.stars) ? summary.stars : null;
     // 다시 연결하면 지금 하는 이야기를 다시 그림 (끊긴 사이에 바뀌었거나 끝났을 수 있음)
@@ -1014,7 +901,7 @@
   }
 
   function renderAll() {
-    staticTexts(); renderTop(); renderNow(); renderQuiz(); renderTreasure(); renderHandoff(); renderQa(); renderCourse(); renderPickList(); renderBadges();
+    staticTexts(); renderTop(); renderNow(); renderQuiz(); renderTreasure(); renderQa(); renderCourse(); renderPickList(); renderBadges();
     if (S.tab === 'pick') drawPickMap();
     if (S.tab === 'record') drawRecord();
   }
@@ -1085,13 +972,12 @@
         case 'story_end': if (S.story && m.placeId === S.story.placeId && sameCar(m, S.story)) { S.storyDone = true; S.story.done = true; renderNow(); renderCourse(); } break;
         case 'pass':
           S.passes.push({ placeId: m.placeId, name: m.name, at: m.at, car: m.car, carNo: m.carNo });
-          renderCourse(); renderNow(); renderPickList();
+          renderCourse(); renderNow();
           if (S.tab === 'pick') drawPickMarkers();
           if (S.tab === 'record') drawRecord(); else if (S.scenario) renderRecHero();
           break;
         case 'pick':
           S.picks.push(m);
-          if (m.fromCar) { toast(f('sentFrom', { car: carLabel(m.carNo, m.car), name: m.name })); break; }
           // 그룹에 운전자 확인을 기다리는 곳이 생김: 답이 올 때까지(최대 90초) 모든 휴대폰의 보내기 단추를 잠금
           S.pending = { id: m.id, name: pickName(m.id, m.name), at: Date.now() };
           if (m.mine) { S.pickWait = null; S.pickSoonUntil = Date.now() + 20000; S.myPicks = (S.myPicks || {}); S.myPicks[m.id] = 1; setPickMsg(t('sent'), 'wait'); }
@@ -1102,7 +988,7 @@
           // 서버가 보내지 않은 까닭: soon(20초 안에 또), busy(다른 곳 확인 중), nocar, bad
           S.pickWait = null;
           if (m.reason === 'soon') { S.pickSoonUntil = Date.now() + (m.retryIn || 20) * 1000; setPickMsg(null); }
-          else if (m.reason === 'busy') { S.pending = { id: S.pending && S.pending.id, name: m.name || '', at: Date.now() - Math.max(0, 90 - (m.retryIn || 90)) * 1000 }; setPickMsg(f('pickBusy', { name: m.name || '' }), 'wait'); }
+          else if (m.reason === 'busy') { S.pending = { id: m.id || (S.pending && S.pending.id), name: m.name || '', at: Date.now() - Math.max(0, 90 - (m.retryIn || 90)) * 1000 }; setPickMsg(f('pickBusy', { name: m.name || '' }), 'wait'); }
           else setPickMsg(t(m.reason === 'nocar' ? 'pickNoCar' : 'pickBad'), 'warn');
           renderPickButton();
           break;
@@ -1120,7 +1006,6 @@
         case 'window': if (mineCar(m)) toast(t('window')); break;
         case 'record': S.record = m.record; if (S.tab === 'record') drawRecord(); else renderRecHero(); break;
         case 'photo': S.photos.push(m.photo); S.photos.sort(function (a, b) { return a.takenAt - b.takenAt; }); if (S.tab === 'record') drawRecord(); else renderPhotos(); break;
-        case 'highlight': S.highlight = m.highlight; renderHighlight(); break;
         case 'trip_end':
           S.ended = true; renderTop(); renderNow(); renderCourse();
           toast(t('tripEnd'), S.tab === 'record' ? null : function () { setTab('record'); }, t('seeRecord'));
@@ -1148,7 +1033,6 @@
           break;
         case 'qa': S.qa.push(m); renderQa(); if (m.q && mineCar(m)) toast(f('asked', { q: m.q })); break;
         case 'kid': if (mineCar(m)) { S.kid = m; renderKid(); } break;
-        case 'handoff': if (mineCar(m)) { S.handoff = m; renderHandoff(); toast(t('handoffNew'), function () { focusCard('handoffCard'); }); nowNews(); } break;
       }
     };
   }

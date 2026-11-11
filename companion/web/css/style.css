@@ -55,9 +55,7 @@ h1, h2, h3, p { margin: 0; }
 .btn.primary { background: var(--accent); color: var(--on-accent); }
 .btn.on-brand { background: var(--on-brand-raised); color: #fff; }
 .btn.block { display: flex; width: 100%; }
-.btn:disabled, .btn[aria-disabled="true"] { opacity: .4; cursor: default; transform: none; }
-.link { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 6px; color: var(--text3); font-size: 14px; font-weight: 600; border-radius: 12px; }
-.link .ic { width: 18px; height: 18px; }
+.btn:disabled { opacity: .4; cursor: default; transform: none; }
 
 /* ---------------------------------------------------------------- 머리 줄 */
 .app {
@@ -148,7 +146,7 @@ body.embed .gg-caption { display: none; }
   border-radius: 26px; transform: translate(-50%, -50%); background: rgba(14, 16, 21, .74); color: #fff; font-size: 16px; font-weight: 600;
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
 }
-.hero-body { position: relative; padding: 2px 20px 14px; background: linear-gradient(180deg, #00264F 0%, rgba(0, 38, 79, 0) 140px); }
+.hero-body { position: relative; padding: 2px 20px 20px; background: linear-gradient(180deg, #00264F 0%, rgba(0, 38, 79, 0) 140px); }
 .segments { display: flex; gap: 4px; margin: 10px 0 14px; }
 .segments:empty { display: none; }
 .segments i { flex: 1; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .18); transition: background-color .3s; }
@@ -161,8 +159,6 @@ body.embed .gg-caption { display: none; }
 .lines .soft { color: var(--on-brand2); }
 .kid { margin-top: 16px; padding: 14px 16px; border-radius: 18px; background: rgba(255, 255, 255, .08); }
 .kid p { margin-top: 6px; color: #fff; font-size: 16px; line-height: 1.62; }
-.hero-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 6px; }
-.hero .link { color: var(--on-brand2); margin-right: -6px; }
 .hero .btn.block { margin-top: 16px; }
 
 /* ---------------------------------------------------------------- 카드 */
@@ -173,12 +169,12 @@ body.embed .gg-caption { display: none; }
 .card h3 { margin-top: 10px; font-size: 20px; line-height: 1.4; font-weight: 700; letter-spacing: -0.015em; }
 .small { color: var(--text2); font-size: 15px; line-height: 1.55; }
 .note { color: var(--text3); font-size: 14px; line-height: 1.5; }
-#handoffCard { order: 1; }
-#treasureCard { order: 4; }
-#treasureCard.open { order: 2; }
-#quizCard { order: 3; }
-#qaCard { order: 5; }
-#courseCard { order: 6; }
+/* 지금 탭 카드 순서: 장면 → 열린 보물 상자 → 퀴즈 → 별을 다 모은 보물 상자 → 차에 물어본 것 → 오늘 코스 */
+#treasureCard { order: 3; }
+#treasureCard.open { order: 1; }
+#quizCard { order: 2; }
+#qaCard { order: 4; }
+#courseCard { order: 5; }
 #problemCard { order: 0; }
 
 /* 퀴즈 */
@@ -220,11 +216,6 @@ body.embed .gg-caption { display: none; }
 .treasure.open .treasure-ic { animation: breathe 2.4s ease-in-out infinite alternate; }
 @keyframes breathe { from { box-shadow: 0 0 0 0 rgba(228, 220, 211, .22), 0 6px 24px rgba(228, 220, 211, .16); } to { box-shadow: 0 0 0 14px rgba(228, 220, 211, 0), 0 6px 24px rgba(228, 220, 211, .16); } }
 
-/* 이어 듣기 */
-.handoff .eyebrow { color: var(--accent); }
-.handoff .text { margin: 8px 0 16px; color: var(--text2); font-size: 16px; line-height: 1.62; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-.handoff .note { margin-top: 10px; text-align: center; }
-
 /* 차에 물어본 것 */
 .qa ul { list-style: none; margin: 4px 0 0; padding: 0; }
 .qa li { padding-top: 14px; }
@@ -261,14 +252,15 @@ body.is-fatal .tabs, body.is-fatal #meBtn { display: none; }
 .page-head p { margin-top: 6px; }
 /* z-index 0 으로 쌓임 맥락을 따로 만들어 Leaflet 안쪽 층(400~1000)이 보내기 줄과 탭 위로 올라오지 않게 함 */
 .map { position: relative; z-index: 0; isolation: isolate; height: min(320px, 46vh); border-radius: var(--r-card); overflow: hidden; background: #1B1F26; }
-.group-title { margin: 22px 4px 2px; color: var(--text3); font-size: 14px; font-weight: 600; }
+/* 지도 아래 가 볼 만한 곳 목록. 지도와는 12px, 줄끼리는 8px (첫 줄의 위 여백은 이 여백과 겹쳐짐) */
+#picklist { margin-top: 12px; }
 .pick-row {
   display: flex; align-items: center; gap: 14px; width: 100%; min-height: 64px; margin-top: 8px; padding: 10px 14px 10px 12px;
   border-radius: var(--r-btn); background: var(--surface); text-align: left;
   transition: background-color var(--fast), box-shadow var(--fast), transform var(--fast) var(--ease);
 }
 .pick-row:active { transform: scale(.985); }
-.pick-ic { display: grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 14px; background: var(--raised2); color: var(--text2); font-size: 15px; font-weight: 700; }
+.pick-ic { display: grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 14px; background: var(--raised2); color: var(--text2); }
 .pick-ic .ic { width: 22px; height: 22px; }
 .pick-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .pick-txt b { font-size: 16px; font-weight: 600; line-height: 1.38; }
@@ -333,8 +325,7 @@ body.is-fatal .tabs, body.is-fatal #meBtn { display: none; }
 .status { margin: 12px 2px 0; color: var(--text2); font-size: 15px; font-weight: 600; line-height: 1.45; }
 .status:empty { display: none; }
 .status.warn { margin: 12px 0 0; padding: 10px 12px; border-radius: 14px; background: var(--warn-soft); color: var(--on-warn); }
-.card video { display: block; width: 100%; margin-top: 16px; border-radius: 18px; background: #000; }
-.btn-col { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+#photoBtn { margin-top: 16px; }
 .keep { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 20px 12px 0; color: var(--text3); font-size: 13px; line-height: 1.45; text-align: center; }
 .keep .ic { width: 16px; height: 16px; }
 
@@ -386,8 +377,7 @@ body.is-fatal .tabs, body.is-fatal #meBtn { display: none; }
 .intro-list { list-style: none; margin: 12px 0 0; padding: 0; }
 .intro-list li { display: flex; align-items: center; gap: 14px; padding: 8px 0; font-size: 16px; line-height: 1.45; }
 .intro-list .ii { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); }
-.field { margin: 18px 0 20px; }
-.field { margin-bottom: 4px; }
+.field { margin: 18px 0 4px; }
 .field label { display: block; margin: 0 2px 8px; color: var(--text2); font-size: 14px; font-weight: 600; }
 .field input { width: 100%; height: 56px; padding: 0 16px; border: 1.5px solid var(--line); border-radius: 16px; background: var(--raised); color: var(--text); font-size: 17px; outline: none; transition: border-color var(--fast); }
 .field input::placeholder { color: var(--text3); opacity: 1; }
@@ -416,12 +406,17 @@ body.is-fatal .tabs, body.is-fatal #meBtn { display: none; }
 .landing-note { display: flex; gap: 12px; margin-top: auto; padding: 16px; border-radius: 20px; background: var(--surface); color: var(--text2); font-size: 15px; line-height: 1.55; }
 .landing-note .ic { margin-top: 2px; color: var(--text3); }
 
-/* ---------------------------------------------------------------- 움직임 줄이기, 가로 화면 */
+/* ---------------------------------------------------------------- 움직임 줄이기, 가로 화면, 좁은 화면 */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
 @media (orientation: landscape) and (max-height: 520px) {
   .stage { aspect-ratio: auto; height: max(200px, calc(100vh - var(--tabbar) - 100px)); max-height: none; }
   .map { height: 70vh; }
-  .sendbar { position: static; }
+  /* 낮은 화면에서는 보내기 줄을 띄워 두지 않고 목록 끝에 둠 (.armed 까지 적어야 위의 sticky 를 이김) */
+  .sendbar, .sendbar.armed { position: static; }
+}
+/* 폭 320px 휴대폰: 머리 줄 단추의 아이콘을 빼 그룹 번호가 잘리지 않게 함 (단추 글자는 그대로) */
+@media (max-width: 340px) {
+  .chip-btn .ic { display: none; }
 }
