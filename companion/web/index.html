@@ -11,33 +11,26 @@
 </head>
 <body>
 <main class="landing">
-  <div class="landing-top">
+  <div class="top">
     <span class="mark" aria-hidden="true"><svg viewBox="33 27 49 49" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"><path d="M47.52 64.8H58.68C62.28 64.8 64.44 62.28 64.44 59.22C64.44 55.98 62.1 53.64 59.04 53.64H48.96C45.9 53.64 43.56 51.3 43.56 48.24C43.56 45.18 45.72 43.2 48.96 43.2H60.48"/><circle cx="43.2" cy="64.8" r="4.32"/><circle cx="64.8" cy="43.2" r="4.32"/><circle cx="73.5" cy="34.5" r="4.6" fill="#00AAD2" stroke="none"/></svg></span>
-    <button class="chip-btn" id="langBtn" type="button" lang="en" aria-label="English">EN</button>
+    <span class="brand" id="brand"></span>
+    <button class="chip" id="langBtn" type="button"></button>
   </div>
-  <p class="landing-brand" id="brand">구르는 가이드</p>
-  <h1 id="h1">여행 그룹에 들어가기</h1>
-  <p class="lead" id="lead">차 화면의 QR을 찍으면 바로 들어와요. 그룹 번호 네 자리로도 들어올 수 있어요.</p>
   <form id="join" class="join" novalidate>
-    <label for="code" id="codeLabel">그룹 번호</label>
+    <h1><label for="code" id="h1"></label></h1>
     <input id="code" class="code-input" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="4" placeholder="0000">
     <p class="err" id="err" role="alert"></p>
-    <button class="btn primary block" id="go" type="submit">들어가기</button>
+    <button class="btn primary" id="go" type="submit"></button>
   </form>
-  <div class="landing-note">
-    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.6" y="3.6" width="6.6" height="6.6" rx="1.4"/><rect x="13.8" y="3.6" width="6.6" height="6.6" rx="1.4"/><rect x="3.6" y="13.8" width="6.6" height="6.6" rx="1.4"/><path class="d" d="M6 6H7.8V7.8H6ZM16.2 6H18V7.8H16.2ZM6 16.2H7.8V18H6ZM13.8 13.8H16V16H13.8ZM18.2 13.8H20.4V16H18.2ZM13.8 18.2H16V20.4H13.8ZM18.2 18.2H20.4V20.4H18.2Z"/></svg>
-    <p id="note">번호로 들어오면 이야기와 퀴즈, 장소 고르기를 같이 해요. 사진과 기록은 QR로 들어오면 보여요.</p>
-  </div>
+  <p class="foot" id="note"></p>
 </main>
 <script>
   (function () {
     'use strict';
     // 그룹을 모르는 첫 화면이라 휴대폰 언어를 따름. 고른 언어는 그룹 페이지와 같이 씀
     var TXT = {
-      ko: { brand: '구르는 가이드', h1: '여행 그룹에 들어가기', lead: '차 화면의 QR을 찍으면 바로 들어와요. 그룹 번호 네 자리로도 들어올 수 있어요.', codeLabel: '그룹 번호', go: '들어가기',
-        note: '번호로 들어오면 이야기와 퀴즈, 장소 고르기를 같이 해요. 사진과 기록은 QR로 들어오면 보여요.', err: '네 자리 숫자를 넣어 주세요', other: 'EN', otherAria: 'English' },
-      en: { brand: 'Rolling Guide', h1: 'Join the trip group', lead: 'Scan the QR on the car screen to join right away, or enter the 4-digit group code.', codeLabel: 'Group code', go: 'Join',
-        note: 'With the code you can follow stories, quizzes and pick places. Scan the QR to see photos and the record.', err: 'Enter the 4-digit code', other: '한국어', otherAria: '한국어로 보기' }
+      ko: { brand: '구르는 가이드', h1: '그룹 번호를 넣어 주세요', go: '들어가기', note: '차 화면의 QR을 찍으면 바로 들어와요', err: '숫자 네 자리예요', other: 'EN', otherAria: 'Show in English' },
+      en: { brand: 'Rolling Guide', h1: 'Enter the group code', go: 'Join', note: 'Or scan the QR on the car screen', err: 'The code has 4 digits', other: '한국어', otherAria: '한국어로 보기' }
     };
     var lang;
     try { lang = localStorage.getItem('gg_lang'); } catch (e) {}
@@ -46,7 +39,8 @@
     function render() {
       var d = TXT[lang];
       document.documentElement.lang = lang;
-      ['brand', 'h1', 'lead', 'codeLabel', 'go', 'note'].forEach(function (k) { $(k).textContent = d[k]; });
+      document.title = d.brand;
+      ['brand', 'h1', 'go', 'note'].forEach(function (k) { $(k).textContent = d[k]; });
       $('langBtn').textContent = d.other; $('langBtn').setAttribute('aria-label', d.otherAria); $('langBtn').lang = lang === 'en' ? 'ko' : 'en';
       if ($('err').textContent) $('err').textContent = d.err;
     }

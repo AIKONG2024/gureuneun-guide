@@ -14,157 +14,84 @@
 <div class="banner hidden" id="banner" role="status"></div>
 <div class="app">
   <header class="top">
-    <div class="top-title">
-      <div class="top-sub"><span class="live" id="liveDot"></span><span id="cars">연결하는 중</span><span id="who"></span></div>
-      <h1 id="title">구르는 가이드</h1>
-    </div>
-    <button class="chip-btn empty" id="meBtn" type="button"><i data-ic="user"></i><span id="meName">이름</span></button>
-    <button class="chip-btn" id="langBtn" type="button" lang="en"><i data-ic="globe"></i><span id="langBtnL">EN</span></button>
+    <span class="mark" aria-hidden="true"><svg viewBox="33 27 49 49" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"><path d="M47.52 64.8H58.68C62.28 64.8 64.44 62.28 64.44 59.22C64.44 55.98 62.1 53.64 59.04 53.64H48.96C45.9 53.64 43.56 51.3 43.56 48.24C43.56 45.18 45.72 43.2 48.96 43.2H60.48"/><circle cx="43.2" cy="64.8" r="4.32"/><circle cx="64.8" cy="43.2" r="4.32"/><circle cx="73.5" cy="34.5" r="4.6" fill="#00AAD2" stroke="none"/></svg></span>
+    <h1 id="title"></h1>
+    <button class="chip" id="meBtn" type="button"><span id="meName"></span></button>
+    <button class="chip" id="langBtn" type="button"></button>
   </header>
 
-  <!-- 지금: 장면과 이야기가 주인공. 나머지 카드는 생길 때만 -->
   <section id="tab-now" aria-labelledby="tNow">
-    <article class="hero" id="hero" data-mode="loading">
-      <div class="stage gg-stage" id="stage">
-        <video id="clip" class="clip hidden" muted playsinline loop preload="metadata"></video>
-        <div class="stage-shade"></div>
-        <div class="stage-load"><span class="spin"></span></div>
-        <button class="playbtn hidden" id="playBtn" type="button"><i data-ic="play"></i><span id="playBtnL"></span></button>
-        <div class="seg" id="modeSeg" role="group">
-          <button id="mVideo" class="on" type="button" aria-pressed="true"><i data-ic="play"></i><span id="mVideoL">영상</span></button>
-          <button id="mOrbit" type="button" aria-pressed="false"><i data-ic="cube"></i><span id="mOrbitL">3D</span></button>
-        </div>
-        <div class="stage-cap">
-          <div class="eyebrow" id="nowLabel"></div>
-          <h2 class="place" id="nowName"></h2>
-        </div>
-      </div>
-      <div class="hero-body">
-        <div class="segments" id="segs"></div>
-        <div class="lines" id="lines"></div>
-        <div class="kid hidden" id="kidCard">
-          <div class="eyebrow"><i data-ic="kid"></i><span id="kidTitle"></span></div>
-          <p id="kidText"></p>
-        </div>
-        <button class="btn on-brand block hidden" id="toRecord" type="button"><span id="toRecordL"></span><i data-ic="chevron"></i></button>
-      </div>
-    </article>
+    <div class="stage" id="stage">
+      <img class="ph" id="phA" alt="" decoding="async">
+      <img class="ph" id="phB" alt="" decoding="async">
+      <div class="dots" id="dots" aria-hidden="true"></div>
+      <a class="credit" id="credit" target="_blank" rel="noopener"></a>
+    </div>
+    <h2 class="place" id="nowName"></h2>
+    <div class="lines" id="lines"></div>
+    <button class="more hidden" id="toRecord" type="button"><span id="toRecordL"></span><i data-ic="chevron"></i></button>
 
-    <article class="card problem hidden" id="problemCard">
-      <div class="problem-ic"><i data-ic="alert"></i></div>
-      <h3 id="problemTitle"></h3>
-      <p class="small" id="problemText"></p>
-      <a class="btn primary block" href="/" id="problemBtn"></a>
-    </article>
-
-    <article class="card treasure hidden" id="treasureCard">
-      <div class="treasure-ic"><i data-ic="gift"></i></div>
-      <div class="stars" id="treasureStars"></div>
-      <h3 id="treasureTitle"></h3>
-      <p class="small" id="treasureText"></p>
-    </article>
-
-    <article class="card quiz hidden" id="quizCard">
-      <div class="card-head">
-        <div class="eyebrow"><i data-ic="star"></i><span id="quizLabel"></span></div>
-        <div class="stars" id="quizStars"></div>
-      </div>
-      <h3 class="q" id="quizQ"></h3>
+    <article class="quiz hidden" id="quizCard">
+      <div class="stars" id="quizStars"></div>
+      <h3 id="quizQ"></h3>
       <div class="choices" id="quizChoices"></div>
       <p class="result" id="quizResult" role="status"></p>
     </article>
 
-    <article class="card qa hidden" id="qaCard">
-      <div class="eyebrow"><i data-ic="mic"></i><span id="qaTitle"></span></div>
-      <ul id="qaList"></ul>
-    </article>
-
-    <article class="card course hidden" id="courseCard">
-      <div class="card-head">
-        <div class="eyebrow"><i data-ic="flag"></i><span id="courseTitle"></span></div>
-        <span class="meta" id="courseMeta"></span>
-      </div>
-      <ol class="course-list" id="course"></ol>
-    </article>
+    <ol class="places hidden" id="course"></ol>
   </section>
 
-  <!-- 장소 고르기: 지도나 가 볼 만한 곳 목록에서 골라 차 내비게이션으로 -->
   <section id="tab-pick" class="hidden" aria-labelledby="tPick">
-    <div class="page-head">
-      <h2 id="pickTitle"></h2>
-      <p class="small" id="pickHelp"></p>
-    </div>
     <div class="map" id="pickMap"></div>
     <div id="picklist"></div>
-    <div class="sendbar" id="sendbar">
-      <p class="pick-info" id="pickStatus" role="status"></p>
-      <button class="btn primary block" id="sendPick" type="button" disabled><i data-ic="send"></i><span id="sendPickL"></span></button>
+    <div class="sendbar">
+      <p class="pick-status" id="pickStatus" role="status"></p>
+      <button class="btn primary" id="sendPick" type="button" disabled></button>
     </div>
   </section>
 
-  <!-- 기록: 지나온 길과 사진 -->
   <section id="tab-record" class="hidden" aria-labelledby="tRecord">
-    <article class="hero rec-hero" id="recHero">
-      <div class="eyebrow"><i data-ic="route"></i><span id="recEyebrow"></span></div>
-      <h2 id="recTitle"></h2>
-      <p class="sub" id="recSummary"></p>
-      <div class="stats hidden" id="recStats"></div>
-      <div class="map" id="recMap"></div>
-    </article>
-    <article class="card hidden" id="basicCard">
-      <div class="eyebrow"><i data-ic="qr"></i><span id="basicTitle"></span></div>
-      <p class="small" id="basicNote"></p>
-    </article>
-    <article class="card" id="photoCard">
-      <div class="card-head">
-        <div class="eyebrow"><i data-ic="image"></i><span id="photoTitle"></span></div>
-        <span class="meta" id="photoCount"></span>
+    <p class="blank" id="recEmpty"></p>
+    <article class="card hidden" id="card">
+      <div class="stage cover">
+        <img class="ph on" id="recCover" alt="">
+        <a class="credit" id="recCredit" target="_blank" rel="noopener"></a>
       </div>
-      <p class="small" id="photoHelp"></p>
-      <div class="photos" id="photos"></div>
-      <label class="btn primary block" for="photoInput" id="photoBtn" role="button" tabindex="0"><i data-ic="camera"></i><span id="photoBtnL"></span></label>
-      <input type="file" id="photoInput" accept="image/*" multiple class="hidden">
-      <p class="status" id="photoStatus" role="status"></p>
+      <h2 class="place" id="recTitle"></h2>
+      <p class="card-date" id="recDate"></p>
+      <p class="card-fact" id="recFact"></p>
+      <div class="map" id="recMap"></div>
+      <ol class="places" id="recPlaces"></ol>
+      <button class="btn primary" id="saveCard" type="button"></button>
+      <p class="keep" id="keepNote"></p>
     </article>
-    <p class="keep hidden" id="keepNote"><i data-ic="lock"></i><span id="keepNoteL"></span></p>
+  </section>
+
+  <section class="problem hidden" id="problem">
+    <h2 id="problemTitle"></h2>
+    <p id="problemText"></p>
+    <a class="btn" href="/" id="problemBtn"></a>
   </section>
 </div>
 
-<nav class="tabs" role="tablist">
-  <button data-tab="now" class="on" id="tNow" type="button" role="tab" aria-selected="true"><span class="tab-ic"><i data-ic="speaker"></i></span><span id="tNowL">지금</span><span class="badge hidden"></span></button>
-  <button data-tab="pick" id="tPick" type="button" role="tab" aria-selected="false"><span class="tab-ic"><i data-ic="pin"></i></span><span id="tPickL">장소 고르기</span></button>
-  <button data-tab="record" id="tRecord" type="button" role="tab" aria-selected="false"><span class="tab-ic"><i data-ic="route"></i></span><span id="tRecordL">기록</span></button>
+<nav class="tabs" id="tabs" role="tablist">
+  <button data-tab="now" class="on" id="tNow" type="button" role="tab" aria-selected="true"><i data-ic="speaker"></i><span id="tNowL"></span><span class="badge hidden"></span></button>
+  <button data-tab="pick" id="tPick" type="button" role="tab" aria-selected="false"><i data-ic="pin"></i><span id="tPickL"></span></button>
+  <button data-tab="record" id="tRecord" type="button" role="tab" aria-selected="false"><i data-ic="route"></i><span id="tRecordL"></span></button>
 </nav>
 
-<div class="toast" id="toast" role="status" aria-live="polite"><i data-ic="info"></i><span id="toastText"></span><span class="toast-act" id="toastAct"></span></div>
+<div class="toast" id="toast" role="status" aria-live="polite"><span id="toastText"></span><span class="toast-act" id="toastAct"></span></div>
 
-<!-- 처음 들어왔을 때 하는 일 안내와 이름 적기. 나중에는 머리 줄 이름 단추로 이름만 바꿈 -->
 <div class="sheet-wrap hidden" id="sheet">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <span class="mark" aria-hidden="true"><svg viewBox="33 27 49 49" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"><path d="M47.52 64.8H58.68C62.28 64.8 64.44 62.28 64.44 59.22C64.44 55.98 62.1 53.64 59.04 53.64H48.96C45.9 53.64 43.56 51.3 43.56 48.24C43.56 45.18 45.72 43.2 48.96 43.2H60.48"/><circle cx="43.2" cy="64.8" r="4.32"/><circle cx="64.8" cy="43.2" r="4.32"/><circle cx="73.5" cy="34.5" r="4.6" fill="#00AAD2" stroke="none"/></svg></span>
-      <h2 id="sheetTitle"></h2>
-      <button class="chip-btn" id="sheetLang" type="button" lang="en"><i data-ic="globe"></i><span id="sheetLangL">English</span></button>
-    </div>
-    <div id="introPart">
-      <p class="lead" id="introLead"></p>
-      <ul class="intro-list" id="introList"></ul>
-    </div>
-    <div class="field">
-      <label for="me" id="meLabel"></label>
-      <input type="text" id="me" maxlength="20" autocomplete="nickname" enterkeyhint="done" placeholder="예: 민지">
-      <p class="note" id="meHint"></p>
-    </div>
-    <div class="sheet-foot">
-      <button class="btn primary block" id="introOk" type="button"></button>
-    </div>
+    <h2 id="sheetTitle"></h2>
+    <input type="text" id="me" maxlength="20" autocomplete="nickname" enterkeyhint="done" aria-labelledby="sheetTitle">
+    <p class="hint" id="meHint"></p>
+    <button class="btn primary" id="sheetOk" type="button"></button>
   </div>
 </div>
 
-<script src="/vendor/three.min.js" defer></script>
 <script src="/vendor/leaflet.js" defer></script>
-<script src="/js/viewer.js" defer></script>
 <script src="/js/app.js" defer></script>
 </body>
 </html>

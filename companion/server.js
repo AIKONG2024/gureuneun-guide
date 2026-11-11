@@ -1,8 +1,8 @@
 // 구르는 가이드 여행 그룹 서버
 // 차 앱과 동승자 휴대폰(웹)을 네 자리 그룹 번호로 묶는다.
-//  - 차 → 휴대폰: 이야기(시작, 읽는 문장, 끝), 지난 명소, 퀴즈, 별과 보물 상자, 아이 이야기, 차에 말로 물어본 것과 답
+//  - 차 → 휴대폰: 이야기(시작, 읽는 문장, 끝), 아이 이야기, 지난 명소, 퀴즈와 별, 차에 말로 물어본 것의 답
 //  - 휴대폰 → 차: 고른 장소(운전자가 확인), 퀴즈 답(채점은 서버가 함)
-//  - 여행 뒤: 차가 올린 기록(지나온 길, 명소를 지난 시각)과 휴대폰이 올린 사진
+//  - 여행 뒤: 차가 올린 기록(지나온 길, 지난 명소)
 // 차의 실시간 위치는 받지 않는다.
 import http from 'node:http';
 import fs from 'node:fs';
@@ -10,7 +10,6 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import zlib from 'node:zlib';
-import { spawn } from 'node:child_process';
 import { pipeline } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
@@ -18,6 +17,7 @@ import { WebSocketServer } from 'ws';
 const PORT = Number(process.env.PORT || 8787);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB = path.join(HERE, 'web');
+const PHOTOS = path.join(WEB, 'photos');
 const SCENARIOS = path.join(HERE, '..', 'app', 'src', 'main', 'assets', 'scenarios');
 // 시험할 때는 DATA_DIR 로 임시 폴더를 줘서 실제 data 폴더를 건드리지 않음
 const DATA = path.resolve(process.env.DATA_DIR || path.join(HERE, 'data'));
@@ -29,9 +29,6 @@ function lanIp() {
   return '127.0.0.1';
 }
 const PUBLIC_BASE = process.env.PUBLIC_BASE || ('http://' + lanIp() + ':' + PORT);
-const CLIPS = path.join(WEB, 'clips');
-// 개발용 영상 클립 만들기 API. RENDER=1 로 켰을 때, 이 컴퓨터에서 바로 온 요청만 받음
-const RENDER = process.env.RENDER === '1';
 const CODE_RE = /^\d{4}$/;
 // 끝난 그룹은 KEEP_DAYS(기본 3일) 뒤 폴더째 지움. 0 이나 off 면 지우지 않음
 const KEEP_DAYS = process.env.KEEP_DAYS === undefined || process.env.KEEP_DAYS === '' ? 3 : (Number(process.env.KEEP_DAYS) > 0 ? Number(process.env.KEEP_DAYS) : 0);
@@ -118,6 +115,34 @@ function scenarioEntry(id) {
   } catch (e) { console.warn('[scenario]', id, e.message); return null; }
 }
 
+// 명소 사진 목록: web/photos 의 '<명소id>_<번호>.jpg', 밤 사진은 '<명소id>_night_<번호>.jpg'.
+// 찍은 사람과 라이선스(credits.json)를 함께 줌. 폴더가 바뀌면 다시 읽음
+let photoCache = null;
+function photoIndex() {
+  const creditFile = path.join(PHOTOS, 'credits.json');
+  let stamp = '';
+  try { stamp = fs.statSync(PHOTOS).mtimeMs + ':' + (fs.existsSync(creditFile) ? fs.statSync(creditFile).mtimeMs : 0); } catch { return '{"places":{},"credits":{}}'; }
+  if (photoCache && photoCache.stamp === stamp) return photoCache.body;
+  const places = {}, credits = {};
+  const found = [];
+  for (const name of fs.readdirSync(PHOTOS)) {
+    const m = /^([a-z0-9_]+?)(_night)?_(\d+)\.jpg$/.exec(name);
+    if (m) found.push({ id: m[1], night: !!m[2], n: Number(m[3]), name });
+  }
+  found.sort((a, b) => a.n - b.n);
+  for (const f of found) {
+    const p = places[f.id] || (places[f.id] = { day: [], night: [] });
+    (f.night ? p.night : p.day).push(f.name);
+  }
+  try {
+    for (const c of JSON.parse(fs.readFileSync(creditFile, 'utf8'))) {
+      if (c && typeof c.file === 'string') credits[c.file] = { title: txt(c.title, 200), author: txt(c.author, 120), license: txt(c.license, 60), license_url: txt(c.license_url, 300), source: txt(c.source, 300) };
+    }
+  } catch {}
+  photoCache = { stamp, body: JSON.stringify({ places, credits }) };
+  return photoCache.body;
+}
+
 /** code -> group */
 const groups = new Map();
 
@@ -137,12 +162,12 @@ function makeGroup(code, scenarioId, lang) {
     phoneKey: newKey(), carSlots: [],
     cars: new Map(), phones: new Set(),
     story: null, line: null, passes: [], picks: [], acks: [], said: [],
-    record: null, photos: [], ended: false,
-    quizzes: {}, answers: [], qa: [], treasure: null, stars: null,
+    record: null, ended: false,
+    quizzes: {}, answers: [], qa: [], stars: null,
     pids: [], pidSet: new Set(),
   };
   groups.set(code, g);
-  fs.mkdirSync(path.join(dir, 'photos'), { recursive: true });
+  fs.mkdirSync(dir, { recursive: true });
   return g;
 }
 
@@ -167,7 +192,7 @@ function carCredentials(g, slot) {
 }
 
 // who: { role: 'car' | 'phone', level: 'full' | 'basic', pid }
-// 번호만 넣고 들어온 휴대폰(basic)에는 지나온 길·사진·차에 물어본 것을 주지 않음
+// 번호만 넣고 들어온 휴대폰(basic)에는 지나온 길과 차에 물어본 것을 주지 않음
 function summary(g, who = {}) {
   const full = who.role === 'car' || who.level === 'full';
   const s = {
@@ -177,10 +202,10 @@ function summary(g, who = {}) {
     // 차가 둘이면 휴대폰은 QR 의 car=N 으로 자기 차 이야기만 따름. 다시 붙을 때 차마다 마지막 이야기를 그리게 함께 줌
     stories: Object.values(g.storyBy || {}), lines: Object.values(g.lineBy || {}).filter(Boolean),
     quizzes: Object.values(g.quizzes).map(publicQuiz), answers: g.answers.map(a => publicAnswer(g, a, who.pid)),
-    treasure: g.treasure, stars: g.stars,
-    keepDays: KEEP_DAYS,   // 휴대폰의 '여행이 끝나고 N일 뒤 지워져요' 안내에 씀 (0 이면 지우지 않음)
+    stars: g.stars,
+    keepDays: KEEP_DAYS,   // 휴대폰의 'N일 뒤 지워져요' 안내에 씀 (0 이면 지우지 않음)
   };
-  if (full) Object.assign(s, { record: g.record, photos: g.photos, qa: g.qa.slice(-20), scores: scores(g) });
+  if (full) Object.assign(s, { record: g.record, qa: g.qa.slice(-20) });
   return s;
 }
 
@@ -201,19 +226,12 @@ function publicAnswer(g, a, pid) {
   return o;
 }
 
-// 이름별 맞힌 개수
-function scores(g) {
-  const s = {};
-  for (const a of g.answers) if (a.correct) s[a.by] = (s[a.by] || 0) + 1;
-  return s;
-}
-
 // 서버를 다시 켜도 여행 그룹이 이어지도록 디스크에 저장해 둔다
 const saveTimers = new Map();
 function writeGroup(g) {
-  // group.json 은 /media 로 열리지 않는 곳에만 둠 (퀴즈 정답과 키가 들어 있음)
+  // group.json 에는 퀴즈 정답과 키가 들어 있음. 자료 폴더는 웹으로 열리지 않음
   if (groups.get(g.code) !== g) return;   // 그사이 지운 그룹은 다시 쓰지 않음
-  const keep = { code: g.code, scenarioId: g.scenarioId, lang: g.lang, createdAt: g.createdAt, phoneKey: g.phoneKey, carSlots: g.carSlots, story: g.story, storyBy: g.storyBy, passes: g.passes, picks: g.picks, acks: g.acks, record: g.record, photos: g.photos, ended: g.ended, endedAt: g.endedAt, quizzes: g.quizzes, answers: g.answers, qa: g.qa, treasure: g.treasure, stars: g.stars, pids: g.pids };
+  const keep = { code: g.code, scenarioId: g.scenarioId, lang: g.lang, createdAt: g.createdAt, phoneKey: g.phoneKey, carSlots: g.carSlots, story: g.story, storyBy: g.storyBy, passes: g.passes, picks: g.picks, acks: g.acks, record: g.record, ended: g.ended, endedAt: g.endedAt, quizzes: g.quizzes, answers: g.answers, qa: g.qa, stars: g.stars, pids: g.pids };
   try {
     const f = path.join(DATA, g.code, 'group.json');
     fs.writeFileSync(f + '.tmp', JSON.stringify(keep));
@@ -235,7 +253,8 @@ function restoreGroups() {
       const g = makeGroup(code, s.scenarioId, s.lang);
       Object.assign(g, s, { cars: new Map(), phones: new Set() });
       // 예전 그룹 파일에 남아 있을 수 있는 값(지금은 없는 기능)은 버림
-      for (const old of ['reports', 'highlight', 'handoff']) delete g[old];
+      for (const old of ['reports', 'highlight', 'handoff', 'photos', 'treasure']) delete g[old];
+      if (g.stars) g.stars = { stars: Number(g.stars.stars) || 0, total: Number(g.stars.total) || 0, by: String(g.stars.by || ''), at: g.stars.at, car: g.stars.car, carNo: g.stars.carNo };
       g.pids = Array.isArray(g.pids) ? g.pids : [];
       g.pidSet = new Set(g.pids);
       if (!Array.isArray(g.carSlots)) g.carSlots = [];
@@ -250,7 +269,7 @@ restoreGroups();
 
 const markEnded = g => { g.ended = true; g.endedAt = Date.now(); };
 
-// 끝난 지 KEEP_DAYS 가 지난 그룹은 폴더째(사진, 기록) 지움. 차가 붙어 있으면 미룸
+// 끝난 지 KEEP_DAYS 가 지난 그룹은 폴더째 지움. 차가 붙어 있으면 미룸
 function sweepOld() {
   if (!(KEEP_DAYS > 0)) return;
   const limit = KEEP_DAYS * 24 * 3600 * 1000, now = Date.now();
@@ -272,7 +291,7 @@ function send(ws, obj) {
   try { if (ws.readyState === 1) ws.send(JSON.stringify(obj)); } catch {}
 }
 
-// full: QR(휴대폰 키)로 들어온 휴대폰에만 보냄 (사진, 지나온 길, 물어본 것)
+// full: QR(휴대폰 키)로 들어온 휴대폰에만 보냄 (지나온 길, 물어본 것)
 function broadcast(g, obj, { cars = true, phones = true, except = null, full = false } = {}) {
   persist(g);
   if (cars) for (const c of g.cars.values()) if (c.ws !== except) send(c.ws, obj);
@@ -284,33 +303,12 @@ function members(g) {
 }
 
 // ---------------------------------------------------------------- HTTP
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.mp4': 'video/mp4', '.svg': 'image/svg+xml', '.txt': 'text/plain; charset=utf-8', '.webp': 'image/webp', '.woff2': 'font/woff2', '.woff': 'font/woff' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.txt': 'text/plain; charset=utf-8', '.webp': 'image/webp', '.woff2': 'font/woff2', '.woff': 'font/woff' };
 
 function json(res, code, obj) {
   // CORS 머리글은 두지 않음 (휴대폰 페이지는 같은 주소, 차는 OkHttp 라 필요 없음)
   res.writeHead(code, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(obj));
-}
-
-// Range 머리글은 한 구간만 받음. 틀렸거나 파일 밖이면 null(416), 여러 구간이면 'all'(통째로 보냄)
-function parseRange(header, size) {
-  const s = String(header).trim();
-  if (s.includes(',')) return 'all';
-  const m = /^bytes=(\d*)-(\d*)$/.exec(s);
-  if (!m || (m[1] === '' && m[2] === '') || size <= 0) return null;
-  let start, end;
-  if (m[1] === '') {
-    const n = Number(m[2]);
-    if (!Number.isSafeInteger(n) || n <= 0) return null;
-    start = Math.max(0, size - n);
-    end = size - 1;
-  } else {
-    start = Number(m[1]);
-    end = m[2] === '' ? size - 1 : Number(m[2]);
-    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)) return null;
-    end = Math.min(end, size - 1);
-  }
-  return start <= end && start < size ? { start, end } : null;
 }
 
 const gzCache = new Map();   // 웹 폴더 글자 파일의 gzip 결과 (파일이 바뀌면 다시 만듦)
@@ -319,27 +317,18 @@ function serveFile(res, file, req) {
     try {
       if (err || !st.isFile()) { res.writeHead(404); return res.end('not found'); }
       const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
-      const range = req && req.headers.range;
-      if (range && type.startsWith('video/')) {
-        const r = parseRange(range, st.size);
-        if (!r) { res.writeHead(416, { 'Content-Range': 'bytes */' + st.size }); return res.end(); }
-        if (r !== 'all') {
-          res.writeHead(206, { 'Content-Type': type, 'Content-Range': 'bytes ' + r.start + '-' + r.end + '/' + st.size, 'Accept-Ranges': 'bytes', 'Content-Length': r.end - r.start + 1 });
-          return pipeline(fs.createReadStream(file, { start: r.start, end: r.end }), res, () => {});
-        }
-      }
-      // 한 번 받은 파일은 다시 받지 않게(304). 3D·지도 라이브러리, 클립, 포스터는 1시간 동안 그대로 씀
+      // 한 번 받은 파일은 다시 받지 않게(304). 글꼴·지도 라이브러리와 명소 사진은 1시간 동안 그대로 씀
       const lastMod = st.mtime.toUTCString();
-      const cache = file.startsWith(DATA + path.sep) ? 'private, no-cache' : /[\\/](vendor|clips|posters)[\\/]/.test(file) ? 'public, max-age=3600' : 'no-cache';
-      if (req && !range && req.headers['if-modified-since'] === lastMod) { res.writeHead(304, { 'Last-Modified': lastMod, 'Cache-Control': cache }); return res.end(); }
-      // 글자 파일은 gzip 으로 보냄 (three.min.js 650KB → 약 160KB)
+      const cache = /[\\/](vendor|photos)[\\/]/.test(file) && !file.endsWith('.json') ? 'public, max-age=3600' : 'no-cache';
+      if (req && req.headers['if-modified-since'] === lastMod) { res.writeHead(304, { 'Last-Modified': lastMod, 'Cache-Control': cache }); return res.end(); }
+      // 글자 파일은 gzip 으로 보냄
       if (req && st.size > 1024 && /^(text\/|application\/json|image\/svg)/.test(type) && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
         let hit = gzCache.get(file);
         if (!hit || hit.mtimeMs !== st.mtimeMs) { hit = { mtimeMs: st.mtimeMs, body: zlib.gzipSync(fs.readFileSync(file)) }; gzCache.set(file, hit); }
         res.writeHead(200, { 'Content-Type': type, 'Content-Encoding': 'gzip', 'Content-Length': hit.body.length, 'Cache-Control': cache, 'Last-Modified': lastMod, 'Vary': 'Accept-Encoding' });
         return res.end(req.method === 'HEAD' ? undefined : hit.body);
       }
-      res.writeHead(200, { 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': cache, 'Last-Modified': lastMod, 'Accept-Ranges': type.startsWith('video/') ? 'bytes' : 'none' });
+      res.writeHead(200, { 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': cache, 'Last-Modified': lastMod });
       if (req && req.method === 'HEAD') return res.end();
       pipeline(fs.createReadStream(file), res, () => {});
     } catch (e) {
@@ -393,37 +382,6 @@ function failRequest(req, res, e) {
   req.once('close', () => clearTimeout(t));
 }
 
-/** JPEG 에서 EXIF(GPS·기기 정보)·XMP·IPTC·주석 조각을 뺌. 휴대폰이 다시 그려 보내 이미 없지만 한 번 더 */
-function stripJpegMeta(buf) {
-  if (buf[0] !== 0xff || buf[1] !== 0xd8) return buf;
-  const parts = [buf.subarray(0, 2)];
-  let i = 2;
-  while (i + 4 <= buf.length && buf[i] === 0xff) {
-    const marker = buf[i + 1];
-    if (marker === 0xff) { i += 1; continue; }
-    if (marker === 0xda) break;   // 여기부터 그림 데이터
-    const len = buf.readUInt16BE(i + 2);
-    if (len < 2 || i + 2 + len > buf.length) return buf;
-    const drop = marker === 0xe1 || (marker >= 0xe3 && marker <= 0xed) || marker === 0xef || marker === 0xfe;
-    if (!drop) parts.push(buf.subarray(i, i + 2 + len));
-    i += 2 + len;
-  }
-  parts.push(buf.subarray(i));
-  return Buffer.concat(parts);
-}
-
-/** 바깥 명령을 돌리고 끝나기를 기다림 (개발용 클립 만들기 /api/render/done 의 ffmpeg) */
-function run(cmd, args) {
-  return new Promise((resolve, reject) => {
-    const p = spawn(cmd, args);
-    let out = '', err = '';
-    p.stdout.on('data', d => out += d);
-    p.stderr.on('data', d => err += d);
-    p.on('close', code => code === 0 ? resolve(out) : reject(new Error(cmd + ' failed: ' + err.slice(-400))));
-    p.on('error', reject);
-  });
-}
-
 const server = http.createServer(async (req, res) => {
   try {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -434,42 +392,11 @@ const server = http.createServer(async (req, res) => {
     if (p.includes('\0')) return json(res, 400, { error: 'bad url' });
     if (req.method === 'OPTIONS') { res.writeHead(204, { Allow: 'GET, HEAD, POST' }); return res.end(); }
 
-    if (p === '/api/info') return json(res, 200, { ok: true, version: 2, publicBase: PUBLIC_BASE });
+    if (p === '/api/info') return json(res, 200, { ok: true, version: 3, publicBase: PUBLIC_BASE });
 
-    // 개발용: 3D 장면 프레임을 받아 MP4 클립으로 만든다 (web/clips 에 저장되어 휴대폰이 씀)
-    // 예전에는 누구나 start 값으로 서버 밖에 파일을 쓰고 web/clips 를 덮어쓸 수 있었음
-    if (p.startsWith('/api/render/')) {
-      if (!RENDER || !directLocal(req) || req.method !== 'POST') return json(res, 404, { error: 'not found' });
-      const body = await readJson(req, 40 * 1024 * 1024);
-      const name = String(body.name || '').replace(/[^\w]/g, '').slice(0, 60);
-      const dir = name && inside(path.join(DATA, 'render'), name);
-      if (!dir) return json(res, 400, { error: 'bad name' });
-      if (p === '/api/render/start') {
-        fs.rmSync(dir, { recursive: true, force: true });
-        fs.mkdirSync(dir, { recursive: true });
-        return json(res, 200, { ok: true });
-      }
-      if (p === '/api/render/frames') {
-        const start = Number(body.start);
-        if (!Number.isInteger(start) || start < 0 || start > 99999 || !Array.isArray(body.frames) || body.frames.length > 120) return json(res, 400, { error: 'bad frames' });
-        fs.mkdirSync(dir, { recursive: true });
-        for (let k = 0; k < body.frames.length; k++) {
-          const f = inside(dir, String(start + k).padStart(5, '0') + '.jpg');
-          if (!f) return json(res, 400, { error: 'bad frames' });
-          fs.writeFileSync(f, Buffer.from(String(body.frames[k]).replace(/^data:image\/jpeg;base64,/, ''), 'base64'));
-        }
-        return json(res, 200, { ok: true });
-      }
-      if (p === '/api/render/done') {
-        const fps = Number.isInteger(Number(body.fps)) ? Math.min(60, Math.max(1, Number(body.fps))) : 30;
-        fs.mkdirSync(CLIPS, { recursive: true });
-        const out = inside(CLIPS, name + '.mp4');
-        if (!out) return json(res, 400, { error: 'bad name' });
-        await run('ffmpeg', ['-y', '-protocol_whitelist', 'file', '-framerate', String(fps), '-i', path.join(dir, '%05d.jpg'), '-c:v', 'libx264', '-preset', 'slow', '-crf', '26', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', out]);
-        fs.rmSync(dir, { recursive: true, force: true });
-        return json(res, 200, { ok: true, file: '/clips/' + name + '.mp4', bytes: fs.statSync(out).size });
-      }
-      return json(res, 404, { error: 'not found' });
+    if (p === '/api/photos' && (req.method === 'GET' || req.method === 'HEAD')) {
+      res.writeHead(200, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-cache' });
+      return res.end(req.method === 'HEAD' ? undefined : photoIndex());
     }
 
     if (p === '/api/groups' && req.method === 'POST') {
@@ -518,7 +445,6 @@ const server = http.createServer(async (req, res) => {
         lookupOk(ip, m[1]);
       }
       const who = slot ? { role: 'car' } : { role: 'phone', level: keyOk || trusted ? 'full' : 'basic' };
-      const full = !!slot || who.level === 'full';
       if (!sub && (req.method === 'GET' || req.method === 'HEAD')) {
         return json(res, 200, Object.assign(summary(g, who), slot ? { carNo: slot.no, carName: slot.name, joinUrl: joinUrlFor(g, slot.no), recordUrl: recordUrlFor(g, slot.no) } : {}));
       }
@@ -529,30 +455,9 @@ const server = http.createServer(async (req, res) => {
         broadcast(g, { type: 'record', record: g.record }, { full: true });
         return json(res, 200, { ok: true });
       }
-      if (sub === '/photos' && !full) return failRequest(req, res, httpError(403, 'qr needed'));
-      if (sub === '/photos' && req.method === 'POST') {
-        if (g.photos.length >= 300) return failRequest(req, res, httpError(409, 'too many photos'));
-        const body = await readJson(req, 12 * 1024 * 1024);
-        const mm = /^data:image\/(jpeg|jpg|png|webp);base64,(.+)$/.exec(body.dataUrl || '');
-        if (!mm) return json(res, 400, { error: 'bad image' });
-        const ext = mm[1] === 'png' ? 'png' : mm[1] === 'webp' ? 'webp' : 'jpg';
-        let bytes = Buffer.from(mm[2], 'base64');
-        // 이름표(data:image/png)만 보지 않고 파일 앞부분으로 진짜 그림인지 확인
-        const real = ext === 'png' ? bytes.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47])) : ext === 'webp' ? bytes.toString('latin1', 0, 4) === 'RIFF' && bytes.toString('latin1', 8, 12) === 'WEBP' : bytes[0] === 0xff && bytes[1] === 0xd8;
-        if (!real) return json(res, 400, { error: 'bad image' });
-        if (ext === 'jpg') bytes = stripJpegMeta(bytes);
-        const id = crypto.randomUUID().slice(0, 8);
-        fs.mkdirSync(path.join(DATA, g.code, 'photos'), { recursive: true });
-        fs.writeFileSync(path.join(DATA, g.code, 'photos', id + '.' + ext), bytes);
-        const photo = { id, url: '/media/' + g.code + '/photos/' + id + '.' + ext, takenAt: Number(body.takenAt) || Date.now(), by: txt(body.by, 20) };
-        g.photos.push(photo);
-        g.photos.sort((a, b) => a.takenAt - b.takenAt);
-        broadcast(g, { type: 'photo', photo }, { cars: false, full: true });
-        return json(res, 200, photo);
-      }
       // 차가 실제로 읽은 문장과 시각 (시연 영상에 음성을 다시 입힐 때 씀). 차 키가 있어야 함
       if (sub === '/said' && req.method === 'GET') return slot || trusted ? json(res, 200, g.said || []) : json(res, 401, { error: 'car key required' });
-      // 모르는 주소(예전 휴대폰 화면이 보내는 올리기 포함)는 본문을 끝까지 받지 않고 404
+      // 모르는 주소는 본문을 끝까지 받지 않고 404
       return failRequest(req, res, httpError(404, 'unknown'));
     }
 
@@ -564,31 +469,14 @@ const server = http.createServer(async (req, res) => {
       return res.end(sc.body);
     }
 
-    // /media 는 올린 사진만 연다 (group.json 같은 다른 파일은 열지 않음)
-    m = p.match(/^\/media\/(\d{4})\/(photos\/[0-9a-f]{8}\.(?:jpg|png|webp))$/);
-    if (m) {
-      const g = groups.get(m[1]);
-      const dir = groupDir(m[1]);
-      const file = g && dir && inside(dir, m[2]);
-      if (!file) { res.writeHead(404); return res.end('not found'); }
-      // 사진은 QR(휴대폰 키)로 들어온 휴대폰과 차만 봄. <img> 는 머리글을 못 붙여 ?k= 로도 받음
-      const k = req.headers['x-group-key'] || url.searchParams.get('k');
-      if (!(k && sameKey(g.phoneKey, String(k))) && !carSlotByKey(g, req.headers['x-car-key']) && !localTrusted(req)) {
-        if (k) lookupLimit.take(clientIp(req));
-        res.writeHead(401); return res.end('key required');
-      }
-      return serveFile(res, file, req);
-    }
-    if (p.startsWith('/media/')) { res.writeHead(404); return res.end('not found'); }
-
     if (p === '/favicon.ico') { res.writeHead(204, { 'Cache-Control': 'public, max-age=86400' }); return res.end(); }
     if (p === '/' || p === '/index.html') return serveFile(res, path.join(WEB, 'index.html'), req);
     if (/^\/g\/\d{4}(\/record)?\/?$/.test(p)) return serveFile(res, path.join(WEB, 'group.html'), req);
 
-    // 웹 폴더 밖, 점(.)으로 시작하는 파일, RENDER 가 아닐 때의 렌더 페이지는 열지 않음
+    // 웹 폴더 밖과 점(.)으로 시작하는 파일은 열지 않음
     const rel = p.replace(/^\/+/, '');
     const file = rel && !rel.split('/').some(s => s.startsWith('.')) && inside(WEB, rel);
-    if (!file || (!RENDER && (rel === 'render.html' || rel === 'js/render-page.js'))) { res.writeHead(404); return res.end('not found'); }
+    if (!file) { res.writeHead(404); return res.end('not found'); }
     return serveFile(res, file, req);
   } catch (e) {
     if (e && e.status) return failRequest(req, res, e);
@@ -722,13 +610,15 @@ function onCarMessage(g, car, msg) {
   if (++car.winN > 120) return;   // 10초에 120개 넘게 보내면 버림
   const tag = o => Object.assign(o, { car: car.name, carNo: car.no });
   if (type === 'story') {
-    g.story = tag({ type, placeId: txt(msg.placeId, 60), name: txt(msg.name, 60), model: /^[a-z0-9_]{0,40}$/.test(msg.model || '') ? (msg.model || '') : '', kind: /^[a-z_]{1,16}$/.test(msg.kind || '') ? msg.kind : 'story', length: txt(msg.length, 12), lang: lang2(msg.lang, g.lang), text: txt(msg.text, 6000), rain: msg.rain === true, night: msg.night === true, color: txt(msg.color, 12), at: now, done: false });
+    g.story = tag({ type, placeId: txt(msg.placeId, 60), name: txt(msg.name, 60), kind: /^[a-z_]{1,16}$/.test(msg.kind || '') ? msg.kind : 'story', length: txt(msg.length, 12), lang: lang2(msg.lang, g.lang), text: txt(msg.text, 6000), rain: msg.rain === true, night: msg.night === true, color: txt(msg.color, 12), at: now, done: false });
     g.line = null;
     g.storyBy = g.storyBy || {}; g.lineBy = g.lineBy || {};
     g.storyBy[car.no] = g.story; g.lineBy[car.no] = null;
     broadcast(g, g.story, { cars: false });
   } else if (type === 'line') {
-    g.line = tag({ type, placeId: txt(msg.placeId, 60), index: int(msg.index, 0, 999, 0), at: now });
+    // 아이 이야기를 읽는 중이면 kid: true (문장 번호가 아이 이야기 안에서 다시 0부터 셈)
+    const placeId = txt(msg.placeId, 60), cur = g.storyBy && g.storyBy[car.no];
+    g.line = tag({ type, placeId, index: int(msg.index, 0, 999, 0), kid: !!(cur && cur.placeId === placeId && cur.kid), at: now });
     g.lineBy = g.lineBy || {}; g.lineBy[car.no] = g.line;
     broadcast(g, g.line, { cars: false });
   } else if (type === 'story_end') {
@@ -753,9 +643,9 @@ function onCarMessage(g, car, msg) {
     broadcast(g, ack, { except: car.ws });
   } else if (type === 'say') {
     capPush(g.said, { at: now, text: txt(msg.text, 600), lang: lang2(msg.lang, g.lang), kind: txt(msg.kind, 20), car: car.name, carNo: car.no }, MAX.said);
-  } else if (type === 'window' || type === 'trip_end') {
-    if (type === 'trip_end') markEnded(g);   // 기록을 올리지 않고 끝내도 보관 기간을 셈
-    broadcast(g, tag({ type, placeId: txt(msg.placeId, 60), open: msg.open !== false, at: now }), { cars: false });
+  } else if (type === 'trip_end') {
+    markEnded(g);   // 기록을 올리지 않고 끝내도 보관 기간을 셈
+    broadcast(g, tag({ type, at: now }), { cars: false });
   } else if (type === 'quiz') {
     // 차가 둘이면 같은 명소 퀴즈가 겹치지 않게 '차 번호:명소' 로 구분. 차에 돌려줄 때는 명소 id(placeId)로
     const placeId = txt(msg.id, 60), answer = msg.answer;
@@ -767,21 +657,22 @@ function onCarMessage(g, car, msg) {
     g.quizzes[id] = q;
     const ids = Object.keys(g.quizzes);
     if (ids.length > MAX.quizzes) delete g.quizzes[ids[0]];
-    broadcast(g, Object.assign({ type, stars: int(msg.stars, 0, 50, 0), need: int(msg.need, 0, 50, 0) }, publicQuiz(q)), { cars: false });
+    broadcast(g, Object.assign({ type, stars: int(msg.stars, 0, 50, 0), total: int(msg.total, 0, 50, 0) }, publicQuiz(q)), { cars: false });
   } else if (type === 'qa') {
     const item = tag({ q: txt(msg.q, 200), a: txt(msg.a, 1200), title: txt(msg.title, 60), placeId: txt(msg.placeId, 60), at: num(msg.at, now) });
     if (!item.a) return;
     capPush(g.qa, item, MAX.qa);
     broadcast(g, Object.assign({ type }, item), { cars: false, full: true });
-  } else if (type === 'treasure') {
-    g.treasure = tag({ stars: int(msg.stars, 0, 50, 0), unlocked: msg.unlocked === true, at: now });
-    broadcast(g, Object.assign({ type }, g.treasure), { cars: false });
   } else if (type === 'stars') {
-    g.stars = tag({ stars: int(msg.stars, 0, 50, 0), need: int(msg.need, 0, 50, 0), ready: msg.ready === true, by: txt(msg.by, 20), at: now });
+    g.stars = tag({ stars: int(msg.stars, 0, 50, 0), total: int(msg.total, 0, 50, 0), by: txt(msg.by, 20), at: now });
     broadcast(g, Object.assign({ type }, g.stars), { cars: false });
   } else if (type === 'kid') {
     const kid = tag({ type, placeId: txt(msg.placeId, 60), text: txt(msg.text, 800), at: now });
-    if (kid.text) broadcast(g, kid, { cars: false });
+    if (!kid.text) return;
+    // 나중에 들어온 휴대폰도 이어서 보게 그 차의 이야기에 붙여 둠
+    const cur = g.storyBy && g.storyBy[car.no];
+    if (cur && cur.placeId === kid.placeId) cur.kid = kid.text;
+    broadcast(g, kid, { cars: false });
   }
 }
 
