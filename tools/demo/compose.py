@@ -34,14 +34,13 @@ CARD = (23, 26, 32, 255)
 BRAND = (0, 44, 95, 255)
 REPO = 'github.com/AIKONG2024/gureuneun-guide'
 
-ORDER = ['gyeongju1', 'gyeongju2', 'jeju', 'record', 'seoul', 'care']
+ORDER = ['gyeongju1', 'gyeongju2', 'jeju', 'record', 'seoul']
 TITLES = {
     'gyeongju1': '장면 1. 경주, 가족 여행',
     'gyeongju2': '장면 1. 경주, 가족 여행',
     'jeju': '장면 2. 제주, 친구들의 렌터카 두 대',
     'record': '장면 2. 여행이 끝나면 남는 기록',
     'seoul': '장면 3. 서울, 외국인 손님을 태운 택시',
-    'care': '장면 4. 먼 길에서 차가 먼저 챙기는 것',
 }
 
 
