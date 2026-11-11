@@ -24,8 +24,7 @@ import app.gureuneun.guide.sdk.GLog
  * 내비 화면이 앞에 와서 이 앱이 뒤로 가도 이야기, 근접 알림, 차 상태 반응이 이어지게 함.
  * 시작, 알림 갱신, 중지는 GuideApp.tripActive(on, title) 로만 함.
  *
- * P 에서 화면이 꺼지면(시동을 끈 것으로 봄) 이야기를 멈춤으로 둠.
- * 다시 켰을 때 저절로 이어 말하지 않고, [계속] 버튼이나 운전대 재생 키를 기다림.
+ * P 에서 화면이 꺼지면(시동을 끈 것으로 봄) 이야기를 멈춰 두고, 다시 D 로 출발하면 다음 장부터 이어 감.
  * 프로세스가 죽으면 다시 띄우지 않음(START_NOT_STICKY). 이어 가기는 홈 화면의 [이어 가기]로.
  */
 class TripService : Service() {
@@ -82,8 +81,7 @@ class TripService : Service() {
                 // 달리는 중에 화면만 끈 것은 그대로 둠. P 로 확인됐을 때만 시동을 끈 것으로 봄
                 if (!app.vehicle.state.value.parked) return
                 GLog.i("Trip", "정차 중 화면 꺼짐: 이야기를 멈춤으로 둠")
-                app.engine.player.hold(TripEngine.HOLD_USER)
-                app.engine.sound.stopWaves()
+                app.engine.pauseForBreak()
             }
         }
         runCatching {

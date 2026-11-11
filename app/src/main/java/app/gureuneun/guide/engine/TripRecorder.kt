@@ -8,7 +8,7 @@ import org.json.JSONObject
 import java.io.File
 
 /**
- * 여행 기록: 지나온 길, 명소를 지난 시각, 들은 이야기, 고른 장소, 창문과 날씨 같은 순간.
+ * 여행 기록: 지나온 길, 명소를 지난 시각, 들은 이야기, 고른 장소.
  * 끝나면 앱 안에 JSON 으로 저장하고, 그룹 서버가 있으면 그룹 페이지로 올림.
  */
 class TripRecorder(private val context: Context) {

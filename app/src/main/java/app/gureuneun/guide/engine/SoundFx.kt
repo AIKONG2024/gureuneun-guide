@@ -8,7 +8,6 @@ import android.media.AudioManager
 import android.media.AudioTrack
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import app.gureuneun.guide.sdk.GLog
 import kotlin.concurrent.thread
 import kotlin.math.PI
@@ -20,8 +19,7 @@ import kotlin.math.sin
  * 효과음은 파일 없이 코드로 만들어 재생함.
  * 시작 전에 180ms 무음을 두어(선행 묵음 가이드) 첫소리가 잘리지 않게 함.
  * 소리 포커스를 받았을 때만 냄 (통화 중이거나 다른 앱이 포커스를 쥐고 있으면 건너뜀).
- * 짧은 신호음은 USAGE_ASSISTANCE_SONIFICATION, 파도 소리는 USAGE_MEDIA 로 냄.
- * 파도 소리는 포커스를 잃으면 멈추고, 잠깐 줄여 달라는 요청(CAN_DUCK)이면 소리를 줄였다가 되돌림.
+ * 신호음은 USAGE_ASSISTANCE_SONIFICATION 으로 냄.
  */
 class SoundFx(context: Context) {
 
@@ -31,26 +29,8 @@ class SoundFx(context: Context) {
         .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
         .build()
-    /** 시연용 파도 소리 (배경 음원) */
-    private val waveAttrs = AudioAttributes.Builder()
-        .setUsage(AudioAttributes.USAGE_MEDIA)
-        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-        .build()
     private val rate = 44_100
-    @Volatile private var wavesTrack: AudioTrack? = null
     private val focusHandler = Handler(Looper.getMainLooper())
-
-    private val wavesFocus = AudioManager.OnAudioFocusChangeListener { change ->
-        val t = wavesTrack ?: return@OnAudioFocusChangeListener
-        when (change) {
-            AudioManager.AUDIOFOCUS_LOSS, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                GLog.i("Fx", "소리 포커스를 잃어 파도 소리 멈춤")
-                stopWaves()
-            }
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> runCatching { t.setVolume(DUCK_VOLUME) }
-            AudioManager.AUDIOFOCUS_GAIN -> runCatching { t.setVolume(1f) }
-        }
-    }
 
     /** 포커스를 받았으면 그 요청을, 못 받았으면 null */
     private fun focus(attrs: AudioAttributes, listener: AudioManager.OnAudioFocusChangeListener): AudioFocusRequest? = runCatching {
@@ -139,63 +119,13 @@ class SoundFx(context: Context) {
     /** 퀴즈 정답, 별 하나 */
     fun star() = notes(doubleArrayOf(1318.51, 1567.98, 2093.0), 0.07, 5.0, 0.9, 0.38)
 
-    /** 보물 상자가 열릴 때 */
+    /** 오늘 퀴즈를 다 맞혔을 때 */
     fun fanfare() = notes(doubleArrayOf(523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5, 1318.51), 0.12, 2.2, 2.4, 0.45)
-
-    /** 시연용 파도 소리 (실차에서는 창문을 내리면 진짜 파도 소리가 들어옴) */
-    fun waves(seconds: Int = 18) {
-        stopWaves()
-        val total = rate * seconds
-        val buf = DoubleArray(total)
-        var brown = 0.0
-        var lp = 0.0
-        val rnd = java.util.Random(7)
-        for (i in 0 until total) {
-            brown = (brown + (rnd.nextDouble() * 2 - 1) * 0.02) * 0.998
-            lp += (brown - lp) * 0.08
-            val t = i.toDouble() / rate
-            val swell = 0.35 + 0.65 * (0.5 + 0.5 * sin(2 * PI * t / 6.5 - PI / 2))
-            val fade = min(1.0, t / 2.5) * min(1.0, (seconds - t) / 3.0)
-            buf[i] = lp * swell * fade
-        }
-        val samples = normalize(buf, 0.5)
-        thread(name = "waves") {
-            val req = focus(waveAttrs, wavesFocus) ?: return@thread
-            runCatching {
-                val t = track(waveAttrs, samples)
-                wavesTrack = t
-                t.write(samples, 0, samples.size)
-                t.play()
-                // 끝까지 기다리되, stopWaves 나 포커스를 잃어 멈추면 바로 나와 포커스를 돌려줌
-                val until = SystemClock.uptimeMillis() + seconds * 1000L + 200
-                while (wavesTrack === t && SystemClock.uptimeMillis() < until) Thread.sleep(100)
-                if (wavesTrack === t) {
-                    wavesTrack = null
-                    runCatching { t.release() }
-                }
-            }.onFailure { GLog.w("Fx", "파도 소리 재생 실패", it) }
-            runCatching { audioManager.abandonAudioFocusRequest(req) }
-        }
-    }
-
-    fun stopWaves() {
-        val t = wavesTrack ?: return
-        wavesTrack = null
-        runCatching {
-            t.stop()
-            t.release()
-        }
-    }
 
     private fun normalize(buf: DoubleArray, peak: Double): ShortArray {
         var max = 1e-9
         buf.forEach { if (kotlin.math.abs(it) > max) max = kotlin.math.abs(it) }
         val k = peak / max * Short.MAX_VALUE
         return ShortArray(buf.size) { (buf[it] * k).toInt().coerceIn(-32767, 32767).toShort() }
-    }
-
-    private companion object {
-        /** 다른 소리가 잠깐 줄여 달라고 할 때 파도 소리 크기 */
-        const val DUCK_VOLUME = 0.3f
     }
 }

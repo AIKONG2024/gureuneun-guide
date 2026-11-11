@@ -8,44 +8,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** 창문 눈금 환산과 닫힘 값, 기어 판정, 되돌리기 값 (안드로이드 없이) */
+/** 기어 판정, 조명 색 비교, 주행 규제 판정 (안드로이드 없이) */
 class VehicleMathTest {
-
-    @Test
-    fun windowStepsOnPercentRange() {
-        // 엔진은 앞 창문을 2 로 엶: 범위 0..100 이면 20
-        assertEquals(20, VehicleMath.windowValue(2, 0, 100))
-        assertEquals(0, VehicleMath.windowValue(0, 0, 100))
-        assertEquals(100, VehicleMath.windowValue(10, 0, 100))
-        // 눈금 밖은 끝으로 맞춤
-        assertEquals(100, VehicleMath.windowValue(15, 0, 100))
-        assertEquals(0, VehicleMath.windowValue(-3, 0, 100))
-    }
-
-    @Test
-    fun openCloseOnlyWindowOpensAtAnyStep() {
-        assertEquals(1, VehicleMath.windowValue(2, 0, 1))
-        assertEquals(0, VehicleMath.windowValue(0, 0, 1))
-    }
-
-    @Test
-    fun negativeRangeClosesAtZeroNotAtMin() {
-        // 최소값이 음수인 차: 닫힘은 0
-        assertEquals(0, VehicleMath.closedValue(-10, 10))
-        assertEquals(0, VehicleMath.windowValue(0, -10, 10))
-        assertEquals(2, VehicleMath.windowValue(2, -10, 10))
-        assertEquals(10, VehicleMath.windowValue(10, -10, 10))
-    }
-
-    @Test
-    fun rangeWithoutZeroUsesNearestEndAsClosed() {
-        assertEquals(5, VehicleMath.closedValue(5, 20))
-        assertEquals(5, VehicleMath.windowValue(0, 5, 20))
-        assertEquals(8, VehicleMath.windowValue(2, 5, 20))
-        assertEquals(20, VehicleMath.windowValue(10, 5, 20))
-        // 잘못된 범위는 움직이지 않는 값으로
-        assertEquals(3, VehicleMath.windowValue(5, 3, 3))
-    }
 
     @Test
     fun gearLetters() {
@@ -68,13 +32,6 @@ class VehicleMathTest {
         assertTrue(VehicleBridge.State(gear = "P").parked)
         // 기어를 못 받은 처음 상태는 정차가 아님
         assertFalse(VehicleBridge.State().parked)
-    }
-
-    @Test
-    fun unknownGloveStateRestoresToLocked() {
-        assertTrue(VehicleMath.gloveRestoreTarget(null))
-        assertTrue(VehicleMath.gloveRestoreTarget(true))
-        assertFalse(VehicleMath.gloveRestoreTarget(false))
     }
 
     @Test

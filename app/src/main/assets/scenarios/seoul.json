@@ -19,17 +19,18 @@
     126.94345
   ],
   "destination": "assembly",
+  "cover": "building63_1",
   "waypoints": [
     "building63",
     "hangang"
   ],
   "greeting": {
-    "ko": "어서 오세요. 오늘은 한강의 섬, 여의도를 한 바퀴 돌아요. 지나갈 곳은 {places}예요. 안전벨트를 매면 출발할게요.",
-    "en": "Welcome aboard. Today we'll drive around Yeouido, an island in the Han River. On the way we'll pass {places}. Please fasten your seatbelts and we'll get going."
+    "ko": "어서 오세요. 오늘은 한강의 섬, 여의도를 한 바퀴 돌아요. 지나갈 곳은 {places}예요.",
+    "en": "Welcome aboard. Today we'll drive around Yeouido, an island in the Han River. On the way we'll pass {places}."
   },
   "departure": {
-    "ko": "고마워요. 출발할게요!",
-    "en": "Thank you. Off we go!"
+    "ko": "출발할게요!",
+    "en": "Off we go!"
   },
   "chapter": {
     "ko": "다시 출발해요. 다음은 {next}예요.",
@@ -56,10 +57,6 @@
      "fact": {"ko": "파크원 타워예요. 서울국제금융센터와 함께 마포대교 남쪽에 서 있어요.", "en": "Those are the Parc.1 towers. They stand south of Mapo Bridge along with IFC Seoul."},
      "source": "위키백과 마포대교"}
   ],
-  "quiz": {
-    "building63": {"q": {"ko": "63빌딩의 63은 무슨 뜻일까요?", "en": "What does 63 mean in the 63 Building?"}, "choices": {"ko": ["땅 위 60층과 땅 밑 3층을 더한 수", "지은 해", "엘리베이터 수"], "en": ["60 floors up plus 3 below", "The year it was built", "Number of elevators"]}, "answer": 0},
-    "assembly": {"q": {"ko": "국회의사당을 둘러싼 기둥은 몇 개일까요?", "en": "How many columns surround the National Assembly building?"}, "choices": {"ko": ["24개", "6개", "100개"], "en": ["24", "6", "100"]}, "answer": 0}
-  },
   "places": [
     {
       "id": "yeouido",
@@ -72,7 +69,6 @@
       "lon": 126.925,
       "radius": 1700,
       "color": "#FFD166",
-      "model": "riverpark",
       "story": {
         "en": {
           "short": "Welcome to Yeouido, an island in the middle of the Han River.",
@@ -106,7 +102,6 @@
       "lon": 126.94025,
       "radius": 380,
       "color": "#FFC94D",
-      "model": "building63",
       "announce": {
         "ko": "{side}에 보이는 금빛 건물이 63빌딩이에요.",
         "en": "{Side} is the 63 Building."
@@ -144,7 +139,6 @@
       "lon": 126.93606,
       "radius": 400,
       "color": "#4FC3F7",
-      "model": "riverpark",
       "announce": {
         "ko": "{side}이 여의도 한강공원이에요.",
         "en": "{Side} is Yeouido Hangang Park."
@@ -182,7 +176,6 @@
       "lon": 126.91412,
       "radius": 380,
       "color": "#9FD3A6",
-      "model": "assembly",
       "stop": true,
       "announce": {
         "ko": "{side}에 보이는 건물이 국회의사당이에요. 오늘의 마지막 장소예요.",
@@ -215,6 +208,7 @@
     {
       "id": "thehyundai",
       "kind": "landmark",
+      "photo": "parc1",
       "name": {
         "ko": "더현대 서울",
         "en": "The Hyundai Seoul"

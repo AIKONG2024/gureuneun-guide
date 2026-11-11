@@ -57,6 +57,9 @@ class GuideApp : Application() {
     @Volatile private var tripOn = false
     private var tripTitle: String? = null
 
+    /** 우리 화면이 지금 앞에 보이는지. 내비게이션에 길을 넣은 뒤 화면을 되찾을지 정할 때 봄 */
+    @Volatile var inFront = false
+
     /** 여행 중 표시가 켜져 있는지 */
     val tripIsActive: Boolean get() = tripOn
 

@@ -124,6 +124,7 @@ class AskTest {
         assertEquals(Ask.Reply.YES, r("응"))
         assertEquals(Ask.Reply.YES, r("네"))
         assertEquals(Ask.Reply.YES, r("응 그래"))
+        assertEquals(Ask.Reply.YES, r("응 가자"))
         assertEquals(Ask.Reply.YES, r("좋아"))
         assertEquals(Ask.Reply.YES, r("넣어 줘"))
         assertEquals(Ask.Reply.YES, r("Yes please"))
@@ -143,6 +144,9 @@ class AskTest {
         assertNull(r("어디야"))
         assertNull(r("오른쪽에 보이는 거 뭐야"))
         assertNull(r("예쁘다"))
+        // 차를 조작해 달라는 말은 대답이 아님
+        assertNull(r("창문 열어 줘"))
+        assertNull(r("시원하게 해 줘"))
         assertNull(r(""))
     }
 
@@ -161,26 +165,28 @@ class AskTest {
     @Test fun answersDependOnThePrompt() {
         fun a(text: String, p: Ask.Prompt) = Ask.answerFor(text, p)
         assertEquals(Ask.Reply.YES, a("응", Ask.Prompt.PICK))
+        assertEquals(Ask.Reply.YES, a("그래 가자", Ask.Prompt.PICK))
+        assertEquals(Ask.Reply.YES, a("가자", Ask.Prompt.PICK))
         assertEquals(Ask.Reply.WAYPOINT, a("가는 길에 들렀다 가자", Ask.Prompt.PICK))
         assertEquals(Ask.Reply.WAYPOINT, a("stop on the way", Ask.Prompt.PICK))
         assertEquals(Ask.Reply.LATER, a("나중에", Ask.Prompt.PICK))
         // 장소를 묻는 중에 "창문 열어 줘"는 장소 대답이 아님
         assertNull(a("창문 열어 줘", Ask.Prompt.PICK))
+        assertNull(a("시원하게 해 줘", Ask.Prompt.PICK))
         // "다음에 보이는 거 뭐야"는 미루는 말이 아니라 질문
         assertNull(a("다음에 보이는 거 뭐야", Ask.Prompt.PICK))
-        // 창문을 묻는 중에는 "창문 열어 줘"가 그 물음의 대답
-        assertEquals(Ask.Reply.YES, a("창문 열어 줘", Ask.Prompt.WINDOW))
-        assertEquals(Ask.Reply.NO, a("창문 열지 마", Ask.Prompt.WINDOW))
-        assertEquals(Ask.Reply.NO, a("창문 닫아 줘", Ask.Prompt.WINDOW))
-        // 보물 상자를 묻는 중
-        assertEquals(Ask.Reply.YES, a("응 열어 줘", Ask.Prompt.TREASURE))
-        assertEquals(Ask.Reply.LATER, a("나중에", Ask.Prompt.TREASURE))
-        assertEquals(Ask.Reply.NO, a("아니 그만해", Ask.Prompt.TREASURE))
-        // 보물 상자를 묻는 중에 "창문 열어 줘"는 그 대답이 아님
-        assertNull(a("창문 열어 줘", Ask.Prompt.TREASURE))
+        // 창문 이야기는 어떤 물음에도 대답이 아님 ("열어", "지 마"가 들어 있어도)
+        assertNull(a("창문 열어 줘", Ask.Prompt.END))
+        assertNull(a("창문 열지 마", Ask.Prompt.PICK))
+        assertNull(a("Close the windows please", Ask.Prompt.END))
+        // 여행을 끝낼지 묻는 중
         assertEquals(Ask.Reply.YES, a("응 여행 끝내 줘", Ask.Prompt.END))
+        assertEquals(Ask.Reply.YES, a("끝내자", Ask.Prompt.END))
+        assertNull(a("목적지로 바꿔 줘", Ask.Prompt.END))
+        assertEquals(Ask.Reply.LATER, a("나중에", Ask.Prompt.END))
+        assertEquals(Ask.Reply.NO, a("아니 그만해", Ask.Prompt.END))
         // 질문은 질문으로
-        assertNull(a("얼마나 남았어", Ask.Prompt.TREASURE))
+        assertNull(a("얼마나 남았어", Ask.Prompt.END))
         assertNull(a("오른쪽에 보이는 거 뭐야", Ask.Prompt.END))
     }
 }

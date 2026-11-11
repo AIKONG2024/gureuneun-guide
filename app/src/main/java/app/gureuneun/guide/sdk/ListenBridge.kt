@@ -218,8 +218,9 @@ class ListenBridge(private val context: Context) {
         val mine = session
         Thread {
             runCatching {
-                // 인식기가 준비됐다고 알려 줄 때까지 기다렸다가 넣음 (앞부분이 잘리지 않게, 최대 6초)
-                val ready = latch.await(6, TimeUnit.SECONDS)
+                // 인식기가 준비됐다고 알려 줄 때까지 기다렸다가 넣음 (앞부분이 잘리지 않게).
+                // 에뮬레이터는 파일을 넣을 때 준비 신호를 주지 않아 1.5초만 기다림 (질문 파일 앞에 무음이 1초쯤 있음)
+                val ready = latch.await(1500, TimeUnit.MILLISECONDS)
                 GLog.i("STT", if (ready) "인식기 준비됨, 음성 넣기 시작" else "준비 신호 없이 음성 넣기 시작")
                 var i = 0
                 while (i < pcm.size && session == mine && !done) {

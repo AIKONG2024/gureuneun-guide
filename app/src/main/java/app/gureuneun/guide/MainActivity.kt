@@ -63,13 +63,11 @@ class MainActivity : ComponentActivity() {
             val group by engine.companion.state.collectAsState()
             val partial by app.listen.partial.collectAsState()
             val level by app.listen.level.collectAsState()
-            val sttStatus by app.listen.status.collectAsState()
 
             when {
                 diag -> DiagScreen(app) { diag = false }
                 ui.phase == TripEngine.Phase.HOME -> HomeScreen(
-                    ui = ui, scenarios = scenarios, vehicle = vehicle, navi = navi, speech = speech, locationOk = locOk, group = group,
-                    listenReady = sttStatus == ListenBridge.Status.READY || sttStatus == ListenBridge.Status.LISTENING,
+                    ui = ui, scenarios = scenarios, vehicle = vehicle, navi = navi, speech = speech, locationOk = locOk,
                     onStart = { id, code -> engine.startTrip(id, ui.lang, code, ui.demoMode) },
                     onResume = { engine.resumeTrip() },
                     onLang = { engine.setLang(it) },
@@ -78,10 +76,8 @@ class MainActivity : ComponentActivity() {
                 ui.phase == TripEngine.Phase.ENDED -> RecordScreen(
                     ui, engine.recorder, group,
                     onShare = { engine.shareRecord() },
-                    onKeepLocal = { engine.keepRecordLocal() },
-                    onCloseWindows = { engine.closeWindows() },
                 ) { engine.goHome() }
-                else -> TripScreen(ui, vehicle, ux, navi, group, engine, partial, level)
+                else -> TripScreen(ui, vehicle, ux, group, engine, partial, level)
             }
         }
         // 시스템이 활동을 되살릴 때는 처음 받은 intent 가 다시 오므로 시연 명령을 또 처리하지 않음
@@ -125,7 +121,7 @@ class MainActivity : ComponentActivity() {
                 engine.setLang(lang)
                 engine.startTrip(intent.getStringExtra("scenario") ?: "gyeongju", lang, intent.getStringExtra("join"), true)
             }
-            "go" -> engine.completeRollcall()
+            "go" -> engine.depart()
             "play" -> engine.demoPlay()
             "pause" -> engine.demoPause()
             "jump" -> engine.demoJumpToNext(intent.getStringExtra("to"))
@@ -135,9 +131,6 @@ class MainActivity : ComponentActivity() {
             "next" -> engine.onMediaCommand(MediaKeys.Command.NEXT)
             "prev" -> engine.onMediaCommand(MediaKeys.Command.PREVIOUS)
             "pick" -> engine.answerPick(intent.getStringExtra("mode") ?: "destination")
-            "window" -> engine.answerWindow(intent.getBooleanExtra("open", true))
-            // [앞 창문 닫기] 단추 (앱이 내려 둔 앞 창문을 닫음. 서 있을 때만)
-            "closewindows" -> engine.closeWindows()
             "end" -> engine.endTrip()
             "clear" -> engine.forgetSavedTrip()
             "home" -> engine.goHome()
@@ -151,19 +144,16 @@ class MainActivity : ComponentActivity() {
             }
             // 말로 묻기: [물어보기] 버튼과 같음 (차 마이크)
             "listen" -> engine.ask()
-            // 말로 묻기 시연: 녹음해 둔 질문(files/ask 또는 앱에 넣어 둔 assets/ask 의 PCM)을 음성 인식 SDK 에 넣어 같은 흐름으로 처리
+            // 말로 묻기 시연: 질문 음성 파일(files/ask 또는 앱에 넣어 둔 assets/ask 의 PCM)을 음성 인식 SDK 에 넣어 같은 흐름으로 처리
             "ask" -> engine.askDemo(intent.getStringExtra("file"))
             // 음성 인식 없이 문장만 넣어 답 확인 (시험용)
             "asktext" -> engine.onHeardTyped(intent.getStringExtra("q") ?: "")
             // 말로 답하기 시험: 차가 물은 뒤 "응", "나중에" 같은 답을 넣음 (음성 인식 결과와 같은 길로 감)
             "answer" -> engine.onHeardTyped(intent.getStringExtra("q") ?: "응")
-            // 보물 상자를 열지 묻는 창의 단추 ([열어 주세요], [나중에])
-            "treasure" -> engine.answerTreasure(intent.getStringExtra("answer") != "no")
             // 여행 끝내기 확인 창을 띄움 ([여행 끝] 단추와 같음)
             "endask" -> engine.requestEndTrip()
-            // 기록 화면: 그룹에 보내기 / 차에만 두기
+            // 기록 화면의 [휴대폰으로 보내기]
             "share" -> engine.shareRecord()
-            "keep" -> engine.keepRecordLocal()
         }
     }
 
@@ -177,9 +167,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun onTrip(): Boolean {
-        val p = app.engine.ui.value.phase
-        return p == TripEngine.Phase.ROLLCALL || p == TripEngine.Phase.DRIVING
+    private fun onTrip(): Boolean = app.engine.ui.value.phase == TripEngine.Phase.DRIVING
+
+    // 화면이 보이는 동안 (다른 앱이 덮으면 onStop). 같은 화면으로 intent 가 올 때 잠깐 거치는 onPause 는 치지 않음
+    override fun onStart() {
+        super.onStart()
+        app.inFront = true
+    }
+
+    override fun onStop() {
+        app.inFront = false
+        super.onStop()
     }
 
     private fun mediaCommand(keyCode: Int): MediaKeys.Command? = when (keyCode) {

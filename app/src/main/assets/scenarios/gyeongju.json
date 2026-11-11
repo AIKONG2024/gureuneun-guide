@@ -19,17 +19,18 @@
     129.1854
   ],
   "destination": "donggung",
+  "cover": "donggung_night_1",
   "waypoints": [
     "daereungwon",
     "cheomseongdae"
   ],
   "greeting": {
-    "ko": "오늘은 경주로 떠나요. 지나갈 곳은 {places}예요. 모두 안전벨트를 매면 출발 안내를 할게요.",
-    "en": "Today we're heading to Gyeongju. On the way we'll pass {places}. Buckle up and we'll set off."
+    "ko": "오늘은 경주로 떠나요. 지나갈 곳은 {places}예요. 출발하면 안내를 시작할게요.",
+    "en": "Today we're heading to Gyeongju. On the way we'll pass {places}. I'll start once we set off."
   },
   "departure": {
-    "ko": "모두 안전벨트를 매셨네요. 그럼 천 년 전 신라로 출발할게요!",
-    "en": "Everyone's buckled up. Let's head back a thousand years, to Silla!"
+    "ko": "그럼 천 년 전 신라로 출발할게요!",
+    "en": "Let's head back a thousand years, to Silla!"
   },
   "chapter": {
     "ko": "다시 출발해요. 다음 장은 {next}예요.",
@@ -64,7 +65,6 @@
     "cheomseongdae": {"ko": "뒷자리 친구들, 첨성대는 옛날 사람들이 별을 보던 돌탑이에요. 선덕여왕 때 쌓았대요.", "en": "Hey, back seat! Cheomseongdae is a stone tower where people watched the stars long ago. It was built in Queen Seondeok's time."},
     "donggung": {"ko": "뒷자리 친구들, 동궁과 월지는 신라 왕자님이 살던 궁궐과 연못이에요. 연못 가운데 섬이 세 개 있대요. 찾아볼까요?", "en": "Hey, back seat! Donggung and Wolji are the palace and pond where a Silla prince lived. There are three islands in the pond. Can you spot them?"}
   },
-  "treasure": {"stars": 2},
   "kidAuto": true,
   "quiz": {
     "daereungwon": {"q": {"ko": "대릉원의 둥근 언덕은 무엇일까요?", "en": "What are the round hills at Daereungwon?"}, "choices": {"ko": ["신라 왕과 왕족의 무덤", "옛날 놀이터", "쌀 창고"], "en": ["Tombs of Silla royals", "An old playground", "Rice storehouses"]}, "answer": 0},
@@ -83,7 +83,6 @@
       "lon": 129.215,
       "radius": 2600,
       "color": "#FFB347",
-      "model": "tumuli",
       "story": {
         "ko": {
           "short": "경주에 들어왔어요. 신라가 천 년 가까이 수도로 삼았던 도시예요.",
@@ -117,7 +116,6 @@
       "lon": 129.21193,
       "radius": 350,
       "color": "#7BD88F",
-      "model": "tumuli",
       "announce": {
         "ko": "잠시 후 {side}에 대릉원이 보여요.",
         "en": "Daereungwon is coming up {side}."
@@ -155,7 +153,6 @@
       "lon": 129.21898,
       "radius": 320,
       "color": "#5B7CFF",
-      "model": "cheomseongdae",
       "announce": {
         "ko": "잠시 후 {side}에 첨성대가 보여요.",
         "en": "Cheomseongdae will appear {side} in a moment."
@@ -193,7 +190,6 @@
       "lon": 129.22644,
       "radius": 300,
       "color": "#FF9F43",
-      "model": "donggung",
       "stop": true,
       "announce": {
         "ko": "잠시 후 {side}에 동궁과 월지가 보여요. 오늘의 마지막 목적지예요.",

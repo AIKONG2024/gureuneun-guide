@@ -16,13 +16,9 @@ import ai.pleos.playground.vehicle.constant.control.WiperState
 import ai.pleos.playground.vehicle.listener.AmbientLightBrightnessColorListener
 import ai.pleos.playground.vehicle.listener.AmbientLightBrightnessListener
 import ai.pleos.playground.vehicle.listener.GearSelectionListener
-import ai.pleos.playground.vehicle.listener.GloveBoxLockStateListener
 import ai.pleos.playground.vehicle.listener.LightStateListener
-import ai.pleos.playground.vehicle.listener.SeatBeltBuckledStateListener
 import ai.pleos.playground.vehicle.listener.SeatOccupancyListener
-import ai.pleos.playground.vehicle.listener.SeatBeltNotBuckledWarningListener
 import ai.pleos.playground.vehicle.listener.TurnSignalStateListener
-import ai.pleos.playground.vehicle.listener.WindowPositionListener
 import ai.pleos.playground.vehicle.listener.WiperStateListener
 import android.content.Context
 import android.content.SharedPreferences
@@ -39,13 +35,11 @@ import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Vehicle SDK 연결부. 여행 안내에 쓰는 신호만 다룸.
- * 읽기: 기어, 방향지시등, 와이퍼, 전조등(하향등), 좌석 착석, 안전벨트, 창문 위치, 실내 조명, 글로브 박스 잠금
- * 쓰기: 실내 조명 색과 밝기, 앞 창문 위치(정차 중 운전자가 답한 뒤에만), 글로브 박스 잠금(정차 중 운전자가 답한 뒤에만)
+ * 읽기: 기어, 방향지시등, 와이퍼, 전조등(하향등), 좌석 착석, 실내 조명
+ * 쓰기: 실내 조명 색과 밝기
  * 차마다 지원하는 기능이 달라서 쓰기 전에 지원 여부(capability)와 쓰기 권한(AccessType WRITE, READ_WRITE)을 먼저 확인하고,
- * 없으면 조용히 건너뜀. 창문 값은 차가 알려 준 범위(AreaBounds)로 환산함.
- * 창문과 글로브 박스 잠금 풀기는 기어가 P 로 확인된 때만, 그리고 움직이기 직전에 P 를 한 번 더 물어 확인될 때만 함.
- * 앱이 바꾼 조명과 글로브 박스 잠금은 바꾸기 직전 값을 기록해 두고 restoreAll() 로 되돌림
- * (창문은 끼임 위험 때문에 앱이 저절로 올리지 않으므로 기록하지 않음).
+ * 없으면 조용히 건너뜀.
+ * 앱이 바꾼 조명은 바꾸기 직전 값을 기록해 두고 restoreAll() 로 되돌림.
  * 차량 서비스 호출은 모두 전용 스레드 하나에서 차례로 함 (화면 스레드가 막혀 앱이 멈춘 것처럼 보이지 않게).
  * 연결이나 기어 구독이 안 되면 1초에서 30초까지 간격을 늘려 다시 시도함.
  */
@@ -57,49 +51,22 @@ class VehicleBridge(private val context: Context, private val scope: CoroutineSc
         val turnSignal: String = "OFF",
         val wiperOn: Boolean = false,
         val lowBeamOn: Boolean = false,
-        val belts: Map<String, Boolean> = emptyMap(),
         val occupied: Map<String, Boolean> = emptyMap(),
-        val windows: Map<String, Int> = emptyMap(),
         val ambientColor: Int? = null,
         val ambientBrightness: Int? = null,
         val ambientAreas: Int = 0,
-        /** 좌석별 '벨트 안 맴' 경고. 좌석별 착용 신호가 없는 차에서는 이걸로 판단 */
-        val beltWarnings: Map<String, Boolean> = emptyMap(),
-        /** 글로브 박스 잠금을 앱이 바꿀 수 있는 차인지 (보물 상자) */
-        val gloveSupported: Boolean? = null,
-        val gloveLocked: Boolean? = null,
         val lastError: String? = null,
     ) {
         /** 기어가 P 로 확인됐을 때만 정차. 기어 정보를 못 받으면(차량 서비스 없음, "-") 정차로 보지 않음 */
         val parked: Boolean get() = VehicleMath.isParked(gear)
-
-        /** 사람이 앉은 자리. 착석 정보가 없으면 운전석만 있다고 봄 */
-        val seatedKeys: List<String>
-            get() = SEAT_KEYS.filter { occupied[it] == true }.ifEmpty { listOf("ROW_1_LEFT") }
-
-        private val perSeatBelts: Boolean get() = belts.values.any { it }
-
-        fun buckled(key: String): Boolean = belts[key] == true || (!perSeatBelts && beltWarnings[key] == false)
-
-        val buckledCount: Int get() = seatedKeys.count { buckled(it) }
-        val allBuckled: Boolean
-            get() = when {
-                perSeatBelts -> seatedKeys.all { belts[it] == true }
-                beltWarnings.isNotEmpty() -> seatedKeys.all { beltWarnings[it] == false }
-                else -> false
-            }
     }
 
     companion object {
         val SEATS = listOf(SeatValue.ROW_1_LEFT, SeatValue.ROW_1_RIGHT, SeatValue.ROW_2_LEFT, SeatValue.ROW_2_RIGHT)
         val SEAT_KEYS = listOf("ROW_1_LEFT", "ROW_1_RIGHT", "ROW_2_LEFT", "ROW_2_RIGHT")
-        val SIDE_WINDOWS = listOf(WindowValue.ROW_1_LEFT, WindowValue.ROW_1_RIGHT, WindowValue.ROW_2_LEFT, WindowValue.ROW_2_RIGHT)
-        val FRONT_WINDOWS = listOf(WindowValue.ROW_1_LEFT, WindowValue.ROW_1_RIGHT)
         /** SDK 답을 기다리는 시간 */
         private const val WAIT_MS = 1500L
         private const val MAX_RETRY_MS = 30_000L
-        // 되돌리기 기록 이름
-        private const val KEY_GLOVE = "glove"
     }
 
     val state = MutableStateFlow(State())
@@ -112,9 +79,6 @@ class VehicleBridge(private val context: Context, private val scope: CoroutineSc
     /** 조명 스위치 지원 여부를 확인했는지, 확인했다면 쓸 수 있는 구역과 고를 수 있는 값 */
     @Volatile private var switchKnown = false
     @Volatile private var switchAreas: Map<SeatArea, List<LightSwitch>> = emptyMap()
-    /** 위치를 바꿀 수 있는 옆 창문과 범위 (쓰기 권한이 있을 때만. 지붕 창은 넣지 않음) */
-    @Volatile private var windowMap: Map<WindowArea, AreaBounds<Int>> = emptyMap()
-    @Volatile private var gloveWritable = false
     /** 차량 서비스가 준비되기 전에 들어온 조명 요청 (준비되면 바로 적용) */
     @Volatile private var pendingAmbient: Pair<Int, Int>? = null
     /** 연결 확인, 구독, 지원 여부 확인까지 끝났는지 */
@@ -257,7 +221,6 @@ class VehicleBridge(private val context: Context, private val scope: CoroutineSc
         ready = false
         attempt = 0
         registerAll(v)
-        registerBody(v)
         ready = true
         GLog.i("Vehicle", "차량 서비스 연결, 구독 끝")
         pendingAmbient?.let { (c, b) ->
@@ -294,7 +257,7 @@ class VehicleBridge(private val context: Context, private val scope: CoroutineSc
 
             override fun onFailed(e: Exception) {
                 fail("기어 구독", e)
-                // 기어는 차를 움직여도 되는지 판단하는 데 쓰므로, 끊기면 처음부터 다시 붙음
+                // 기어는 차가 서 있는지 판단하는 데 쓰므로, 끊기면 처음부터 다시 붙음
                 retryLater("기어 구독 오류")
             }
         }
@@ -340,14 +303,6 @@ class VehicleBridge(private val context: Context, private val scope: CoroutineSc
         SEATS.forEachIndexed { i, seat ->
             val key = SEAT_KEYS[i]
             val area = SeatArea(seat)
-            val beltL = object : SeatBeltBuckledStateListener {
-                override fun onSeatBeltBuckledStateUpdated(value: Boolean?) {
-                    post { state.update { it.copy(connected = true, belts = it.belts + (key to (value == true))) } }
-                }
-
-                override fun onFailed(e: Exception) = fail("벨트 구독 $key", e)
-            }
-            reg("벨트 구독 $key", { seatApi.registerSeatBeltBuckledState(area, beltL) }, { seatApi.unregisterSeatBeltBuckledState(area, beltL) })
             val occL = object : SeatOccupancyListener {
                 override fun onSeatOccupancyUpdated(value: Boolean?) {
                     post { state.update { it.copy(connected = true, occupied = it.occupied + (key to (value == true))) } }
@@ -356,38 +311,6 @@ class VehicleBridge(private val context: Context, private val scope: CoroutineSc
                 override fun onFailed(e: Exception) = fail("착석 구독 $key", e)
             }
             reg("착석 구독 $key", { seatApi.registerSeatOccupancy(area, occL) }, { seatApi.unregisterSeatOccupancy(area, occL) })
-        }
-
-        val window = v.getWindow()
-        SIDE_WINDOWS.forEach { w ->
-            val area = WindowArea(w)
-            val winL = object : WindowPositionListener {
-                override fun onWindowPositionUpdated(value: Int?) {
-                    if (value != null) post { state.update { it.copy(windows = it.windows + (w.name to value)) } }
-                }
-
-                override fun onFailed(e: Exception) = fail("창문 구독 ${w.name}", e)
-            }
-            reg("창문 구독 ${w.name}", { window.registerWindowPosition(area, winL) }, { window.unregisterWindowPosition(area, winL) })
-        }
-
-        val safety = v.getSafety()
-        SEATS.forEachIndexed { i, seat ->
-            val key = SEAT_KEYS[i]
-            val area = SeatArea(seat)
-            val warnL = object : SeatBeltNotBuckledWarningListener {
-                override fun onSeatBeltNotBuckledWarningUpdated(value: Boolean?) {
-                    if (value != null) post { state.update { it.copy(beltWarnings = it.beltWarnings + (key to value)) } }
-                }
-
-                override fun onFailed(e: Exception) = fail("벨트 경고 구독 $key", e)
-            }
-            reg("벨트 경고 구독 $key", { safety.registerSeatBeltNotBuckledWarning(area, warnL) }, { safety.unregisterSeatBeltNotBuckledWarning(area, warnL) })
-            runCatching {
-                safety.hasSeatBeltNotBuckledWarning(area, { w ->
-                    if (w != null) post { state.update { it.copy(beltWarnings = it.beltWarnings + (key to w)) } }
-                }, { e -> fail("벨트 경고 읽기 $key", e) })
-            }.onFailure { fail("벨트 경고 읽기 $key", it) }
         }
 
         // 실내 조명: 색을 바꿀 수 있는 구역, 밝기 범위, 스위치(켜고 끄기)
@@ -438,9 +361,6 @@ class VehicleBridge(private val context: Context, private val scope: CoroutineSc
                 v.getSeat().getCurrentSeatOccupancy(SeatArea(seat), { b ->
                     post { state.update { it.copy(occupied = it.occupied + (key to (b == true))) } }
                 }, { e -> fail("착석 읽기 $key", e) })
-                v.getSeat().getCurrentSeatBeltBuckledState(SeatArea(seat), { b ->
-                    post { state.update { it.copy(belts = it.belts + (key to (b == true))) } }
-                }, { e -> fail("벨트 읽기 $key", e) })
             }
         }
         runCatching {
@@ -453,13 +373,6 @@ class VehicleBridge(private val context: Context, private val scope: CoroutineSc
                 post { state.update { it.copy(wiperOn = s == WiperState.ON) } }
             }, { e -> fail("와이퍼 읽기", e) })
         }
-        SIDE_WINDOWS.forEach { w ->
-            runCatching {
-                v.getWindow().getCurrentWindowPosition(WindowArea(w), { p ->
-                    if (p != null) post { state.update { it.copy(windows = it.windows + (w.name to p)) } }
-                }, { e -> fail("창문 읽기 ${w.name}", e) })
-            }
-        }
         ambientAreas.firstOrNull()?.let { area ->
             runCatching {
                 v.getLight().getAmbientLightBrightnessColor(area, { c -> post { state.update { it.copy(ambientColor = c) } } }, { e -> fail("조명 색 읽기", e) })
@@ -468,126 +381,7 @@ class VehicleBridge(private val context: Context, private val scope: CoroutineSc
         }
     }
 
-    // ------------------------------------------------------------ 글로브 박스, 창문
-
-    private fun registerBody(v: Vehicle) {
-        val door = v.getDoor()
-        val gc = await<CapabilityConfig> { ok, err -> door.checkGloveBoxLockCapabilities(ok, err) }
-        gloveWritable = gc != null && writable(gc.value)
-        if (gc != null) {
-            GLog.i("Vehicle", "글로브 박스 잠금 지원 (${gc.value?.accessType})")
-            val gloveL = object : GloveBoxLockStateListener {
-                override fun onGloveBoxLockStateUpdated(value: Boolean?) {
-                    if (value != null) post { state.update { it.copy(gloveLocked = value) } }
-                }
-
-                override fun onFailed(e: Exception) = fail("글로브 박스 구독", e)
-            }
-            reg("글로브 박스 구독", { door.registerGloveBoxLockState(gloveL) }, { door.unregisterGloveBoxLockState(gloveL) })
-            runCatching {
-                door.getCurrentGloveBoxLockState({ b -> if (b != null) post { state.update { it.copy(gloveLocked = b) } } }, { e -> fail("글로브 박스 읽기", e) })
-            }.onFailure { fail("글로브 박스 읽기", it) }
-        } else {
-            GLog.i("Vehicle", "글로브 박스 잠금 신호를 주지 않는 차")
-        }
-        post { state.update { it.copy(gloveSupported = gloveWritable) } }
-
-        val window = v.getWindow()
-        val wc = await2<CapabilityConfig?, Map<WindowArea, AreaBounds<Int>>?>("창문 위치") { ok, err -> window.checkWindowPositionCapabilities(ok, err) }
-        // 지붕 창(선루프)이 들어 있는 영역은 뺌. 이 앱이 움직이는 것은 앞 옆 창문뿐
-        val side = wc?.second.orEmpty().filterKeys { a -> WindowValue.ROOF_TOP_1 !in a.values && WindowValue.ROOF_TOP_2 !in a.values }
-        windowMap = if (writable(wc?.first)) side else emptyMap()
-        GLog.i(
-            "Vehicle",
-            "위치를 움직일 수 있는 창 (${wc?.first?.accessType}): " +
-                side.entries.joinToString { (a, b) -> a.values.joinToString("+") { it.name } + " ${b.minValue}~${b.maxValue}" }.ifBlank { "없음" },
-        )
-    }
-
-    private fun refuse(what: String, why: String) {
-        GLog.w("Vehicle", "$what 안 함: $why")
-        post { state.update { it.copy(lastError = "$what 안 함: $why") } }
-    }
-
-    /** 움직이기 직전에 기어를 다시 물어봄. P 로 답이 와야 true (전용 스레드에서만) */
-    private fun confirmParked(v: Vehicle): Boolean {
-        val got = await<VehicleGear> { ok, err -> v.getGear().getCurrentGearSelectionState(ok, err) } ?: return false
-        val g = gearName(got.value)
-        post { state.update { it.copy(connected = true, gear = g) } }
-        return VehicleMath.isParked(g)
-    }
-
-    /**
-     * 창문, 글로브 박스 잠금 풀기처럼 끼이거나 열릴 수 있는 동작.
-     * 마지막으로 받은 기어가 P 가 아니면 바로 false. P 이면 전용 스레드에서 움직이기 직전에 한 번 더 물어보고,
-     * P 로 확인되지 않으면 움직이지 않고 로그와 lastError 를 남김.
-     * 돌려주는 true 는 '요청을 받았다'는 뜻. 실제로 했는지는 onResult(메인 스레드)로 옴
-     */
-    private fun guarded(what: String, onResult: ((Boolean) -> Unit)?, action: (Vehicle) -> Boolean): Boolean {
-        val v = vehicle
-        val why = when {
-            v == null -> "차량 서비스 연결 전"
-            !state.value.parked -> "기어가 P 로 확인되지 않음 (지금 ${state.value.gear})"
-            else -> null
-        }
-        if (v == null || why != null) {
-            refuse(what, why ?: "차량 서비스 연결 전")
-            onResult?.let { cb -> post { cb(false) } }
-            return false
-        }
-        bg {
-            val ok = runCatching {
-                if (confirmParked(v)) {
-                    action(v)
-                } else {
-                    refuse(what, "움직이기 직전 P 확인 실패")
-                    false
-                }
-            }.getOrElse {
-                fail(what, it)
-                false
-            }
-            onResult?.let { cb -> post { cb(ok) } }
-        }
-        return true
-    }
-
-    /**
-     * 글로브 박스 잠금. 지원하지 않거나 쓰기 권한이 없는 차면 false.
-     * 잠금 풀기는 P 를 다시 확인한 뒤에만 함. 잠그기는 열리는 쪽이 아니라서 달리는 중에도 함 (보물 상자를 연 뒤 다시 잠글 때).
-     * 처음 바꾸기 직전 잠금 상태를 기록해 두고 restoreAll() 때 되돌림. true 는 요청을 받았다는 뜻, 결과는 onResult
-     */
-    fun setGloveBoxLock(locked: Boolean, onResult: ((Boolean) -> Unit)? = null): Boolean {
-        val what = if (locked) "글로브 박스 잠금" else "글로브 박스 잠금 풀기"
-        if (!gloveWritable) {
-            onResult?.let { cb -> post { cb(false) } }
-            return false
-        }
-        val act: (Vehicle) -> Boolean = { v ->
-            rememberGlove(v)
-            setWait(what) { done, err ->
-                v.getDoor().setGloveBoxLock(locked, { value ->
-                    if (value != null) post { state.update { it.copy(gloveLocked = value) } }
-                    done()
-                }, err)
-            }
-        }
-        GLog.i("Vehicle", what)
-        if (!locked) return guarded(what, onResult, act)
-        val v = vehicle
-        if (v == null) {
-            onResult?.let { cb -> post { cb(false) } }
-            return false
-        }
-        bg {
-            val ok = runCatching { act(v) }.getOrElse {
-                fail(what, it)
-                false
-            }
-            onResult?.let { cb -> post { cb(ok) } }
-        }
-        return true
-    }
+    // ------------------------------------------------------------ 실내 조명
 
     /**
      * 실내 조명 색(RGB)과 밝기(0~100)를 바꿈. 차량 서비스가 준비되기 전이면 준비되는 대로 적용.
@@ -637,83 +431,9 @@ class VehicleBridge(private val context: Context, private val scope: CoroutineSc
     private fun canSwitch(area: SeatArea): Boolean =
         if (switchKnown) switchAreas[area]?.contains(LightSwitch.ON) == true else true
 
-    /**
-     * 창문 위치를 0~10 눈금으로 바꿈 (0 닫힘, 10 끝까지). 차가 알려 준 창문별 범위로 환산함 (범위 0..100 이면 2 는 20).
-     * P 를 다시 확인한 뒤에만 움직임. 사용자 확인은 부르는 쪽에서 먼저 받음.
-     * 창문은 끼임 위험 때문에 앱이 저절로 올리지 않으므로 되돌리기 기록을 하지 않음.
-     * true 는 요청을 받았다는 뜻, 결과는 onResult
-     */
-    fun setWindows(position: Int, windows: List<WindowValue> = SIDE_WINDOWS, onResult: ((Boolean) -> Unit)? = null): Boolean {
-        val targets = windowTargets(windows)
-        if (targets.isEmpty()) {
-            GLog.i("Vehicle", "움직일 수 있는 창문이 없음 (${windows.joinToString { it.name }})")
-            onResult?.let { cb -> post { cb(false) } }
-            return false
-        }
-        val step = position.coerceIn(0, VehicleMath.WINDOW_STEPS)
-        GLog.i(
-            "Vehicle",
-            "창문 $step/${VehicleMath.WINDOW_STEPS}: " +
-                targets.joinToString { (a, b) -> a.values.joinToString("+") { it.name } + "→" + VehicleMath.windowValue(step, b.minValue, b.maxValue) },
-        )
-        return guarded("창문", onResult) { v ->
-            var all = true
-            targets.forEach { (a, b) ->
-                val value = VehicleMath.windowValue(step, b.minValue, b.maxValue)
-                val names = a.values.map { it.name }
-                val ok = setWait("창문 움직이기 ${names.joinToString("+")}") { done, err ->
-                    v.getWindow().setWindowPosition(a, value, { _, got ->
-                        if (got != null) post { state.update { s -> s.copy(windows = s.windows + names.associateWith { got }) } }
-                        done()
-                    }, err)
-                }
-                if (!ok) all = false
-            }
-            all
-        }
-    }
-
-    /** 부탁받은 창마다 움직일 영역. 그 창만 있는 영역을 먼저 쓰고, 없으면 부탁받은 창으로만 이뤄진 묶음 영역을 씀 */
-    private fun windowTargets(windows: List<WindowValue>): List<Pair<WindowArea, AreaBounds<Int>>> {
-        val m = windowMap
-        val out = LinkedHashMap<WindowArea, AreaBounds<Int>>()
-        windows.forEach { w ->
-            val hit = m.entries.firstOrNull { (a, _) -> a.values.toList() == listOf(w) }
-                ?: m.entries.firstOrNull { (a, _) -> w in a.values && a.values.all { it in windows } }
-            if (hit != null) out[hit.key] = hit.value else GLog.i("Vehicle", "${w.name} 창문은 이 차에서 움직일 수 없음")
-        }
-        return out.toList()
-    }
-
-    /**
-     * 앞 창문이 모두 닫혀 있는지. 위치를 아는 앞 창문이 하나도 없으면 null.
-     * 운전자가 스위치로 직접 닫았을 때 앱의 '열려 있음' 표시를 거두는 데 씀
-     */
-    fun frontWindowsClosed(s: State = state.value): Boolean? {
-        val m = windowMap
-        val known = FRONT_WINDOWS.mapNotNull { w ->
-            val pos = s.windows[w.name] ?: return@mapNotNull null
-            val b = m.entries.firstOrNull { (a, _) -> w in a.values }?.value
-            pos <= (if (b != null) VehicleMath.closedValue(b.minValue, b.maxValue) else 0)
-        }
-        return if (known.isEmpty()) null else known.all { it }
-    }
-
     // ------------------------------------------------------------ 앱이 바꾼 차 상태 되돌리기
 
     private fun seatKey(a: SeatArea) = a.values.joinToString("+") { it.name }
-
-    private fun tri(b: Boolean?) = when (b) {
-        true -> 1
-        false -> 0
-        null -> -1
-    }
-
-    private fun untri(i: Int): Boolean? = when (i) {
-        1 -> true
-        0 -> false
-        else -> null
-    }
 
     /** 조명을 처음 바꾸기 직전 스위치, 색, 밝기를 기록 (이미 기록이 있으면 그대로 둠). 전용 스레드에서만 */
     private fun rememberLight(v: Vehicle, a: SeatArea) {
@@ -728,20 +448,12 @@ class VehicleBridge(private val context: Context, private val scope: CoroutineSc
         GLog.i("Vehicle", "조명 원래 값 기록 ${seatKey(a)}")
     }
 
-    private fun rememberGlove(v: Vehicle) {
-        if (restore.contains(KEY_GLOVE)) return
-        val got = await<Boolean> { ok, err -> v.getDoor().getCurrentGloveBoxLockState(ok, err) }?.value
-        restore.edit().putInt(KEY_GLOVE, tri(got)).commit()
-    }
-
     /** 되돌릴 기록이 남아 있는지 */
     val hasChanges: Boolean get() = restore.all.isNotEmpty()
 
     /**
-     * 앱이 바꾼 실내 조명(스위치 포함)과 글로브 박스 잠금을 바꾸기 전 값으로 되돌림.
-     * 창문은 끼임 위험 때문에 되돌리지 않음 (닫기는 사람이 확인하고 직접).
-     * 되돌린 뒤 다시 읽어 맞으면 그 기록을 지움. 맞지 않거나 지금 할 수 없는 것(P 가 아닐 때 잠금 풀기)은
-     * 기록을 남겨 두었다가 다음 restoreAll() 때 다시 함. 원래 잠금 상태를 모르면 잠금으로 둠.
+     * 앱이 바꾼 실내 조명(스위치 포함)을 바꾸기 전 값으로 되돌림.
+     * 되돌린 뒤 다시 읽어 맞으면 그 기록을 지움. 맞지 않으면 기록을 남겨 두었다가 다음 restoreAll() 때 다시 함.
      * 차량 서비스에 붙기 전에 부르면 붙은 뒤에 함. onDone 은 메인 스레드에서, 남은 기록이 없으면 true
      */
     fun restoreAll(onDone: ((Boolean) -> Unit)? = null) {
@@ -782,27 +494,14 @@ class VehicleBridge(private val context: Context, private val scope: CoroutineSc
 
     /** 전용 스레드에서만. 남은 기록이 없으면 true */
     private fun restoreNow(v: Vehicle): Boolean {
-        // 이 앱이 더는 바꾸지 않는 항목의 옛 기록(앞 버전의 공조, 선루프)은 되돌릴 수 없으므로 지움
-        val stale = restore.all.keys.filter { !it.startsWith("light.") && it != KEY_GLOVE }
+        // 이 앱이 더는 바꾸지 않는 항목의 옛 기록(앞 버전의 공조, 선루프, 글로브 박스)은 되돌릴 수 없으므로 지움
+        val stale = restore.all.keys.filter { !it.startsWith("light.") }
         if (stale.isNotEmpty()) restore.edit().apply { stale.forEach { remove(it) } }.commit()
         if (restore.all.isEmpty()) return true
         GLog.i("Vehicle", "앱이 바꾼 차 상태 되돌리기 시작")
         ambientAreas.forEach { a ->
             val k = "light.${seatKey(a)}"
             if (restore.contains(k) && restoreLight(v, a, k)) restore.edit().remove(k).remove("$k.sw").remove("$k.color").remove("$k.bright").commit()
-        }
-        if (restore.contains(KEY_GLOVE) && gloveWritable) {
-            val target = VehicleMath.gloveRestoreTarget(untri(restore.getInt(KEY_GLOVE, -1)))
-            val d = v.getDoor()
-            // 잠그는 것은 언제든, 잠금 풀기로 되돌리는 것은 P 로 확인될 때만
-            if (!target && !confirmParked(v)) {
-                GLog.i("Vehicle", "글로브 박스 잠금 풀기는 차가 P 일 때 되돌림")
-            } else if (
-                setWait("글로브 박스 되돌리기") { done, err -> d.setGloveBoxLock(target, { _ -> done() }, err) } &&
-                check<Boolean>({ o, err -> d.getCurrentGloveBoxLockState(o, err) }) { it == target }
-            ) {
-                restore.edit().remove(KEY_GLOVE).commit()
-            }
         }
         val left = restore.all.keys.filter { !it.endsWith(".sw") && !it.endsWith(".color") && !it.endsWith(".bright") }
         if (left.isEmpty()) GLog.i("Vehicle", "앱이 바꾼 차 상태를 모두 되돌림") else GLog.w("Vehicle", "아직 못 되돌린 것: ${left.joinToString()}")

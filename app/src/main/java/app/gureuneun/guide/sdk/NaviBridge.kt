@@ -31,9 +31,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -57,8 +55,6 @@ class NaviBridge(private val context: Context, private val scope: CoroutineScope
         val remainSeconds: Int? = null,
         val destinationName: String? = null,
         val navPos: LatLng? = null,
-        /** 내비가 마지막으로 알려 준 경유지 수 (모르면 null) */
-        val waypointCount: Int? = null,
         val lastEvent: String? = null,
         val lastError: String? = null,
     )
@@ -71,7 +67,7 @@ class NaviBridge(private val context: Context, private val scope: CoroutineScope
 
     /**
      * 내비 오류. code 는 NaviErrorCode 이름(CAUSE_SEARCH_ROUTE 등)이거나
-     * CONNECT_FAILED(연결 실패), WAYPOINTS_FULL(경유지 두 곳이 다 참), REQUEST_FAILED(요청 중 예외).
+     * CONNECT_FAILED(연결 실패), REQUEST_FAILED(요청 중 예외).
      * what 은 무엇을 하다가 났는지 (장소 이름, 요청 이름)
      */
     data class Failure(val code: String, val what: String?)
@@ -90,10 +86,6 @@ class NaviBridge(private val context: Context, private val scope: CoroutineScope
     private var pollJob: Job? = null
     @Volatile private var tripActive = false
     @Volatile private var routeRequestedAt = 0L
-    /** 이 앱이 넣은 경유지 수. 내비가 경유지 정보를 주지 않을 때만 씀 */
-    @Volatile private var knownWaypoints = 0
-    @Volatile private var waypointWait: CountDownLatch? = null
-    @Volatile private var lastWaypoints: List<WaypointInfo>? = null
     /** 연결 전에 들어온 요청 */
     private val pending = ArrayDeque<Pair<String, (NaviHelper) -> Unit>>()
     // 내비 서비스 호출은 전용 스레드에서 (내비 앱이 바쁠 때 화면이 멈추지 않게)
@@ -183,28 +175,21 @@ class NaviBridge(private val context: Context, private val scope: CoroutineScope
 
         override fun onDestinationArrived(destinationArrivedInfo: DestinationArrivedInfo) {
             GLog.i("Navi", "목적지 도착")
-            knownWaypoints = 0
             events.tryEmit(Event.Arrived(state.value.destinationName))
         }
 
         override fun onWayPointArrived(waypointArrivedInfo: WaypointArrivedInfo) {
             GLog.i("Navi", "경유지 도착")
-            knownWaypoints = (knownWaypoints - 1).coerceAtLeast(0)
             events.tryEmit(Event.WaypointArrived(null))
         }
 
-        override fun onWayPointInfo(waypointInfo: List<WaypointInfo>) {
-            lastWaypoints = waypointInfo
-            waypointWait?.countDown()
-            post { state.update { it.copy(waypointCount = waypointInfo.size) } }
-        }
+        override fun onWayPointInfo(waypointInfo: List<WaypointInfo>) {}
 
         override fun onWaypointChanged(waypointChangedInfo: WaypointChangedInfo) {
             GLog.i("Navi", "경유지 바뀜: ${waypointChangedInfo.index} ${waypointChangedInfo.cmdType}")
         }
 
         override fun onRouteCancelled() {
-            knownWaypoints = 0
             post { state.update { it.copy(lastEvent = "경로 취소") } }
         }
 
@@ -353,77 +338,12 @@ class NaviBridge(private val context: Context, private val scope: CoroutineScope
                 }
                 h.requestRouteWithWaypoints(RouteWithWaypointsRequest(destination = routeInfo(name, pos), waypoints = req))
             }
-            knownWaypoints = wps.size
             markRouteRequested()
             GLog.i("Navi", "목적지 요청: $name (경유지 ${wps.size}곳)")
             post { state.update { it.copy(destinationName = name, lastEvent = "목적지 요청 $name") } }
         }
 
-    /** 지금 경유지 수를 내비에 물어봄 (전용 스레드에서만). 답이 없으면 null */
-    private fun askWaypointCount(h: NaviHelper): Int? {
-        val latch = CountDownLatch(1)
-        lastWaypoints = null
-        waypointWait = latch
-        try {
-            h.getWaypointInfo()
-            latch.await(WAIT_MS, TimeUnit.MILLISECONDS)
-        } catch (e: Exception) {
-            GLog.w("Navi", "경유지 정보 요청 실패", e)
-        } finally {
-            waypointWait = null
-        }
-        return lastWaypoints?.size
-    }
-
-    /**
-     * 지금 경로를 유지한 채 경유지 하나를 넣음. 먼저 내비에 경유지 수를 물어 빈 자리(FIRST, SECOND)에 넣음.
-     * 두 곳이 다 찼으면 replaceLast 일 때만 두 번째를 바꾸고, 아니면 넣지 않고 WAYPOINTS_FULL 로 알림
-     * (시나리오가 처음부터 경유지 두 곳을 넣으므로 여행 중에는 보통 다 차 있음).
-     * true 는 요청을 받았다는 뜻. 실제로 넣었는지는 onResult(메인 스레드)로 옴
-     */
-    fun addWaypoint(name: String, pos: LatLng, replaceLast: Boolean = false, onResult: ((Boolean) -> Unit)? = null): Boolean {
-        val accepted = send("경유지 추가 $name") { h ->
-            val asked = askWaypointCount(h)
-            val count = asked ?: knownWaypoints.also { GLog.w("Navi", "경유지 정보를 받지 못해 앱이 넣은 수(${it}곳)로 판단") }
-            val index = when {
-                count <= 0 -> WaypointIndex.FIRST
-                count == 1 -> WaypointIndex.SECOND
-                replaceLast -> {
-                    h.removeWaypoint(WaypointIndex.SECOND)
-                    WaypointIndex.SECOND
-                }
-                else -> null
-            }
-            if (index == null) {
-                GLog.w("Navi", "경유지가 이미 두 곳이라 넣지 않음: $name")
-                report("WAYPOINTS_FULL", name)
-                onResult?.let { cb -> post { cb(false) } }
-                return@send
-            }
-            h.addWaypoint(
-                RequestWaypointInfo(
-                    latitude = pos.lat,
-                    longitude = pos.lon,
-                    poiName = name,
-                    waypointIndex = index,
-                    poiId = "",
-                    address = name,
-                    poiSubId = "0",
-                )
-            )
-            knownWaypoints = (count + 1).coerceAtMost(2)
-            markRouteRequested()
-            GLog.i("Navi", "경유지 추가: $name (${index.name})")
-            onResult?.let { cb -> post { cb(true) } }
-        }
-        if (!accepted) onResult?.let { cb -> post { cb(false) } }
-        return accepted
-    }
-
-    fun cancelRoute(): Boolean = send("경로 취소") {
-        it.cancelRoute()
-        knownWaypoints = 0
-    }
+    fun cancelRoute(): Boolean = send("경로 취소") { it.cancelRoute() }
 
     fun release() {
         started = false
@@ -438,7 +358,6 @@ class NaviBridge(private val context: Context, private val scope: CoroutineScope
 
     private companion object {
         const val MAX_PENDING = 8
-        const val WAIT_MS = 1500L
         const val MAX_RETRY_MS = 30_000L
         const val FAST_POLL_MS = 1500L
         const val SLOW_POLL_MS = 10_000L

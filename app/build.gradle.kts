@@ -58,9 +58,9 @@ android {
         compose = true
         buildConfig = true
     }
-    // 차 앱에는 명소 장면 사진(posters)만 넣고, 휴대폰용 동영상 클립, 웹 페이지와 스크립트, 웹 글꼴(vendor)은 뺌
+    // 차 앱에는 명소 사진(photos)만 넣고 웹 페이지와 스크립트, 웹 글꼴(vendor)은 뺌
     androidResources {
-        ignoreAssetsPattern = "!clips:!vendor:!js:!css:!*.html:!.DS_Store"
+        ignoreAssetsPattern = "!vendor:!js:!css:!*.html:!.DS_Store"
     }
     packaging {
         resources {
@@ -69,7 +69,7 @@ android {
         }
     }
 
-    // 휴대폰 그룹 페이지와 같은 명소 장면 사진(posters)을 차 화면에서도 씀
+    // 휴대폰 그룹 페이지와 같은 명소 사진(companion/web/photos)을 차 화면에서도 씀
     sourceSets {
         getByName("main") {
             assets.srcDirs("src/main/assets", "../companion/web")

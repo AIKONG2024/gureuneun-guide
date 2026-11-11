@@ -68,7 +68,6 @@ import androidx.compose.ui.unit.dp
 import app.gureuneun.guide.core.LatLng
 import app.gureuneun.guide.core.Place
 import app.gureuneun.guide.core.PlaceKind
-import app.gureuneun.guide.sdk.VehicleBridge
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
@@ -348,87 +347,6 @@ fun Stars(have: Int, need: Int, size: Dp = 34.dp) {
 fun Segments(count: Int, index: Int, modifier: Modifier = Modifier, on: Color = C.accent, off: Color = Color(0x26FFFFFF)) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         repeat(count) { i -> Box(Modifier.height(8.dp).weight(1f).clip(RoundedCornerShape(4.dp)).background(if (i <= index) on else off)) }
-    }
-}
-
-// ---------------------------------------------------------------- 어느 쪽 창밖인지
-
-/**
- * 차를 위에서 본 그림 둘레에 그곳이 보이는 쪽을 밝힘. 운전자가 1초 안에 "오른쪽"을 알아보게 글보다 먼저 그림으로.
- * side: "left", "right", "ahead", "behind"
- */
-@Composable
-fun SideIndicator(side: String, size: Dp, modifier: Modifier = Modifier, color: Color = C.accent) {
-    Canvas(modifier.size(size)) {
-        val w = this.size.width
-        val c = Offset(w / 2f, w / 2f)
-        val r = w * 0.40f
-        val track = w * 0.05f
-        drawCircle(Color.White.copy(alpha = 0.12f), r, c, style = Stroke(width = track))
-        val mid = when (side) { "left" -> 180f; "right" -> 0f; "behind" -> 90f; else -> -90f }
-        drawArc(color, mid - 50f, 100f, false, Offset(c.x - r, c.y - r), Size(r * 2, r * 2), style = Stroke(width = w * 0.085f, cap = StrokeCap.Round))
-        // 바깥을 가리키는 화살촉
-        val a = Math.toRadians(mid.toDouble())
-        val tip = Offset(c.x + (r + w * 0.10f) * cos(a).toFloat(), c.y + (r + w * 0.10f) * sin(a).toFloat())
-        val base = Offset(c.x + (r + w * 0.03f) * cos(a).toFloat(), c.y + (r + w * 0.03f) * sin(a).toFloat())
-        val nx = -sin(a).toFloat()
-        val ny = cos(a).toFloat()
-        val half = w * 0.06f
-        drawPath(Path().apply { moveTo(tip.x, tip.y); lineTo(base.x + nx * half, base.y + ny * half); lineTo(base.x - nx * half, base.y - ny * half); close() }, color)
-        // 가운데 차 (앞이 위)
-        val cw = w * 0.22f
-        val ch = w * 0.38f
-        val body = Offset(c.x - cw / 2, c.y - ch / 2)
-        drawRoundRect(Color.White.copy(alpha = 0.92f), body, Size(cw, ch), CornerRadius(cw * 0.42f), style = Stroke(width = w * 0.022f))
-        drawRoundRect(Color.White.copy(alpha = 0.92f), Offset(c.x - cw * 0.34f, c.y - ch * 0.26f), Size(cw * 0.68f, ch * 0.16f), CornerRadius(cw * 0.1f))
-        drawRoundRect(Color.White.copy(alpha = 0.55f), Offset(c.x - cw * 0.3f, c.y + ch * 0.2f), Size(cw * 0.6f, ch * 0.1f), CornerRadius(cw * 0.08f))
-    }
-}
-
-// ---------------------------------------------------------------- 좌석 점호 그림
-
-/** 차를 위에서 본 좌석 그림. 빈자리는 테두리만, 앉았는데 벨트를 안 매면 빨간 테두리, 맸으면 파랗게 채움 */
-@Composable
-fun SeatMap(vehicle: VehicleBridge.State, lang: String, modifier: Modifier = Modifier) {
-    val seats = listOf(
-        Triple("ROW_1_LEFT", t(lang, "운전석", "Driver"), Offset(0f, 0f)),
-        Triple("ROW_1_RIGHT", t(lang, "조수석", "Passenger"), Offset(1f, 0f)),
-        Triple("ROW_2_LEFT", t(lang, "뒷좌석", "Rear left"), Offset(0f, 1f)),
-        Triple("ROW_2_RIGHT", t(lang, "뒷좌석", "Rear right"), Offset(1f, 1f)),
-    )
-    Box(modifier.size(440.dp, 560.dp)) {
-        Canvas(Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-            val line = Color.White.copy(alpha = 0.22f)
-            drawRoundRect(Color.White.copy(alpha = 0.04f), Offset(w * 0.04f, h * 0.02f), Size(w * 0.92f, h * 0.96f), CornerRadius(w * 0.22f))
-            drawRoundRect(line, Offset(w * 0.04f, h * 0.02f), Size(w * 0.92f, h * 0.96f), CornerRadius(w * 0.22f), style = Stroke(width = 4f))
-            // 앞 유리 아래 대시보드 줄과 운전대 (좌석 칸에 겹치지 않게 위쪽에)
-            drawLine(line, Offset(w * 0.16f, h * 0.11f), Offset(w * 0.84f, h * 0.11f), 4f, StrokeCap.Round)
-            drawLine(line, Offset(w * 0.2f, h * 0.9f), Offset(w * 0.8f, h * 0.9f), 4f, StrokeCap.Round)
-            drawCircle(line, w * 0.055f, Offset(w * 0.3f, h * 0.17f), style = Stroke(width = 4f))
-        }
-        seats.forEach { (key, name, pos) ->
-            val seated = key in vehicle.seatedKeys
-            val buckled = vehicle.buckled(key)
-            val bg = if (buckled) C.accent else Color.Transparent
-            val border = when { buckled -> C.accent; seated -> C.warn; else -> Color.White.copy(alpha = 0.18f) }
-            val fg = when { buckled -> C.onAccent; seated -> Color(0xFFFFDCD5); else -> C.text3 }
-            Column(
-                Modifier.offset(x = 48.dp + 180.dp * pos.x, y = 130.dp + 200.dp * pos.y).size(164.dp, 176.dp)
-                    .clip(RoundedCornerShape(30.dp)).background(bg).border(4.dp, border, RoundedCornerShape(30.dp)).padding(14.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Icon(if (buckled) Ic.Check else if (seated) Ic.Info else Ic.Plus, fg, 40.dp)
-                Spacer(Modifier.height(10.dp))
-                Text(name, style = T.label, color = fg, maxLines = 1)
-                Text(
-                    when { buckled -> t(lang, "벨트 착용", "Buckled"); seated -> t(lang, "벨트 미착용", "Not buckled"); else -> t(lang, "빈자리", "Empty") },
-                    style = T.caption, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
     }
 }
 

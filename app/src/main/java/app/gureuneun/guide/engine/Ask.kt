@@ -21,11 +21,11 @@ object Ask {
 
     enum class Intent { WHAT, WHERE, REPLAY, NEXT, PAUSE, RESUME, REMAIN, END_TRIP, UNKNOWN }
 
-    /** 차가 먼저 물어본 것(고른 장소, 창문, 보물 상자, 여행 끝)에 대한 짧은 대답 */
+    /** 차가 먼저 물어본 것(고른 장소, 여행 끝)에 대한 짧은 대답 */
     enum class Reply { YES, NO, LATER, DESTINATION, WAYPOINT }
 
     /** 지금 떠 있는 물음의 종류 */
-    enum class Prompt { PICK, WINDOW, TREASURE, END }
+    enum class Prompt { PICK, END }
 
     enum class Side { LEFT, RIGHT, AHEAD, BEHIND }
 
@@ -48,7 +48,7 @@ object Ask {
         val intent = when {
             // "그만"이 들어 있어도 여행 전체를 끝내자는 말이면 멈춤이 아니라 여행 끝
             has(t, "여행끝", "여행마치", "여행그만", "여행종료", "오늘은여기까지", "endtrip", "endthetrip", "finishthetrip", "finishtrip", "endourtrip") -> Intent.END_TRIP
-            // 창문을 움직여 달라는 말은 받지 않음 (창문은 차가 물었을 때 "응"으로만). "창문 그만 올려"의 '그만', "창문 다시 닫아"의 '다시'를
+            // 창문을 움직여 달라는 말은 받지 않음 (차 조작은 이 앱이 하지 않음). "창문 그만 올려"의 '그만', "창문 다시 닫아"의 '다시'를
             // 이야기 조작으로 잘못 듣지 않게 먼저 거름. "창문 밖에 저거 뭐야"처럼 움직이는 말이 없으면 그대로 질문
             has(t, "창문", "window") && has(t, "열", "닫", "올려", "내려", "open", "close", "shut", "roll", "lower") -> Intent.UNKNOWN
             // "배터리 얼마나 남았어"는 남은 길을 묻는 말이 아님 (차 상태는 이 앱이 답하지 않음)
@@ -67,8 +67,9 @@ object Ask {
     }
 
     // 한 글자 대답은 "어디야", "예쁘다"처럼 다른 말의 첫 글자와 겹치므로 그 말만 했을 때만 대답으로 봄
-    private val YES_KO = setOf("응", "응응", "네", "네네", "예", "넹", "웅", "어어")
-    private val YES_EN = listOf("yes", "yeah", "yep", "ok", "okay", "sure")
+    // "해 줘"도 마찬가지 ("시원하게 해 줘"를 장소 물음의 대답으로 듣지 않게)
+    private val YES_KO = setOf("응", "응응", "네", "네네", "예", "넹", "웅", "어어", "해줘", "해주세요", "부탁해", "부탁해요")
+    private val YES_EN = listOf("yes", "yeah", "yep", "ok", "okay", "sure", "please")
 
     /**
      * 차가 물어본 직후의 짧은 대답을 알아들음. 물음과 상관없는 말이면 null (그때는 parse 로 넘김).
@@ -82,10 +83,11 @@ object Ask {
             has(t, "경유", "들렀다", "들러", "들르", "들렀가", "가는길에", "waypoint", "addastop", "asastop", "ontheway") -> Reply.WAYPOINT
             // "다음에 보이는 거"처럼 질문에도 쓰이는 '다음에'는 빼고 미루는 말만
             has(t, "나중에", "다음에할", "다음에하", "이따", "later", "notnow", "maybelater") -> Reply.LATER
-            // "열지 마", "하지 말고"처럼 하지 말라는 말은 '열어' 같은 낱말이 들어 있어도 거절
+            // "넣지 마", "하지 말고"처럼 하지 말라는 말은 '넣어' 같은 낱말이 들어 있어도 거절
             has(t, "아니", "아뇨", "싫", "괜찮아", "됐어", "필요없", "안할래", "안해", "안좋", "지마", "지말", "그대로둬", "nothank", "nope", "dont", "donot") || t == "no" -> Reply.NO
-            has(t, "그래", "좋아", "알았어", "알겠어", "넣어", "열어", "해줘", "해주세요", "부탁", "오케이", "그렇게", "please", "doit", "goahead", "letsgo") -> Reply.YES
-            t in YES_KO -> Reply.YES
+            has(t, "그래", "좋아", "알았어", "알겠어", "넣어", "오케이", "그렇게", "doit", "goahead", "letsgo") -> Reply.YES
+            // "응 가자", "응 끝내 줘"처럼 응으로 시작하는 짧은 말도 대답
+            t in YES_KO || (t.startsWith("응") && t.length <= 8) -> Reply.YES
             YES_EN.any { w -> t == w || (t.startsWith(w) && t.length <= w.length + 6) } -> Reply.YES
             else -> null
         }
@@ -104,22 +106,21 @@ object Ask {
     /**
      * 물음이 떠 있을 때 들은 말을 그 물음의 대답으로 볼지 정함. null 이면 보통 질문으로 처리.
      * "응", "좋아"처럼 짧은 대답은 다른 뜻이 없을 때만 대답으로 보고,
-     * "목적지로", "나중에"처럼 물음에만 쓰는 말은 언제나 대답으로 봄.
-     * "창문 열어 줘"는 창문을 묻는 중일 때만 대답 (장소를 묻는 중에 들었다고 장소를 넣으면 안 되니까)
+     * "들렀다 가자", "끝내자"처럼 그 물음에만 맞는 말은 그 물음이 떠 있을 때만 대답으로 봄.
+     * "창문 열어 줘"처럼 차를 조작해 달라는 말은 대답으로 보지 않음 (장소를 묻는 중에 들었다고 장소를 넣으면 안 되니까)
      */
     fun answerFor(raw: String, prompt: Prompt): Reply? {
+        val t = squeeze(raw)
         val r = reply(raw)
         val q = parse(raw).intent
-        val aboutWindow = has(squeeze(raw), "창문", "window")
         return when {
-            aboutWindow && prompt != Prompt.WINDOW -> null
-            r == Reply.DESTINATION || r == Reply.WAYPOINT || r == Reply.LATER -> if (prompt == Prompt.PICK || r == Reply.LATER) r else Reply.YES
+            has(t, "창문", "window") -> null
+            r == Reply.LATER -> r
+            r == Reply.DESTINATION || r == Reply.WAYPOINT -> if (prompt == Prompt.PICK) r else null
             r == Reply.NO && (q == Intent.UNKNOWN || q == Intent.PAUSE) -> Reply.NO
             r == Reply.YES && q == Intent.UNKNOWN -> Reply.YES
-            // 창문을 묻는 중: "창문 내려 줘"는 그러자는 말, "창문 닫아", "창문 올려"는 됐다는 말
-            prompt == Prompt.WINDOW && aboutWindow && has(squeeze(raw), "닫", "올려", "close", "shut", "rollup") -> Reply.NO
-            prompt == Prompt.WINDOW && aboutWindow && has(squeeze(raw), "열", "내려", "open", "lower", "rolldown") -> Reply.YES
-            prompt == Prompt.END && q == Intent.END_TRIP -> Reply.YES
+            prompt == Prompt.END && (q == Intent.END_TRIP || has(t, "끝내", "마치자")) -> Reply.YES
+            prompt == Prompt.PICK && q == Intent.UNKNOWN && has(t, "가자", "갑시다", "가보자") -> Reply.YES
             else -> null
         }
     }

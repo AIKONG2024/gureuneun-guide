@@ -1,26 +1,22 @@
 package app.gureuneun.guide.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -29,17 +25,16 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,47 +42,41 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.gureuneun.guide.core.Geo
+import app.gureuneun.guide.core.Lang
 import app.gureuneun.guide.core.PlaceKind
-import app.gureuneun.guide.core.StoryLength
 import app.gureuneun.guide.core.pick
 import app.gureuneun.guide.engine.StoryPlayer
 import app.gureuneun.guide.engine.TripEngine
 import app.gureuneun.guide.net.CompanionClient
 import app.gureuneun.guide.sdk.MediaKeys
-import app.gureuneun.guide.sdk.NaviBridge
 import app.gureuneun.guide.sdk.UxBridge
 import app.gureuneun.guide.sdk.VehicleBridge
-import kotlinx.coroutines.delay
 
 /**
  * 여행 중 차 화면.
- * 달리는 동안(주행 규제 중이거나 P 가 아닐 때): 현대 블루 이야기 카드 하나가 주인공. 지금 이야기하는 곳 이름,
- * 그곳이 보이는 쪽(차 그림 둘레에 밝힘), 큰 단추 네 개만. 글과 영상, QR 은 차가 섰을 때만.
- * 차가 서면: 명소 장면을 크게, 옆에 QR 과 오늘 코스.
- * 차가 물어보는 것(여행 끝, 창문, 보물 상자, 고른 장소)은 한 번에 하나만. 달리는 동안에는 이야기 카드 안에서,
- * 서 있을 때는 가운데 창에서 같은 글과 같은 단추로 답함.
- * 앱이 내비게이션 옆 절반 창(Pleos 1:1 분할, 세로)에 들어가면 카드 안의 그림과 글을 위아래로 쌓고,
- * 답하는 단추는 주 단추를 위에 크게 둠. 달리는 동안은 스크롤 없이 한 화면에 들어감.
+ * 명소 사진 한 장이 화면을 채우고 그 위에 이름과 보이는 쪽만 올림. 달리는 동안에는 사진을 가만히 두고 글은 한 줄씩.
+ * 차가 서면 지금 읽는 문장과 옆 칸(QR, 오늘 코스)이 나옴.
+ * 차가 묻는 것(고른 장소, 여행 끝)은 한 번에 하나만. 달리는 동안에는 같은 자리에서 큰 단추 둘이나 "응" 한마디로 답함.
  */
 @Composable
 fun TripScreen(
     ui: TripEngine.Ui,
     vehicle: VehicleBridge.State,
     ux: UxBridge.Ux,
-    @Suppress("UNUSED_PARAMETER") navi: NaviBridge.State,
     group: CompanionClient.State,
     engine: TripEngine,
     partial: String = "",
@@ -96,131 +85,278 @@ fun TripScreen(
     ui.scenario ?: return
     val parked = vehicle.parked && !ux.restricted
     var showDemo by remember { mutableStateOf(false) }
-    // 뒤로 키는 시연 도구 창부터 닫음 (앱이 뒤로 숨지 않게)
-    BackHandler(enabled = showDemo && ui.demoMode) { showDemo = false }
+    BackHandler(enabled = showDemo) { showDemo = false }
     val toast = rememberToast(ui.toast, ui.toastSeq)
-    // 달리는 동안의 알림은 화면 위에 겹쳐 띄우지 않고 이야기 카드 안 한 줄로 보여 줌
-    val notice = toast.message.takeIf { toast.visible && ui.phase == TripEngine.Phase.DRIVING }
+    val prompt = promptOf(ui, engine)
 
-    BrandBackground {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val wide = maxWidth > 1100.dp
-            val inner = maxHeight - 64.dp
-            Box(Modifier.fillMaxSize().padding(32.dp)) {
-                when {
-                    wide -> Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                        Column(Modifier.weight(1.5f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                            TopBarArea(ui, group, engine, parked, partial, level, compact = false) { showDemo = true }
-                            if (parked) {
-                                Box(Modifier.weight(1f)) {
-                                    ParkedHero(ui, engine, Modifier.fillMaxSize())
-                                    // 서 있을 때의 알림은 장면 위쪽 하늘 자리에 (읽고 있는 문장과 옆 칸의 QR 을 가리지 않게)
-                                    if (ui.phase == TripEngine.Phase.DRIVING) ToastBubble(toast, Modifier.align(Alignment.TopCenter).padding(24.dp), fromTop = true)
-                                }
-                            } else {
-                                NowCard(ui, engine, Modifier.weight(1f), compact = false, notice = notice)
-                            }
-                        }
-                        if (parked) {
-                            Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                                ParkedSide(ui, group, engine)
-                            }
-                        } else {
-                            // 달리는 동안 오른쪽 칸은 밀지 않음: 지도가 남는 높이를 채움
-                            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                                DrivingSide(ui)
-                            }
-                        }
+    BoxWithConstraints(Modifier.fillMaxSize().background(C.bg)) {
+        val wide = maxWidth > 1100.dp
+        val pad = if (wide) 28.dp else 22.dp
+        when {
+            wide && parked -> Row(Modifier.fillMaxSize().padding(pad), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+                Stage(ui, engine, parked = true, compact = false, prompt = null, toast, partial, level, Modifier.weight(1.7f).fillMaxHeight()) { showDemo = true }
+                SidePanel(ui, group, engine, Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(top = 12.dp, end = 12.dp))
+            }
+            parked -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(pad), verticalArrangement = Arrangement.spacedBy(32.dp)) {
+                Stage(ui, engine, parked = true, compact = true, prompt = null, toast, partial, level, Modifier.fillMaxWidth().height(660.dp)) { showDemo = true }
+                SidePanel(ui, group, engine, Modifier.fillMaxWidth().padding(horizontal = 10.dp))
+            }
+            // 달리는 동안에는 사진 한 장뿐
+            else -> Stage(ui, engine, parked = false, compact = !wide, prompt, toast, partial, level, Modifier.fillMaxSize().padding(pad)) { showDemo = true }
+        }
+        if (parked && prompt != null) PromptDialog(prompt, ui)
+        if (showDemo && ui.demoMode) DemoSheet(ui, vehicle, engine) { showDemo = false }
+    }
+}
+
+// ---------------------------------------------------------------- 사진 무대
+
+/** 지금 무대에 올릴 것: 어느 곳 사진, 이름, 보이는 쪽, 덧붙이는 한 줄 */
+private class Scene(val photoId: String?, val eyebrow: String?, val title: String, val side: String?, val sub: String?)
+
+private fun sceneOf(ui: TripEngine.Ui, prompt: Prompt?, parked: Boolean, partial: String, heard: String?, hasPhoto: (String?) -> Boolean): Scene {
+    val sc = ui.scenario!!
+    val lang = Lang.screen
+    val now = ui.nowPlace
+    val next = ui.nextPlace
+    val playing = ui.sentenceCount > 0
+    // 창밖을 물어 답하는 중. 남은 길처럼 곳이 없는 답은 소리로만 하고 무대는 그대로 둠
+    val answering = playing && ui.nowKind == StoryPlayer.Kind.ANSWER && ui.answerPlaceId != null
+    // 명소 안내나 이야기, 아이 이야기를 들려주는 중 (인사나 알림은 무대를 바꾸지 않음)
+    val telling = playing && now != null && ui.nowKind in setOf(StoryPlayer.Kind.ANNOUNCE, StoryPlayer.Kind.STORY, StoryPlayer.Kind.KID)
+    val listening = ui.listening && !ui.asking
+
+    val photo = when {
+        // 고른 곳을 묻는 동안에는 그곳 사진, 물어본 것에 답하는 동안에는 답한 곳 사진 (사진이 있을 때만)
+        prompt?.photoId != null && hasPhoto(prompt.photoId) -> prompt.photoId
+        answering && hasPhoto(ui.answerPlaceId) -> ui.answerPlaceId
+        telling -> now?.id
+        !ui.departed -> sc.cover
+        next != null -> next.id
+        else -> now?.id ?: sc.cover
+    }
+    val title = when {
+        prompt != null -> prompt.title
+        listening -> t(lang, "듣고 있어요", "Listening")
+        answering -> sc.nameOf(ui.answerPlaceId)?.pick(lang) ?: ui.nowTitle.orEmpty()
+        telling -> now?.name?.pick(lang).orEmpty()
+        !ui.departed -> sc.title.pick(lang)
+        next != null -> next.name.pick(lang)
+        else -> now?.name?.pick(lang) ?: sc.title.pick(lang)
+    }
+    val eyebrow = when {
+        prompt != null -> prompt.eyebrow
+        listening || answering -> null
+        telling -> if (ui.nowKind == StoryPlayer.Kind.KID) t(lang, "뒷자리 친구들에게", "For the back seat") else null
+        !ui.departed -> null
+        next != null -> t(lang, "다음", "Next")
+        else -> null
+    }
+    val side = if (prompt == null && !listening && (telling || answering)) ui.nowSide else null
+    val sub = when {
+        prompt != null -> prompt.sub
+        listening -> partial.ifBlank { t(lang, "창밖에 보이는 걸 물어보세요", "Ask about anything outside") }
+        heard != null -> "“${heard}”"
+        // 글은 차가 섰을 때만: 지금 읽는 문장
+        parked && ui.nowSentence != null -> ui.nowSentence
+        !ui.departed -> t(lang, "출발하면 안내를 시작해요", "The guide starts when we set off")
+        !playing && next != null -> ui.nextDistanceM?.let { formatDist(it) }
+        else -> null
+    }
+    return Scene(photo, eyebrow, title, side, sub)
+}
+
+@Composable
+private fun Stage(
+    ui: TripEngine.Ui, engine: TripEngine, parked: Boolean, compact: Boolean, prompt: Prompt?,
+    toast: ToastState, partial: String, level: Double, modifier: Modifier, onDemo: () -> Unit,
+) {
+    val lang = Lang.screen
+    // 방금 알아들은 질문 (엔진이 3초 뒤에 지움)
+    val heard = ui.heardText?.takeIf { it.isNotBlank() }
+    val ctx = LocalContext.current
+    val scene = sceneOf(ui, prompt, parked, partial, heard) { Photos.has(ctx, it) }
+    var file by remember { mutableStateOf<String?>(null) }
+    val pad = if (compact) 30.dp else 44.dp
+
+    Box(modifier.clip(RoundedCornerShape(36.dp))) {
+        PhotoStage(scene.photoId, ui.night, moving = parked, Modifier.fillMaxSize()) { file = it }
+        // 아래로 갈수록 어둡게 해서 글자가 읽히게 함. 달리는 동안에는 사진을 한 번 더 눌러 글이 먼저 보이게
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(0f to Color(0x40000000), 0.28f to Color.Transparent, 0.52f to Color(0x4D05090F), 0.78f to Color(0xD905090F), 1f to Color(0xF205090F)),
+            ),
+        )
+        if (!parked) Box(Modifier.fillMaxSize().background(Color(0x1F000000)))
+        SideGlow(scene.side)
+
+        Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(pad), verticalAlignment = Alignment.CenterVertically) {
+            if (ui.stars > 0) StarCount(ui.stars)
+            Spacer(Modifier.weight(1f))
+            // 사진을 찍은 사람과 라이선스 (글자는 차가 섰을 때만)
+            if (parked) PhotoCredit(file)
+            if (ui.demoMode) {
+                Spacer(Modifier.width(16.dp))
+                IconBtn(Ic.Sliders, tint = Color(0xB3FFFFFF), bg = Color(0x33000000), size = 72.dp, label = t(lang, "시연 도구", "Demo tools"), onClick = onDemo)
+            }
+        }
+
+        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(pad)) {
+            // 운전자가 멈춰 둔 것만 알림. 길 안내나 방향지시등 때문에 잠깐 쉬는 것은 곧 이어 가므로 띄우지 않음
+            val paused = TripEngine.HOLD_USER in ui.holds && ui.sentenceCount > 0 && prompt == null
+            if (scene.side != null || paused || scene.eyebrow != null) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    scene.side?.let { SideChip(it, lang) }
+                    scene.eyebrow?.let { Text(it, style = T.label, color = Color(0xE6FFFFFF), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    if (paused) Text(t(lang, "멈춤", "Paused"), style = T.label, color = Color(0xB3FFFFFF), maxLines = 1)
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+            // 곳 이름은 한 줄, 물음은 두 줄까지
+            Text(
+                scene.title, style = (if (compact) T.headM else T.headL).copy(shadow = T.onImage), color = Color.White,
+                maxLines = if (prompt != null) 2 else 1, overflow = TextOverflow.Ellipsis,
+            )
+            scene.sub?.let {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    it, style = (if (compact) T.bodyM else T.bodyL).copy(shadow = T.onImage), color = Color(0xF2FFFFFF),
+                    maxLines = if (parked) 3 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 1100.dp),
+                )
+            }
+            if (toast.visible) {
+                Spacer(Modifier.height(20.dp))
+                NoticeLine(toast.message)
+            }
+            when {
+                prompt != null -> {
+                    Spacer(Modifier.height(28.dp))
+                    AnswerButtons(prompt, onPhoto = true)
+                    Spacer(Modifier.height(18.dp))
+                    VoiceHint(ui, prompt.words, onPhoto = true)
+                }
+                ui.departed -> {
+                    Spacer(Modifier.height(if (ui.sentenceCount > 1) 26.dp else 30.dp))
+                    if (ui.sentenceCount > 1) {
+                        Segments(ui.sentenceCount, ui.sentenceIndex, Modifier.fillMaxWidth(), on = Color.White, off = Color(0x40FFFFFF))
+                        Spacer(Modifier.height(24.dp))
                     }
-                    !parked -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                        TopBarArea(ui, group, engine, parked, partial, level, compact = true) { showDemo = true }
-                        NowCard(ui, engine, Modifier.weight(1f), compact = true, notice = notice)
-                        NextStrip(ui)
-                    }
-                    else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                        TopBarArea(ui, group, engine, parked, partial, level, compact = true) { showDemo = true }
-                        // 사진 칸 바로 아래 QR 카드가 첫 화면에 들어오게 높이를 맞춤 (나머지 카드는 밀어 봄)
-                        ParkedHero(ui, engine, Modifier.height((inner - 520.dp).coerceIn(600.dp, 760.dp)), compact = true)
-                        ParkedSide(ui, group, engine)
-                    }
+                    Controls(ui, engine, level)
                 }
             }
-
-            if (ui.phase == TripEngine.Phase.ROLLCALL) RollCall(ui, vehicle, group, parked, engine)
-            // 차가 서 있을 때만 화면 가운데 물음 창. 달리는 동안의 물음은 이야기 카드 안에서 답함 (화면을 덮지 않게)
-            if (parked && ui.phase == TripEngine.Phase.DRIVING) promptOf(ui, engine, driving = false)?.let { PromptDialog(it, ui) }
-            if (showDemo && ui.demoMode) DemoSheet(ui, vehicle, engine) { showDemo = false }
-            // 점호 창이 떠 있을 때와 절반 창에서 서 있을 때(밀어 보는 화면)의 알림은 창 맨 아래에 붙여, 어디를 보고 있어도 보이게 함
-            if (ui.phase == TripEngine.Phase.ROLLCALL || (!wide && parked)) {
-                Box(Modifier.fillMaxSize().padding(start = 32.dp, end = 32.dp, bottom = 40.dp), contentAlignment = Alignment.BottomCenter) { ToastBubble(toast) }
-            }
         }
     }
 }
 
-// ---------------------------------------------------------------- 맨 위 막대
-
+/** 그곳이 보이는 쪽 가장자리를 밝힘. 글을 읽지 않고 곁눈으로도 어느 쪽인지 알게 */
 @Composable
-private fun TopBarArea(
-    ui: TripEngine.Ui, group: CompanionClient.State, engine: TripEngine, parked: Boolean,
-    partial: String, level: Double, compact: Boolean, onDemo: () -> Unit,
-) {
-    // 듣는 동안과 알아들은 직후에는 이 자리에 듣기 표시를 겹쳐 띄움 (아래 카드는 밀리지 않음)
-    Box {
-        TopBar(ui, group, engine, parked, compact, onDemo)
-        Hearing(ui, partial, level, Modifier.matchParentSize())
+private fun BoxScope.SideGlow(side: String?) {
+    val soft = C.accent.copy(alpha = 0.5f)
+    when (side) {
+        "right" -> {
+            Box(Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(180.dp).background(Brush.horizontalGradient(listOf(Color.Transparent, soft))))
+            Box(Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(12.dp).background(C.accent))
+        }
+        "left" -> {
+            Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().width(180.dp).background(Brush.horizontalGradient(listOf(soft, Color.Transparent))))
+            Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().width(12.dp).background(C.accent))
+        }
+        "ahead" -> {
+            Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(150.dp).background(Brush.verticalGradient(listOf(soft, Color.Transparent))))
+            Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(12.dp).background(C.accent))
+        }
     }
 }
 
 @Composable
-private fun TopBar(ui: TripEngine.Ui, group: CompanionClient.State, engine: TripEngine, parked: Boolean, compact: Boolean, onDemo: () -> Unit) {
-    val lang = ui.lang
-    val sc = ui.scenario ?: return
-    // 절반 창에서는 앱 표시를 빼고 단추 안쪽 여백을 줄여 여행 이름이 잘리지 않게
-    val pad = if (compact) 20.dp else 26.dp
-    Row(Modifier.fillMaxWidth().heightIn(min = 96.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        if (!compact) {
-            AppMark(64.dp)
-            Spacer(Modifier.width(4.dp))
-        }
-        Column(Modifier.weight(1f)) {
-            Text(sc.who.pick(lang), style = T.label, color = C.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(sc.title.pick(lang), style = T.titleM, color = C.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        // 그룹 번호와 휴대폰 수는 QR 카드에서 보여 줌. 맨 위에는 운전자가 알아야 할 것만
-        if (group.cars.size > 1) Tag(t(lang, "차 ${group.cars.size}대", "${group.cars.size} cars"), Ic.Car)
-        if (ui.demoMode) Btn(t(lang, "시연", "Demo"), icon = Ic.Sliders, tone = Tone.Quiet, height = 76.dp, style = T.label, iconSize = 28.dp, hPad = pad, onClick = onDemo)
-        // 여행을 끝내는 단추는 차가 섰을 때만. 달리는 동안은 "여행 끝내 줘"라고 말하면 됨
-        if (parked && ui.phase == TripEngine.Phase.DRIVING) Btn(t(lang, "여행 끝", "End trip"), icon = Ic.Flag, height = 76.dp, style = T.label, iconSize = 28.dp, hPad = pad) { engine.requestEndTrip() }
+private fun SideChip(side: String, lang: String) {
+    val turn = when (side) { "left" -> 180f; "ahead" -> -90f; "behind" -> 90f; else -> 0f }
+    Row(
+        Modifier.clip(RoundedCornerShape(18.dp)).background(C.accent).padding(horizontal = 18.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(Ic.Arrow, C.onAccent, 30.dp, Modifier.graphicsLayer { rotationZ = turn })
+        Text(sideWord(side, lang), style = T.label.copy(fontWeight = FontWeight.Bold), color = C.onAccent, maxLines = 1)
     }
 }
 
-/** 듣는 중이면 소리 크기 막대와 들리는 글자, 다 들으면 알아들은 문장을 맨 위 막대 자리에 잠깐 띄움 */
 @Composable
-private fun Hearing(ui: TripEngine.Ui, partial: String, level: Double, modifier: Modifier) {
-    var showHeard by remember { mutableStateOf(false) }
-    LaunchedEffect(ui.heardSeq) {
-        if (ui.heardSeq > 0) {
-            showHeard = true
-            delay(4000)
-            showHeard = false
-        }
+private fun StarCount(stars: Int) {
+    Row(
+        Modifier.clip(RoundedCornerShape(18.dp)).background(Color(0x66000000)).padding(horizontal = 18.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(Ic.Star, C.sand, 30.dp)
+        Text("$stars", style = T.label, color = Color.White)
     }
-    // 차가 물은 것에 답을 듣는 중이면 물음 아래 안내 한 곳에서만 보여 줌 (한눈에 볼 것을 하나로)
-    val visible = (ui.listening && !ui.asking) || (showHeard && ui.heardText != null)
-    AnimatedVisibility(visible, modifier, enter = fadeIn(), exit = fadeOut()) {
-        val shape = RoundedCornerShape(28.dp)
-        Row(
-            Modifier.fillMaxSize().clip(shape).background(Color(0xFF0A1C38)).border(2.dp, C.accent.copy(alpha = 0.7f), shape).padding(horizontal = 26.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            if (ui.listening) LevelBars(level, Modifier.size(64.dp, 44.dp)) else Icon(Ic.Mic, C.accent, 36.dp)
-            Text(if (ui.listening) t(ui.lang, "듣고 있어요", "Listening") else t(ui.lang, "이렇게 들었어요", "I heard"), style = T.label, color = C.accent, maxLines = 1)
-            val hint = t(ui.lang, "창밖에 보이는 걸 물어보세요", "Ask about anything outside")
-            val shown = if (ui.listening) partial.ifBlank { hint } else "“${ui.heardText ?: ""}”"
-            Text(shown, style = T.bodyL, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        }
+}
+
+@Composable
+private fun PhotoCredit(file: String?) {
+    val ctx = LocalContext.current
+    val credit = remember(file) { file?.let { Photos.credit(ctx, it) } } ?: return
+    Text(
+        "사진 ${credit.author} · ${credit.license}", style = T.caption.copy(shadow = T.onImage), color = Color(0xB3FFFFFF),
+        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 620.dp),
+    )
+}
+
+/** 짧은 알림 한 줄 (4초) */
+@Composable
+private fun NoticeLine(msg: String) {
+    Row(
+        Modifier.clip(RoundedCornerShape(20.dp)).background(Color(0x99000000)).padding(horizontal = 24.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Icon(Ic.Info, Color.White, 28.dp)
+        Text(msg, style = T.bodyM, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** 이야기 조작: 다시, 멈춤, 다음은 운전대 버튼과 같은 일. 물어보기만 색을 줌 */
+@Composable
+private fun Controls(ui: TripEngine.Ui, engine: TripEngine, level: Double) {
+    val lang = Lang.screen
+    val paused = TripEngine.HOLD_USER in ui.holds
+    // 들려주는 것이 없을 때는 멈춤과 다음을 흐리게 (다시 듣기는 방금 끝난 이야기를 다시 들려줌)
+    val playing = ui.sentenceCount > 0
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        RoundBtn(Ic.Replay, t(lang, "다시 듣기", "Replay")) { engine.onMediaCommand(MediaKeys.Command.PREVIOUS) }
+        RoundBtn(if (paused) Ic.Play else Ic.Pause, if (paused) t(lang, "계속", "Resume") else t(lang, "멈춤", "Pause"), enabled = playing || paused) { engine.togglePause() }
+        RoundBtn(Ic.Next, t(lang, "다음 이야기", "Next"), enabled = playing) { engine.onMediaCommand(MediaKeys.Command.NEXT) }
+        Spacer(Modifier.weight(1f))
+        MicButton(ui, level) { engine.ask() }
+    }
+}
+
+@Composable
+private fun RoundBtn(icon: Ic, label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.93f else 1f, tween(90), label = "press")
+    Box(
+        Modifier.size(104.dp).graphicsLayer { scaleX = scale; scaleY = scale; alpha = if (enabled) 1f else 0.35f }.clip(CircleShape)
+            .background(if (pressed) Color(0x59FFFFFF) else Color(0x33FFFFFF))
+            .clickable(interactionSource = src, indication = null, enabled = enabled, onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, Color.White, 42.dp) }
+}
+
+@Composable
+private fun MicButton(ui: TripEngine.Ui, level: Double, onClick: () -> Unit) {
+    val lang = Lang.screen
+    val listening = ui.listening && !ui.asking
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.95f else 1f, tween(90), label = "press")
+    Row(
+        Modifier.height(104.dp).widthIn(min = 300.dp).graphicsLayer { scaleX = scale; scaleY = scale }.clip(RoundedCornerShape(52.dp)).background(C.accent)
+            .clickable(interactionSource = src, indication = null, onClick = onClick).padding(horizontal = 40.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+    ) {
+        if (listening) LevelBars(level, Modifier.size(56.dp, 40.dp)) else Icon(Ic.Mic, C.onAccent, 42.dp)
+        Text(if (listening) t(lang, "듣는 중", "Listening") else t(lang, "물어보기", "Ask"), style = T.button, color = C.onAccent, maxLines = 1)
     }
 }
 
@@ -237,752 +373,210 @@ private fun LevelBars(level: Double, modifier: Modifier) {
         for (i in 0 until n) {
             val wobble = 0.4f + 0.6f * ((kotlin.math.sin(phase + i * 1.3f) + 1f) / 2f)
             val bh = size.height * (0.14f + 0.86f * amp * wobble)
-            drawRoundRect(C.accent, topLeft = Offset(i * bw * 2f, (size.height - bh) / 2f), size = Size(bw, bh), cornerRadius = CornerRadius(bw / 2f))
+            drawRoundRect(C.onAccent, topLeft = Offset(i * bw * 2f, (size.height - bh) / 2f), size = Size(bw, bh), cornerRadius = CornerRadius(bw / 2f))
         }
-    }
-}
-
-// ---------------------------------------------------------------- 달리는 동안: 이야기 카드
-
-@Composable
-private fun NowCard(ui: TripEngine.Ui, engine: TripEngine, modifier: Modifier, compact: Boolean, notice: String? = null) {
-    val lang = ui.lang
-    // 달리는 동안 차가 물은 것(고른 장소, 여행 끝)은 이 카드 안에서 답함
-    val prompt = promptOf(ui, engine, driving = true)
-    // 들려주는 것이 없는 동안에는 다음 명소가 주인공 (끝난 이야기 제목을 붙들고 있지 않게)
-    val next = ui.nextPlace
-    val quiet = isQuiet(ui)
-    val title = when {
-        // 물음이 떠 있으면 무엇을 묻는지가 제목
-        prompt != null -> prompt.title
-        quiet && next != null -> next.name.pick(lang)
-        quiet -> t(lang, "명소를 모두 지났어요", "Every stop is behind us")
-        else -> ui.nowTitle ?: t(lang, "출발 준비 중", "Getting ready")
-    }
-    BrandCard(modifier.fillMaxWidth(), padding = if (compact) 32.dp else 40.dp) {
-        when {
-            prompt != null -> Eyebrow(prompt.eyebrow, prompt.icon, C.onBrand2)
-            quiet -> Text(if (next != null) t(lang, "다음 명소", "Next stop") else t(lang, "오늘 코스", "Today's course"), style = T.label, color = C.onBrand2, maxLines = 1)
-            else -> KindRow(ui, title)
-        }
-        Spacer(Modifier.height(6.dp))
-        // 곳 이름은 한 줄, 물음은 두 줄까지 (물음이 잘리면 무엇을 묻는지 알 수 없으니까)
-        val question = prompt != null && prompt.title.length > 12
-        Text(title, style = if (compact || question) T.headM else T.headL, color = Color.White, maxLines = if (question) 2 else 1, overflow = TextOverflow.Ellipsis)
-        Spacer(Modifier.height(18.dp))
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            when {
-                prompt != null -> DockCenter(prompt, compact)
-                quiet -> QuietCenter(ui, compact)
-                else -> DrivingCenter(ui, compact)
-            }
-        }
-        if (prompt != null) {
-            if (notice != null) {
-                NoticeLine(Ic.Info, notice, lines = 2)
-                Spacer(Modifier.height(18.dp))
-            }
-            // 답하는 단추는 평소 조작 단추가 있던 자리에 (손이 가는 곳을 바꾸지 않게)
-            AnswerButtons(prompt.primary, prompt.others, onBrand = true)
-            Spacer(Modifier.height(18.dp))
-            VoiceHint(ui, prompt.words, onBrand = true)
-        } else {
-            val hold = ui.holds.firstOrNull { it != TripEngine.HOLD_LISTEN }
-            // 짧은 알림은 4초 동안 이 줄에, 그 밖에는 이야기가 왜 멈췄는지를 보여 줌
-            if (notice != null) {
-                NoticeLine(Ic.Info, notice, lines = 2)
-                Spacer(Modifier.height(18.dp))
-            } else if (hold != null) {
-                NoticeLine(Ic.Pause, holdMessage(hold, lang))
-                Spacer(Modifier.height(18.dp))
-            }
-            // 한 문장짜리 안내에는 진행 막대를 그리지 않음
-            if (ui.sentenceCount > 1) {
-                Segments(ui.sentenceCount, ui.sentenceIndex, Modifier.fillMaxWidth())
-                Spacer(Modifier.height(22.dp))
-            }
-            ControlBar(ui, engine)
-        }
-    }
-}
-
-/** 들려주는 것도, 답을 기다리는 물음도 없이 달리는 중인지 */
-private fun isQuiet(ui: TripEngine.Ui) = !hasPrompt(ui) && ui.sentenceCount == 0 && ui.phase == TripEngine.Phase.DRIVING
-
-private fun hasPrompt(ui: TripEngine.Ui) = ui.confirmEnd || ui.windowAsk != null || ui.treasureAsk || ui.pick != null
-
-/** 절반 창에서 달릴 때 카드 아래 '다음 명소' 줄이 보이는지 (조용할 때는 카드가 이미 다음 명소를 크게 보여 줌) */
-private fun nextStripShown(ui: TripEngine.Ui) = ui.nextPlace != null && !isQuiet(ui)
-
-/** 카드 맨 위: 지금 무엇을 하는 중인지, 이야기 길이. 아래 큰 제목과 같은 말이면 그곳 이름을 대신 씀 */
-@Composable
-private fun KindRow(ui: TripEngine.Ui, title: String?, nowKind: StoryPlayer.Kind? = ui.nowKind) {
-    val lang = ui.lang
-    // 다 들려준 뒤에는 "지금 들려주는 이야기"가 아니라 "방금 들은 이야기"
-    val idle = ui.sentenceCount == 0
-    val kind = if (idle) idleLabel(nowKind, lang) else kindLabel(nowKind, lang)
-    val label = if (kind == title) ui.nowPlace?.name?.pick(lang)?.takeIf { it != title } else kind
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        if (label != null) Text(label, style = T.label, color = C.onBrand2, maxLines = 1)
-        // 이야기 길이는 다음 길 안내까지 조용히 들을 수 있는 시간에 맞춰 고름
-        val len = ui.nowLength
-        if (len != null && ui.nowKind == StoryPlayer.Kind.STORY && !idle) {
-            Box(Modifier.clip(RoundedCornerShape(14.dp)).background(C.onBrandRaised).padding(horizontal = 14.dp, vertical = 4.dp)) {
-                Text(lengthLabel(len, lang), style = T.label, color = Color.White, maxLines = 1)
-            }
-        }
-    }
-}
-
-/**
- * 이야기 카드 가운데: 그림과 글. 넓은 창은 그림 왼쪽, 글 오른쪽.
- * 절반 창(세로)은 키가 커서 그림을 위에 크게 두고 글을 그 아래 가운데에 (한눈에 들어오게)
- */
-@Composable
-private fun CenterLayout(compact: Boolean, visual: @Composable () -> Unit, text: @Composable (TextAlign) -> Unit) {
-    if (compact) {
-        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            visual()
-            Spacer(Modifier.height(30.dp))
-            Column(horizontalAlignment = Alignment.CenterHorizontally) { text(TextAlign.Center) }
-        }
-    } else {
-        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(40.dp)) {
-            visual()
-            Column { text(TextAlign.Start) }
-        }
-    }
-}
-
-/** 둥근 판 위 아이콘 (카드 가운데 그림) */
-@Composable
-private fun Medallion(icon: Ic, size: Dp) {
-    Box(Modifier.size(size).clip(CircleShape).background(C.onBrandRaised), contentAlignment = Alignment.Center) {
-        Icon(icon, Color.White, size * 0.46f)
-    }
-}
-
-@Composable
-private fun DrivingCenter(ui: TripEngine.Ui, compact: Boolean) {
-    val lang = ui.lang
-    val side = ui.nowSide
-    val showSide = side != null && ui.nowKind in setOf(StoryPlayer.Kind.ANNOUNCE, StoryPlayer.Kind.STORY, StoryPlayer.Kind.KID, StoryPlayer.Kind.ANSWER)
-    if (showSide) {
-        CenterLayout(compact, { SideIndicator(side, 250.dp) }) { align ->
-            Text(sideLabel(side, ui.nowKind, lang), style = T.headM, color = Color.White, maxLines = 2, textAlign = align)
-            Spacer(Modifier.height(6.dp))
-            Text(t(lang, "창밖을 보면 돼요", "Take a look outside"), style = T.bodyL, color = C.onBrand2, textAlign = align)
-        }
-    } else {
-        CenterLayout(compact, { Medallion(Ic.Speaker, if (compact) 170.dp else 200.dp) }) { align ->
-            Text(t(lang, "운전 중에는 소리로 안내해요", "While driving, the guide speaks"), style = T.titleL, color = Color.White, maxLines = 2, textAlign = align)
-            Spacer(Modifier.height(6.dp))
-            Text(t(lang, "글과 영상은 동승자 휴대폰에서 같이 봐요", "Text and video are on passengers' phones"), style = T.bodyM, color = C.onBrand2, maxLines = 2, textAlign = align)
-        }
-    }
-}
-
-/** 들려주는 것이 없을 때: 다음 명소까지 남은 거리. 가까워지면 차가 먼저 말한다는 것만 알려 줌 */
-@Composable
-private fun QuietCenter(ui: TripEngine.Ui, compact: Boolean) {
-    val lang = ui.lang
-    val next = ui.nextPlace
-    val dist = ui.nextDistanceM
-    CenterLayout(compact, { Medallion(if (next != null) Ic.Navigation else Ic.Flag, if (compact) 170.dp else 200.dp) }) { align ->
-        if (next != null && dist != null) {
-            Row {
-                Text(formatDist(dist), style = T.headM, color = Color.White, maxLines = 1, modifier = Modifier.alignByBaseline())
-                Text(t(lang, " 남았어요", " to go"), style = T.titleM, color = C.onBrand2, maxLines = 1, modifier = Modifier.alignByBaseline())
-            }
-            Spacer(Modifier.height(6.dp))
-        }
-        Text(
-            if (next != null) t(lang, "가까워지면 차가 먼저 알려 드려요", "The car will speak up as we get close")
-            else t(lang, "여행을 마치려면 “여행 끝내 줘”라고 말해 주세요", "To finish, just say “end the trip”"),
-            style = T.bodyL, color = if (next != null && dist != null) C.onBrand2 else Color.White, maxLines = 2, textAlign = align,
-        )
-    }
-}
-
-/** 이야기 카드 안의 한 줄 안내: 이야기가 멈춘 까닭, 또는 4초짜리 짧은 알림 */
-@Composable
-private fun NoticeLine(icon: Ic, msg: String, lines: Int = 1) {
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color(0x1FFFFFFF)).padding(horizontal = 24.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Icon(icon, C.onBrand2, 30.dp)
-        Text(msg, style = T.bodyM, color = Color.White, maxLines = lines, overflow = TextOverflow.Ellipsis)
-    }
-}
-
-/** 이야기 조작 단추 네 개. 아이콘 위, 라벨 아래 (운전대의 이전, 다음 버튼과 같은 일) */
-@Composable
-private fun ControlBar(ui: TripEngine.Ui, engine: TripEngine) {
-    val lang = ui.lang
-    val paused = TripEngine.HOLD_USER in ui.holds
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-        CtrlBtn(Ic.Replay, t(lang, "다시 듣기", "Replay"), Modifier.weight(1f)) { engine.onMediaCommand(MediaKeys.Command.PREVIOUS) }
-        CtrlBtn(if (paused) Ic.Play else Ic.Pause, if (paused) t(lang, "계속", "Resume") else t(lang, "멈춤", "Pause"), Modifier.weight(1f)) { engine.togglePause() }
-        CtrlBtn(Ic.Next, t(lang, "다음 이야기", "Next"), Modifier.weight(1f)) { engine.onMediaCommand(MediaKeys.Command.NEXT) }
-        CtrlBtn(Ic.Mic, if (ui.listening && !ui.asking) t(lang, "듣는 중", "Listening") else t(lang, "물어보기", "Ask"), Modifier.weight(1.25f), primary = true) { engine.ask() }
-    }
-}
-
-@Composable
-private fun CtrlBtn(icon: Ic, label: String, modifier: Modifier, primary: Boolean = false, onClick: () -> Unit) {
-    val src = remember { MutableInteractionSource() }
-    val pressed by src.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.95f else 1f, tween(90), label = "press")
-    val fg = if (primary) C.onAccent else Color.White
-    Column(
-        modifier.height(120.dp).graphicsLayer { scaleX = scale; scaleY = scale }.clip(RoundedCornerShape(26.dp))
-            .background(if (primary) C.accent else C.onBrandRaised)
-            .drawWithContent { drawContent(); if (pressed) drawRect(Color.White.copy(alpha = 0.12f)) }
-            .clickable(interactionSource = src, indication = null, onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Icon(icon, fg, 40.dp)
-        Spacer(Modifier.height(8.dp))
-        Text(label, style = T.label, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
 // ---------------------------------------------------------------- 차가 물어본 것
 
-/** 답 단추 하나 (글, 아이콘, 넓은 줄에서 차지하는 몫) */
-private class Answer(val text: String, val icon: Ic? = null, val weight: Float = 1f, val onClick: () -> Unit)
-
-/**
- * 차가 물어본 것 하나 (여행 끝, 창문, 보물 상자, 고른 장소).
- * 달리는 동안에는 이야기 카드 안에, 차가 서 있으면 가운데 창에 같은 글과 같은 단추로 보여 줌
- */
+/** 차가 물어본 것 하나 (고른 장소, 여행 끝). 답은 늘 둘: 그러자, 아니면 나중에 */
 private class Prompt(
-    val icon: Ic,
-    /** 작은 머리글: 누가 고른 곳인지, 어디에서 묻는지 */
-    val eyebrow: String,
-    /** 물음 (고른 장소는 그곳 이름) */
+    val eyebrow: String?,
     val title: String,
-    /** 판단에 필요한 한 줄 */
-    val body: String,
-    /** 덧붙이는 한 줄 */
-    val hint: String,
-    val primary: Answer,
-    val others: List<Answer>,
+    val sub: String?,
+    val yes: String,
+    val no: String,
     /** 말로 답할 때 쓸 낱말 */
     val words: String,
-    val tint: Color = C.accent,
+    val onYes: () -> Unit,
+    val onNo: () -> Unit,
+    val photoId: String? = null,
 )
 
-/**
- * 지금 답을 기다리는 물음. 순서는 엔진이 말로 들은 답을 넘기는 순서와 같음 (여행 끝, 창문, 보물 상자, 고른 장소).
- * 달리는 동안(driving)에는 고른 장소의 답을 둘로 줄임: 그러자, 나중에. 목적지를 바꾸는 것은 차가 선 뒤에 고름
- */
-private fun promptOf(ui: TripEngine.Ui, engine: TripEngine, driving: Boolean): Prompt? {
-    val lang = ui.lang
-    val window = ui.windowAsk
+private fun promptOf(ui: TripEngine.Ui, engine: TripEngine): Prompt? {
+    val lang = Lang.screen
     val pick = ui.pick
     return when {
         ui.confirmEnd -> Prompt(
-            Ic.Flag, t(lang, "여행 끝", "End trip"), t(lang, "오늘 여행을 끝낼까요?", "End today's trip?"),
-            t(lang, "끝내면 하루 기록을 보여 드려요", "We'll show today's record"),
-            t(lang, "앱이 바꾼 실내 조명은 원래대로 돌려 둬요", "The cabin lights go back to how they were"),
-            Answer(t(lang, "끝내고 기록 보기", "End and see the record"), Ic.Flag) { engine.endTrip() },
-            listOf(Answer(t(lang, "계속 가기", "Keep going")) { engine.cancelEndTrip() }),
-            t(lang, "‘응’ 또는 ‘아니’", "“yes” or “no”"),
-        )
-        window != null -> Prompt(
-            Ic.Window, window.name.pick(lang), t(lang, "앞 창문을 조금 내려 볼까요?", "Lower the front windows a little?"),
-            t(lang, "파도 소리가 들어올 만큼만 열어요", "Just enough to let the sound of the waves in"),
-            t(lang, "뒷창문은 그대로 두고, 차가 서 있을 때만 움직여요", "Rear windows stay shut. Windows move only while parked"),
-            Answer(t(lang, "창문 내리기", "Lower windows"), Ic.Window) { engine.answerWindow(true) },
-            listOf(Answer(t(lang, "괜찮아요", "No thanks")) { engine.answerWindow(false) }),
-            t(lang, "‘응’ 또는 ‘괜찮아’", "“yes” or “no thanks”"),
-        )
-        ui.treasureAsk -> Prompt(
-            Ic.Gift, t(lang, "보물 상자", "Treasure box"), t(lang, "보물 상자를 열어 볼까요?", "Open the treasure box?"),
-            t(lang, "별 ${ui.stars}개를 다 모았어요", "All ${ui.stars} stars collected"),
-            t(lang, "조수석 앞 글로브 박스 잠금을 풀어요. 달리기 시작하면 다시 잠가요", "This unlocks the glove box. It locks again when we drive off"),
-            Answer(t(lang, "열어 주세요", "Open it"), Ic.Gift) { engine.answerTreasure(true) },
-            listOf(Answer(t(lang, "나중에", "Later")) { engine.answerTreasure(false) }),
-            t(lang, "‘응’ 또는 ‘나중에’", "“yes” or “later”"),
-            tint = C.sand,
+            null, t(lang, "오늘 여행을 끝낼까요?", "End today's trip?"), null,
+            t(lang, "끝내고 기록 보기", "End and see the record"), t(lang, "계속 가기", "Keep going"),
+            t(lang, "‘응’ · ‘아니’", "“yes” · “no”"),
+            { engine.endTrip() }, { engine.cancelEndTrip() },
         )
         pick != null -> {
-            // 주차장은 '그리로 안내'가, 카페와 볼거리는 '가는 길에 들르기'가 먼저 ("응"이라고 하면 이것)
+            // 주차장은 그리로 안내, 카페와 볼거리는 가는 길에 들르기 ("응"이라고 하면 이것)
             val parking = pick.kind.equals("parking", ignoreCase = true)
             val word = when (pick.kind.lowercase()) {
                 "cafe" -> t(lang, "카페", "Café")
                 "parking" -> t(lang, "주차장", "Parking")
-                "landmark" -> t(lang, "볼거리", "Sight")
-                else -> t(lang, "고른 곳", "Picked place")
+                else -> t(lang, "볼거리", "Sight")
             }
             val d = ui.carPos?.let { Geo.distanceM(it, pick.pos) }
-            val stopText = if (parking) t(lang, "경유지로", "Add a stop") else t(lang, "가는 길에 들르기", "Stop on the way")
-            val goText = if (parking) t(lang, "그리로 안내", "Take us there") else t(lang, "목적지로 바꾸기", "Go there instead")
-            val stop: () -> Unit = { engine.answerPick("waypoint") }
-            val go: () -> Unit = { engine.answerPick("destination") }
-            val first = if (parking) Answer(goText, Ic.Navigation, 1.3f, go) else Answer(stopText, Ic.Pin, 1.3f, stop)
-            val second = if (parking) Answer(stopText, onClick = stop) else Answer(goText, onClick = go)
-            val later = Answer(t(lang, "나중에", "Later"), weight = 0.8f) { engine.answerPick("later") }
             Prompt(
-                pickIcon(pick), pickLabel(pick, lang), pick.name,
-                if (d != null) t(lang, "${word}, 여기서 ${formatDist(d)}", "${word}, ${formatDist(d)} away") else word,
-                when {
-                    driving -> t(lang, "미뤄 두면 차를 세웠을 때 다시 보여 드려요", "Say later and it comes back when we stop")
-                    parking -> t(lang, "목적지로 바꾸거나 가는 길에 들를 수 있어요", "Make it the destination or stop on the way")
-                    else -> t(lang, "가는 길에 들르거나 목적지로 바꿀 수 있어요", "Stop on the way or make it the destination")
-                },
-                first, if (driving) listOf(later) else listOf(second, later),
-                if (driving) t(lang, "‘응’ 또는 ‘나중에’", "“yes” or “later”") else t(lang, "‘응’, ‘목적지로’, ‘나중에’", "“yes”, “destination”, “later”"),
+                pickLabel(pick, lang), engine.pickName(pick), if (d != null) "$word · ${formatDist(d)}" else word,
+                if (parking) t(lang, "그리로 안내", "Take us there") else t(lang, "들르기", "Stop there"), t(lang, "나중에", "Later"),
+                t(lang, "‘응’ · ‘나중에’", "“yes” · “later”"),
+                { engine.answerPick(if (parking) "destination" else "waypoint") }, { engine.answerPick("later") },
+                photoId = ui.scenario?.photoOf(pick.placeId),
             )
         }
         else -> null
     }
 }
 
-/** 달리는 동안 이야기 카드 가운데: 판단에 필요한 것만 (그림 하나, 한 줄, 덧붙이는 한 줄) */
 @Composable
-private fun DockCenter(p: Prompt, compact: Boolean) {
-    CenterLayout(compact, { Medallion(p.icon, if (compact) 140.dp else 200.dp) }) { align ->
-        Text(p.body, style = T.titleL, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = align)
-        Spacer(Modifier.height(8.dp))
-        Text(p.hint, style = T.bodyL, color = C.onBrand2, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = align)
+private fun AnswerButtons(p: Prompt, onPhoto: Boolean) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+        Btn(p.yes, Modifier.weight(1.4f), tone = Tone.Primary, height = 108.dp, onClick = p.onYes)
+        Btn(p.no, Modifier.weight(1f), tone = if (onPhoto) Tone.OnBrand else Tone.Secondary, height = 108.dp, onClick = p.onNo)
     }
 }
 
-/** 차가 서 있을 때 화면 가운데 뜨는 물음 창 */
+/** 말로도 답할 수 있다는 표시. 차가 듣는 중이면 색을 줌 */
+@Composable
+private fun VoiceHint(ui: TripEngine.Ui, words: String, onPhoto: Boolean) {
+    val listening = ui.asking && ui.listening
+    val color = when {
+        listening -> C.accent
+        onPhoto -> Color(0xCCFFFFFF)
+        else -> C.text3
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Icon(Ic.Mic, color, 30.dp)
+        Text(words, style = T.bodyM.copy(fontWeight = if (listening) FontWeight.SemiBold else FontWeight.Normal), color = color, maxLines = 1)
+    }
+}
+
+/** 차가 서 있을 때는 같은 물음을 화면 가운데에 띄움 */
 @Composable
 private fun PromptDialog(p: Prompt, ui: TripEngine.Ui) {
-    PopupFrame(p.icon, p.tint, width = if (p.others.size > 1) 1100.dp else 1000.dp) {
-        Text(p.eyebrow, style = T.label, color = p.tint, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Spacer(Modifier.height(8.dp))
-        Text(p.title, style = T.titleL, color = C.text, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Spacer(Modifier.height(10.dp))
-        Text(p.body, style = T.bodyS, color = C.text2, textAlign = TextAlign.Center)
-        Text(p.hint, style = T.bodyS, color = C.text3, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(32.dp))
-        AnswerButtons(p.primary, p.others, onBrand = false)
-        Spacer(Modifier.height(22.dp))
-        VoiceHint(ui, p.words, onBrand = false)
-    }
-}
-
-/**
- * 물음에 답하는 단추 묶음. 줄이 넉넉하면 한 줄에 나란히,
- * 좁으면(절반 창) 주 단추를 위에 한 줄로 크게 두고 나머지는 그 아래에 나란히 둠 (글자가 잘리지 않게)
- */
-@Composable
-private fun AnswerButtons(primary: Answer, others: List<Answer>, onBrand: Boolean) {
-    val other = if (onBrand) Tone.OnBrand else Tone.Secondary
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        if (maxWidth >= 760.dp) {
-            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                Btn(primary.text, Modifier.weight(primary.weight), icon = primary.icon, tone = Tone.Primary, height = 104.dp, onClick = primary.onClick)
-                others.forEach { a -> Btn(a.text, Modifier.weight(a.weight), icon = a.icon, tone = other, height = 104.dp, onClick = a.onClick) }
+    Box(Modifier.fillMaxSize().background(C.scrim).clickable(enabled = false) {}.padding(32.dp), contentAlignment = Alignment.Center) {
+        Column(
+            Modifier.widthIn(max = 920.dp).clip(RoundedCornerShape(36.dp)).background(Color(0xFF1B1F26)).padding(48.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            p.eyebrow?.let {
+                Text(it, style = T.label, color = C.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(10.dp))
             }
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Btn(primary.text, Modifier.fillMaxWidth(), icon = primary.icon, tone = Tone.Primary, height = 104.dp, onClick = primary.onClick)
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    others.forEach { a -> Btn(a.text, Modifier.weight(1f), icon = a.icon, tone = other, height = 92.dp, onClick = a.onClick) }
-                }
+            Text(p.title, style = T.titleL, color = C.text, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            p.sub?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(it, style = T.bodyM, color = C.text2, textAlign = TextAlign.Center, maxLines = 1)
             }
+            Spacer(Modifier.height(36.dp))
+            AnswerButtons(p, onPhoto = false)
+            Spacer(Modifier.height(22.dp))
+            VoiceHint(ui, p.words, onPhoto = false)
         }
     }
 }
 
-private fun pickIcon(p: TripEngine.Pick): Ic = when (p.kind.lowercase()) {
-    "parking" -> Ic.Parking
-    "cafe" -> Ic.Cup
-    else -> Ic.Pin
-}
+// ---------------------------------------------------------------- 차가 섰을 때 옆 칸
 
-/** 물음 아래: 말로도 답할 수 있다는 안내. 차가 듣는 중이면 그렇다고 바꿔 보여 줌 */
 @Composable
-private fun VoiceHint(ui: TripEngine.Ui, words: String, onBrand: Boolean) {
-    val lang = ui.lang
-    val listening = ui.asking && ui.listening
-    val quiet = if (onBrand) C.onBrand2 else C.text3
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        Icon(Ic.Mic, if (listening) C.accent else quiet, 30.dp)
-        Text(
-            if (listening) t(lang, "듣고 있어요. ${words} 하고 말해 주세요", "Listening. Say ${words}") else t(lang, "말로 답해도 돼요: ${words}", "You can just say ${words}"),
-            style = if (listening) T.bodyM.copy(fontWeight = FontWeight.SemiBold) else T.bodyM, color = if (listening) C.accent else quiet,
-            maxLines = 1, overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-// ---------------------------------------------------------------- 달리는 동안: 오른쪽 칸
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ColumnScope.DrivingSide(ui: TripEngine.Ui) {
-    val lang = ui.lang
+private fun SidePanel(ui: TripEngine.Ui, group: CompanionClient.State, engine: TripEngine, modifier: Modifier) {
+    val lang = Lang.screen
     val sc = ui.scenario ?: return
-    val next = ui.nextPlace
-    Card(Modifier.fillMaxWidth().weight(1f), padding = 28.dp) {
-        if (isQuiet(ui)) {
-            // 다음 명소는 왼쪽 큰 카드에 있으니 여기서는 오늘 코스가 어디까지 왔는지
-            val stops = sc.places.filter { it.triggers && it.kind != PlaceKind.CITY }
-            Eyebrow(t(lang, "오늘 코스", "Today's course"), Ic.Route)
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(t(lang, "지난 명소", "Stops passed"), style = T.titleL, color = C.text, maxLines = 1, modifier = Modifier.weight(1f))
-                Text("${stops.count { it.id in ui.entered }}/${stops.size}", style = T.titleL, color = C.accent)
-            }
-        } else if (next != null) {
-            Eyebrow(t(lang, "다음 명소", "Next stop"), Ic.Pin)
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(next.name.pick(lang), style = T.titleL, color = C.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                ui.nextDistanceM?.let { Text(formatDist(it), style = T.titleL, color = C.accent) }
-            }
-        } else {
-            Eyebrow(t(lang, "오늘 코스", "Today's course"), Ic.Route)
-            Spacer(Modifier.height(10.dp))
-            Text(t(lang, "오늘 코스의 명소를 다 지났어요", "We've passed every stop today"), style = T.titleM, color = C.text)
-        }
-        Spacer(Modifier.height(18.dp))
-        RouteMap(
-            route = sc.route, places = sc.places.filter { it.triggers }, entered = ui.entered, car = ui.carPos, heading = ui.heading,
-            modifier = Modifier.fillMaxWidth().weight(1f), nextId = next?.id,
-        )
-    }
-    val adapt = adaptTags(ui)
-    if (adapt.isNotEmpty()) {
-        Card(Modifier.fillMaxWidth(), padding = 28.dp) {
-            Eyebrow(t(lang, "지금 차에 맞춘 것", "Adapting to the car"), Ic.Car)
-            Spacer(Modifier.height(14.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                adapt.forEach { (ic, text) -> Tag(text, ic, bg = C.accentSoft, fg = C.text) }
-            }
-        }
-    }
-    if (ui.starsNeeded > 0) {
-        Card(Modifier.fillMaxWidth(), padding = 28.dp) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Ic.Gift, C.sand, 36.dp)
-                Spacer(Modifier.width(16.dp))
-                Text(t(lang, "보물 상자", "Treasure box"), style = T.bodyL.copy(fontWeight = FontWeight.SemiBold), color = C.text, modifier = Modifier.weight(1f))
-                Stars(ui.stars, ui.starsNeeded)
-            }
-        }
-    }
-    if (ui.laterPicks.isNotEmpty()) {
-        Card(Modifier.fillMaxWidth(), padding = 28.dp) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Icon(Ic.Bookmark, C.accent, 34.dp)
-                Column {
-                    Text(t(lang, "담아 둔 장소 ${ui.laterPicks.size}곳", "${ui.laterPicks.size} saved places"), style = T.bodyM.copy(fontWeight = FontWeight.SemiBold), color = C.text)
-                    Text(t(lang, "차를 세우면 보여 드려요", "Shown when we stop"), style = T.caption, color = C.text3)
-                }
-            }
-        }
-    }
-}
-
-/** 좁은 창에서 달릴 때 카드 아래 한 줄: 다음 명소와 남은 거리 */
-@Composable
-private fun NextStrip(ui: TripEngine.Ui) {
-    val lang = ui.lang
-    // 조용할 때는 위 카드가 이미 다음 명소를 크게 보여 줌
-    if (!nextStripShown(ui)) return
-    val next = ui.nextPlace ?: return
-    Card(Modifier.fillMaxWidth(), padding = 24.dp) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Icon(Ic.Pin, C.accent, 32.dp)
-            Text(t(lang, "다음", "Next"), style = T.label, color = C.text3)
-            Text(next.name.pick(lang), style = T.titleM, color = C.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            ui.nextDistanceM?.let { Text(formatDist(it), style = T.titleM, color = C.accent) }
-        }
-    }
-}
-
-// ---------------------------------------------------------------- 차가 섰을 때
-
-@Composable
-private fun ParkedHero(ui: TripEngine.Ui, engine: TripEngine, modifier: Modifier, compact: Boolean = false) {
-    val lang = ui.lang
-    val place = ui.nowPlace
-    // 지금 명소 장면이 없으면(출발 안내 등) 오늘 여행지 표지 장면을 씀. 글만 있는 빈 카드가 되지 않게
-    val cover = ui.scenario?.let { coverOf(it) }
-    val model = place?.model ?: cover?.first
-    val night = if (place?.model != null) ui.night else (ui.night || cover?.second == true)
-    BrandCard(modifier.fillMaxWidth(), padding = 0.dp) {
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            if (model != null) PlaceClip(model, night, Modifier.fillMaxSize())
-            Box(
-                Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(0f to Color(0x4D000000), 0.28f to Color.Transparent, 0.58f to Color(0x8C001A3A), 1f to Color(0xF5001A3A)),
-                ),
-            )
-            Column(Modifier.align(Alignment.BottomStart).padding(if (compact) 32.dp else 40.dp)) {
-                // 짧은 안내("창문", "고른 장소")가 끝난 뒤에는 그 제목을 붙들지 않고 장면에 나온 명소 이름으로 돌아감
-                val settled = ui.sentenceCount == 0 && ui.nowKind == StoryPlayer.Kind.SYSTEM && place != null
-                val title = (if (settled) place?.name?.pick(lang) else ui.nowTitle) ?: place?.name?.pick(lang) ?: t(lang, "출발 준비 중", "Getting ready")
-                KindRow(ui, title, if (settled) StoryPlayer.Kind.STORY else ui.nowKind)
-                Spacer(Modifier.height(6.dp))
-                Text(title, style = if (compact) T.headM else T.headL, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                // 지금 읽는 문장. 들려주는 것이 없으면 다음에 무엇이 오는지 한 줄
-                val line = ui.nowSentence ?: if (ui.sentenceCount == 0) {
-                    ui.nextPlace?.let { n -> t(lang, "다음은 ${n.name.pick(lang)}. 가까워지면 차가 먼저 알려 드려요", "Next up: ${n.name.pick(lang)}. The car will speak up as we get close") }
-                } else null
-                if (!line.isNullOrBlank()) {
-                    Spacer(Modifier.height(12.dp))
-                    Text(line, style = if (compact) T.bodyM else T.bodyL, color = Color.White, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                }
-            }
-        }
-        Column(Modifier.padding(if (compact) 24.dp else 28.dp)) {
-            if (ui.sentenceCount > 1) {
-                Segments(ui.sentenceCount, ui.sentenceIndex, Modifier.fillMaxWidth())
-                Spacer(Modifier.height(22.dp))
-            }
-            ControlBar(ui, engine)
-        }
-    }
-}
-
-@Composable
-private fun ParkedSide(ui: TripEngine.Ui, group: CompanionClient.State, engine: TripEngine) {
-    val lang = ui.lang
-    val sc = ui.scenario ?: return
-
-    // 앱이 열어 둔 앞 창문은 저절로 올리지 않음. 닫는 단추는 열려 있는 동안에만, 가장 먼저 보이게
-    if (ui.windowOpened) {
-        Card(Modifier.fillMaxWidth(), padding = 28.dp) {
-            Eyebrow(t(lang, "앞 창문이 조금 열려 있어요", "The front windows are a little open"), Ic.Window, C.accent)
-            Spacer(Modifier.height(16.dp))
-            Btn(t(lang, "앞 창문 닫기", "Close front windows"), Modifier.fillMaxWidth(), icon = Ic.Window, height = 88.dp) { engine.closeWindows() }
-        }
-    }
-
-    // 함께 보기 QR: 차가 서 있을 때 가장 먼저
-    Card(Modifier.fillMaxWidth(), padding = 28.dp) {
+    Column(modifier) {
         val joinUrl = group.joinUrl
         if (joinUrl != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(26.dp), verticalAlignment = Alignment.CenterVertically) {
-                QrCode(joinUrl, 220.dp)
-                Column(Modifier.weight(1f)) {
-                    Eyebrow(t(lang, "휴대폰으로 같이 보기", "On passengers' phones"), Ic.Phone, C.accent)
-                    Spacer(Modifier.height(8.dp))
-                    Text(t(lang, "함께 탄 사람은 QR을 찍어 주세요", "Passengers, scan to join"), style = T.titleM, color = C.text)
-                    Spacer(Modifier.height(8.dp))
-                    Text(t(lang, "앱을 깔지 않아도 영상과 3D 모형, 퀴즈를 같이 봐요", "No app needed. Videos, 3D models and quizzes show up on your phone"), style = T.bodyS, color = C.text2, maxLines = 3)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(30.dp)) {
+                QrCode(joinUrl, 232.dp)
+                Column {
+                    Text(t(lang, "휴대폰으로 같이 봐요", "Follow along on your phone"), style = T.titleM, color = C.text)
                     ui.groupCode?.let {
-                        Spacer(Modifier.height(14.dp))
-                        Text(t(lang, "그룹 번호 ${it}", "Group code ${it}"), style = T.titleM, color = C.accent)
+                        Spacer(Modifier.height(10.dp))
+                        Text(t(lang, "그룹 번호 ${it}", "Group code ${it}"), style = T.bodyM, color = C.text2)
                     }
-                    Spacer(Modifier.height(10.dp))
-                    PhonesLine(group, lang)
+                    val joined = joinedLine(group, lang)
+                    if (joined != null) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(joined, style = T.bodyM, color = C.text2)
+                    }
                 }
             }
         } else {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Icon(Ic.Qr, C.text3, 34.dp)
-                Text(t(lang, "그룹 서버에 연결되면 QR이 떠요. 차 안 안내는 그대로 돼요.", "The QR appears once the group server is reachable. The in-car guide still works."), style = T.bodyS, color = C.text2)
-            }
+            Text(t(lang, "지금은 휴대폰 연결이 안 돼요", "Phones can't join right now"), style = T.bodyM, color = C.text3)
         }
-    }
 
-    // 달리는 동안 '나중에'로 담아 둔 장소
-    if (ui.laterPicks.isNotEmpty()) {
-        Card(Modifier.fillMaxWidth(), padding = 28.dp) {
-            Eyebrow(t(lang, "담아 둔 장소", "Saved for later"), Ic.Bookmark, C.accent)
+        // 달리는 동안 '나중에'로 미뤄 둔 곳
+        if (ui.laterPicks.isNotEmpty()) {
+            Rule()
+            Text(t(lang, "담아 둔 곳", "Saved for later"), style = T.label, color = C.text3)
             ui.laterPicks.forEach { p ->
-                Spacer(Modifier.height(18.dp))
-                Text(p.name, style = T.bodyL.copy(fontWeight = FontWeight.SemiBold), color = C.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(pickLabel(p, lang), style = T.caption, color = C.text3)
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Btn(t(lang, "들르기", "Stop there"), Modifier.weight(1f), icon = Ic.Pin, height = 80.dp, style = T.label, iconSize = 28.dp) { engine.routeLaterPick(p.id, "waypoint") }
-                    Btn(t(lang, "목적지로", "Go there"), Modifier.weight(1f), icon = Ic.Navigation, height = 80.dp, style = T.label, iconSize = 28.dp) { engine.routeLaterPick(p.id, "destination") }
-                    IconBtn(Ic.Close, size = 80.dp) { engine.routeLaterPick(p.id, "drop") }
+                Spacer(Modifier.height(16.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text(engine.pickName(p), style = T.bodyL, color = C.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    val parking = p.kind.equals("parking", ignoreCase = true)
+                    Btn(if (parking) t(lang, "안내", "Go") else t(lang, "들르기", "Stop there"), height = 76.dp, style = T.label) {
+                        engine.routeLaterPick(p.id, if (parking) "destination" else "waypoint")
+                    }
+                    IconBtn(Ic.Close, size = 76.dp, label = t(lang, "지우기", "Remove")) { engine.routeLaterPick(p.id, "drop") }
                 }
             }
         }
-    }
 
-    if (ui.starsNeeded > 0) {
-        Card(Modifier.fillMaxWidth(), padding = 28.dp) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Ic.Gift, C.sand, 36.dp)
-                Spacer(Modifier.width(16.dp))
-                Text(t(lang, "보물 상자", "Treasure box"), style = T.titleM, color = C.text, modifier = Modifier.weight(1f))
-                Stars(ui.stars, ui.starsNeeded, 38.dp)
-            }
-            Spacer(Modifier.height(12.dp))
-            Text(
-                when (ui.treasure) {
-                    TripEngine.Treasure.READY -> t(lang, "별을 다 모았어요! 차를 세우면 보물 상자를 열어 드려요.", "All stars collected! Park to open the treasure box.")
-                    TripEngine.Treasure.OPEN -> t(lang, "보물 상자를 열었어요. 달리기 시작하면 다시 잠가요.", "The treasure box is open. It locks again when we drive off.")
-                    else -> t(lang, "휴대폰 퀴즈를 맞히면 별이 모여요. 별 ${ui.starsNeeded}개면 조수석 앞 글로브 박스가 열려요.", "Answer phone quizzes to collect stars. ${ui.starsNeeded} stars open the glove box.")
-                },
-                style = T.bodyS, color = if (ui.treasure == TripEngine.Treasure.READY) C.sand else C.text2,
-            )
-        }
-    }
-
-    Card(Modifier.fillMaxWidth(), padding = 28.dp) {
-        Eyebrow(t(lang, "오늘 코스", "Today's course"), Ic.Route)
-        Spacer(Modifier.height(14.dp))
-        RouteMap(
-            route = sc.route, places = sc.places.filter { it.triggers }, entered = ui.entered, car = ui.carPos, heading = ui.heading,
-            modifier = Modifier.fillMaxWidth().height(280.dp), nextId = ui.nextPlace?.id,
-        )
-        Spacer(Modifier.height(8.dp))
+        Rule()
         sc.places.filter { it.triggers && it.kind != PlaceKind.CITY }.forEach { p ->
             val done = p.id in ui.entered
-            val now = ui.nowPlace?.id == p.id
             val next = !done && p.id == ui.nextPlace?.id
-            Row(Modifier.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Box(Modifier.size(18.dp).clip(CircleShape).background(when { now -> C.accent; done -> C.accent.copy(alpha = 0.45f); else -> C.raised2 }))
-                Text(p.name.pick(lang), style = T.bodyM, color = if (done || now) C.text else C.text3, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(Modifier.padding(vertical = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                Photo(p.id, ui.night, Modifier.size(76.dp).clip(CircleShape).graphicsLayer { alpha = if (done || next) 1f else 0.55f }, shrink = 4)
+                Text(p.name.pick(lang), style = T.bodyL, color = if (done || next) C.text else C.text3, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Text(
                     when {
-                        now -> t(lang, "지금", "Now")
-                        ui.heard[p.id] != null -> t(lang, "들음", "Heard")
                         done -> t(lang, "지남", "Passed")
-                        next -> t(lang, "다음", "Next") + (ui.nextDistanceM?.let { " " + formatDist(it) } ?: "")
+                        next -> ui.nextDistanceM?.let { formatDist(it) }.orEmpty()
                         else -> ""
                     },
-                    style = T.label, color = if (now) C.accent else if (next) C.text2 else C.text3,
+                    style = T.bodyM, color = if (next) C.text else C.text3,
                 )
             }
         }
-    }
-}
-
-// ---------------------------------------------------------------- 출발 전 좌석 점호
-
-/** 연결된 휴대폰 수. 동승자가 QR을 찍으면 바로 늘어남 */
-@Composable
-private fun PhonesLine(group: CompanionClient.State, lang: String, compact: Boolean = false) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        StatusDot(if (group.phones > 0) true else null)
-        Text(
-            if (group.phones > 0) t(lang, "휴대폰 ${group.phones}대 연결됨", if (group.phones == 1) "1 phone connected" else "${group.phones} phones connected")
-            else t(lang, "아직 연결된 휴대폰이 없어요", "No phones connected yet"),
-            style = T.label, color = C.text2, maxLines = if (compact) 2 else 1, overflow = TextOverflow.Ellipsis,
-            textAlign = if (compact) TextAlign.Center else TextAlign.Start,
-        )
-    }
-}
-
-@Composable
-private fun RollCall(ui: TripEngine.Ui, vehicle: VehicleBridge.State, group: CompanionClient.State, parked: Boolean, engine: TripEngine) {
-    val lang = ui.lang
-    val sc = ui.scenario
-    val joinUrl = group.joinUrl
-    Box(Modifier.fillMaxSize().background(C.scrim).clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
-        BoxWithConstraints(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-            val wide = maxWidth > 1400.dp
-            // 출발 전(차가 서 있을 때)이 동승자가 QR을 찍기 가장 좋은 때라 점호 창 옆에 QR을 같이 띄움
-            val showQr = wide && parked && joinUrl != null
-            val shape = RoundedCornerShape(40.dp)
-            val inner: @Composable () -> Unit = {
-                Column(if (wide) Modifier.width(600.dp) else Modifier.fillMaxWidth()) {
-                    Eyebrow(t(lang, "출발 전 좌석 점호", "Seat roll call"), Ic.Users, C.accent)
-                    Spacer(Modifier.height(12.dp))
-                    Text(t(lang, "모두 안전벨트를 매면 출발 안내를 시작해요", "Buckle up and the trip begins"), style = T.titleL, color = C.text)
-                    val places = sc?.landmarks?.filter { it.triggers }?.joinToString(", ") { it.name.pick(lang) }.orEmpty()
-                    if (places.isNotBlank()) {
-                        Spacer(Modifier.height(18.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Icon(Ic.Pin, C.accent, 30.dp)
-                            Text(t(lang, "오늘 지나갈 곳  ${places}", "Today's stops  ${places}"), style = T.bodyS, color = C.text2)
-                        }
-                    }
-                    // 보물 상자 놀이는 부모가 미리 준비해야 하므로 출발 전에 알림
-                    if (ui.starsNeeded > 0) {
-                        Spacer(Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Icon(Ic.Gift, C.sand, 30.dp)
-                            Text(t(lang, "보물 상자 놀이: 출발 전에 조수석 앞 글로브 박스에 작은 선물을 넣어 두세요", "Treasure game: put a small gift in the glove box before we go"), style = T.bodyS, color = C.sand)
-                        }
-                    }
-                    Spacer(Modifier.height(36.dp))
-                    Btn(t(lang, "모두 맸어요, 출발", "All buckled, let's go"), Modifier.fillMaxWidth(), icon = Ic.Check, tone = Tone.Primary, height = 112.dp, style = T.titleM, iconSize = 40.dp) { engine.completeRollcall() }
-                    Spacer(Modifier.height(12.dp))
-                    Text(t(lang, "차량 안전벨트 신호가 오면 저절로 넘어가요", "Moves on by itself when the car reports all belts buckled"), style = T.caption, color = C.text3)
-                }
-            }
-            if (wide) {
-                Row(
-                    Modifier.clip(shape).background(Color(0xFF1B1F26)).padding(48.dp),
-                    horizontalArrangement = Arrangement.spacedBy(48.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    SeatMap(vehicle, lang)
-                    inner()
-                    if (showQr) {
-                        Column(Modifier.width(340.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            QrCode(joinUrl, 300.dp)
-                            Spacer(Modifier.height(18.dp))
-                            Text(t(lang, "함께 탄 사람은 QR을 찍어 주세요", "Passengers, scan to join"), style = T.bodyM.copy(fontWeight = FontWeight.SemiBold), color = C.text, textAlign = TextAlign.Center)
-                            ui.groupCode?.let {
-                                Spacer(Modifier.height(8.dp))
-                                Text(t(lang, "그룹 번호 ${it}", "Group code ${it}"), style = T.titleM, color = C.accent)
-                            }
-                            Text(t(lang, "앱 설치 없이 영상과 퀴즈를 같이 봐요", "No app needed"), style = T.caption, color = C.text3, textAlign = TextAlign.Center)
-                            Spacer(Modifier.height(14.dp))
-                            PhonesLine(group, lang)
-                        }
-                    }
-                }
-            } else {
-                // 절반 창: 점호 글과 단추 아래 좌석 그림, 그 옆에 QR (출발 전이 동승자가 QR을 찍기 가장 좋은 때)
-                val qr = if (parked) joinUrl else null
-                Column(
-                    Modifier.clip(shape).background(Color(0xFF1B1F26)).verticalScroll(rememberScrollState()).padding(36.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    inner()
-                    Spacer(Modifier.height(28.dp))
-                    if (qr != null) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                            SeatMap(vehicle, lang)
-                            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                                QrCode(qr, 200.dp)
-                                Spacer(Modifier.height(14.dp))
-                                Text(t(lang, "함께 탄 사람은 QR을 찍어 주세요", "Passengers, scan to join"), style = T.bodyS.copy(fontWeight = FontWeight.SemiBold, lineBreak = T.balanced), color = C.text, textAlign = TextAlign.Center)
-                                ui.groupCode?.let {
-                                    Spacer(Modifier.height(12.dp))
-                                    Text(t(lang, "그룹 번호", "Group code"), style = T.caption, color = C.text3)
-                                    Text(it, style = T.titleL, color = C.accent)
-                                }
-                                Spacer(Modifier.height(12.dp))
-                                PhonesLine(group, lang, compact = true)
-                            }
-                        }
-                    } else {
-                        SeatMap(vehicle, lang)
-                    }
-                }
-            }
+        if (ui.departed) {
+            Spacer(Modifier.height(28.dp))
+            Btn(t(lang, "여행 끝", "End trip"), Modifier.fillMaxWidth(), tone = Tone.Quiet, height = 88.dp) { engine.requestEndTrip() }
+        } else {
+            // 출발 전에는 다른 여행지로 바꿀 수 있게
+            Spacer(Modifier.height(28.dp))
+            Btn(t(lang, "처음으로", "Back"), Modifier.fillMaxWidth(), tone = Tone.Quiet, height = 88.dp) { engine.goHome() }
         }
+    }
+}
+
+@Composable
+private fun Rule() {
+    Spacer(Modifier.height(30.dp))
+    Box(Modifier.fillMaxWidth().height(1.dp).background(C.line))
+    Spacer(Modifier.height(26.dp))
+}
+
+/** 누가 같이 보고 있는지 한 줄. 아무도 없으면 띄우지 않음 */
+private fun joinedLine(group: CompanionClient.State, lang: String): String? {
+    val cars = group.cars.size
+    val phones = group.phones
+    return when {
+        cars > 1 && phones > 0 -> t(lang, "차 ${cars}대, 휴대폰 ${phones}대", "${cars} cars, ${phones} phone" + if (phones == 1) "" else "s")
+        cars > 1 -> t(lang, "차 ${cars}대", "${cars} cars")
+        phones > 0 -> t(lang, "휴대폰 ${phones}대", "${phones} phone" + if (phones == 1) "" else "s")
+        else -> null
     }
 }
 
 // ---------------------------------------------------------------- 시연 도구 (에뮬레이터)
 
-/** 에뮬레이터 시연용 단추를 한곳에 모음. 맨 위 [시연]을 누를 때만 뜨고, 실제 위치 모드(실차)에서는 단추가 없음 */
+/** 에뮬레이터는 GPS 가 움직이지 않아서 시연 경로를 달리게 하는 단추를 한곳에 모음. 실제 위치 모드에서는 나오지 않음 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DemoSheet(ui: TripEngine.Ui, vehicle: VehicleBridge.State, engine: TripEngine, onClose: () -> Unit) {
-    val lang = ui.lang
+    val lang = Lang.screen
     PopupFrame(Ic.Sliders, width = 1300.dp) {
         Text(t(lang, "시연 도구", "Demo tools"), style = T.titleL, color = C.text)
-        Text(t(lang, "에뮬레이터 시연용이에요. 실제 차에서는 나오지 않아요.", "For the emulator demo only. Hidden in a real car."), style = T.bodyS, color = C.text2, modifier = Modifier.padding(top = 6.dp))
-        Spacer(Modifier.height(18.dp))
-        val seated = vehicle.seatedKeys.size
+        Spacer(Modifier.height(10.dp))
         val signals = buildList {
             add(t(lang, "기어 ${vehicle.gear}", "Gear ${vehicle.gear}"))
-            add(t(lang, "벨트 ${vehicle.buckledCount}/${seated}", "Belts ${vehicle.buckledCount}/${seated}"))
             ui.guideDistanceM?.let { add(t(lang, "다음 길 안내 ${it.toInt()}m", "Next turn ${it.toInt()}m")) }
         }
         Text(signals.joinToString("   "), style = T.caption, color = C.text3)
@@ -1001,11 +595,11 @@ private fun DemoSheet(ui: TripEngine.Ui, vehicle: VehicleBridge.State, engine: T
             Btn(t(lang, "다음 명소 앞으로", "Skip to next place"), icon = Ic.Pin, height = 84.dp, style = T.label, iconSize = 28.dp) { engine.demoJumpToNext() }
             Btn(if (ui.followGear) t(lang, "기어 따라 주행: 켬", "Follow gear: on") else t(lang, "기어 따라 주행: 끔", "Follow gear: off"), icon = Ic.Car, height = 84.dp, style = T.label, iconSize = 28.dp) { engine.toggleFollowGear() }
         }
-        // 마이크 입력이 없는 에뮬레이터에서 말로 묻기를 보여 주는 단추 (앱에 넣어 둔 녹음을 음성 인식 SDK 에 그대로 넣음)
-        val qs = engine.demoQuestions[lang] ?: engine.demoQuestions.getValue("ko")
+        // 마이크 입력이 없는 에뮬레이터에서 말로 묻기를 보여 주는 단추 (앱에 넣어 둔 질문 음성을 음성 인식 SDK 에 그대로 넣음)
+        val qs = engine.demoQuestions[ui.lang] ?: engine.demoQuestions.getValue("ko")
         val nextQ = qs[ui.demoQuestionIdx % qs.size]
         Spacer(Modifier.height(14.dp))
-        Btn(t(lang, "녹음한 질문으로 묻기: “${nextQ.text}”", "Ask with a recording: “${nextQ.text}”"), icon = Ic.Mic, height = 84.dp, style = T.label, iconSize = 28.dp) { engine.askDemo() }
+        Btn(t(lang, "질문 음성 넣기: “${nextQ.text}”", "Play a question: “${nextQ.text}”"), icon = Ic.Mic, height = 84.dp, style = T.label, iconSize = 28.dp) { engine.askDemo() }
         Spacer(Modifier.height(24.dp))
         Btn(t(lang, "닫기", "Close"), Modifier.width(320.dp), tone = Tone.Quiet, height = 84.dp, onClick = onClose)
     }
@@ -1013,64 +607,13 @@ private fun DemoSheet(ui: TripEngine.Ui, vehicle: VehicleBridge.State, engine: T
 
 // ---------------------------------------------------------------- 글
 
-private fun kindLabel(kind: StoryPlayer.Kind?, lang: String) = when (kind) {
-    StoryPlayer.Kind.STORY -> t(lang, "지금 들려주는 이야기", "Now telling")
-    StoryPlayer.Kind.ANNOUNCE -> t(lang, "곧 보여요", "Coming up")
-    StoryPlayer.Kind.SYSTEM -> t(lang, "안내", "Guide")
-    StoryPlayer.Kind.ANSWER -> t(lang, "물어본 것에 답하는 중", "Answering your question")
-    StoryPlayer.Kind.KID -> t(lang, "뒷자리 친구들에게", "For the back seat")
-    null -> t(lang, "구르는 가이드", "Rolling Guide")
-}
-
-private fun idleLabel(kind: StoryPlayer.Kind?, lang: String) = when (kind) {
-    StoryPlayer.Kind.STORY -> t(lang, "방금 들은 이야기", "Just heard")
-    StoryPlayer.Kind.ANNOUNCE -> t(lang, "방금 알려 드린 곳", "Just pointed out")
-    StoryPlayer.Kind.SYSTEM -> t(lang, "안내", "Guide")
-    StoryPlayer.Kind.ANSWER -> t(lang, "방금 답한 것", "Just answered")
-    StoryPlayer.Kind.KID -> t(lang, "뒷자리 친구들에게", "For the back seat")
-    null -> t(lang, "구르는 가이드", "Rolling Guide")
-}
-
-private fun lengthLabel(len: StoryLength, lang: String) = when (len) {
-    StoryLength.SHORT -> t(lang, "짧은 이야기", "Short story")
-    StoryLength.MEDIUM -> t(lang, "보통 이야기", "Medium story")
-    StoryLength.LONG -> t(lang, "긴 이야기", "Long story")
-}
-
-private fun holdMessage(hold: String, lang: String) = when (hold) {
-    TripEngine.HOLD_TURN -> t(lang, "방향지시등이 켜져 잠시 멈췄어요", "Paused for the turn signal")
-    TripEngine.HOLD_GUIDE -> t(lang, "곧 길 안내가 나와서 잠시 쉬어요", "Pausing for navigation guidance")
-    TripEngine.HOLD_CALL -> t(lang, "전화 중이라 잠시 멈췄어요", "Paused for the phone call")
-    TripEngine.HOLD_NAVVOICE -> t(lang, "길 안내 음성이 나와서 잠시 쉬어요", "Pausing for the navigation voice")
-    TripEngine.HOLD_USER -> t(lang, "멈춰 뒀어요. 계속을 누르면 이어 가요", "Paused. Tap Resume to continue")
-    else -> t(lang, "잠시 멈춤", "Paused")
-}
-
-private fun sideLabel(side: String, kind: StoryPlayer.Kind?, lang: String): String {
-    val word = when (side) {
-        "left" -> t(lang, "왼쪽", "On your left")
-        "right" -> t(lang, "오른쪽", "On your right")
-        "behind" -> t(lang, "뒤쪽", "Behind us")
-        else -> t(lang, "앞쪽", "Straight ahead")
-    }
-    if (lang == "en") return word
-    return when (kind) {
-        StoryPlayer.Kind.ANNOUNCE -> word + "에 보여요"
-        StoryPlayer.Kind.ANSWER -> word + "으로 보이는 곳"
-        else -> word + " 창밖"
-    }
+private fun sideWord(side: String, lang: String) = when (side) {
+    "left" -> t(lang, "왼쪽", "Left")
+    "right" -> t(lang, "오른쪽", "Right")
+    "behind" -> t(lang, "뒤쪽", "Behind")
+    else -> t(lang, "앞쪽", "Ahead")
 }
 
 private fun pickLabel(p: TripEngine.Pick, lang: String) =
     if (p.anonymous) t(lang, "함께 탄 분이 고른 곳", "Picked by a passenger") else t(lang, "${p.by} 님이 고른 곳", "Picked by ${p.by}")
 
-/** 지금 이야기에 반영 중인 차 상태 (켜진 것만) */
-private fun adaptTags(ui: TripEngine.Ui): List<Pair<Ic, String>> {
-    val lang = ui.lang
-    return buildList {
-        if (ui.rain) add(Ic.Rain to t(lang, "비 오는 날 이야기", "Rain stories"))
-        if (ui.night) add(Ic.Moon to t(lang, "밤 이야기", "Night stories"))
-        if (ui.kidMode) add(Ic.Kid to t(lang, "뒷자리 아이 이야기", "Kid stories"))
-        if (ui.windowOpened) add(Ic.Window to t(lang, "앞 창문 조금 열림", "Front windows open"))
-    }
-}

@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.sp
  * 색: 현대자동차 CI 전용색상(hyundai.com/kr/ko/info/ci/ci-color, 2026-11-11 확인)을 브랜드 색으로,
  *     Pleos Connect 다크 테마 회색 단계(basic_00 #131417 ~ basic_900 #FFFFFF)를 바탕과 글자 색으로 씀.
  *     역할은 섞지 않음: 현대 블루는 큰 브랜드 면, 액티브 블루는 하나뿐인 강조(누르는 것, 지금 진행 중인 것),
- *     샌드는 보물 상자와 별, 액티브 레드는 경고에만 조금.
+ *     샌드는 퀴즈 별, 액티브 레드는 경고에만 조금.
  * 글자: Pleos 시스템 글꼴(Asta Sans)을 그대로 씀. Pleos 글꼴 단계 Headline 60, Title 40/36, Body 30/28/26, Label 24 를 따름.
  *     시스템 글꼴 설정상 굵기 500 은 보통체, 600 은 Bold, 700 이상은 ExtraBold 로 보임.
  * 대비: 바탕과 글자, 아이콘은 4.5:1 이상 (Pleos, Android for Cars).

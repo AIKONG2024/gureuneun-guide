@@ -41,13 +41,11 @@ import app.gureuneun.guide.engine.TripEngine
 import app.gureuneun.guide.sdk.GLog
 import app.gureuneun.guide.sdk.ListenBridge
 import app.gureuneun.guide.sdk.SpeechBridge
-import app.gureuneun.guide.sdk.VehicleBridge
 
 /**
  * SDK 연결 상태를 한눈에 보고 하나씩 눌러 확인하는 점검 화면 (PT 시연용).
  * 왼쪽은 SDK 별 상태 카드, 오른쪽은 시연 설정과 시험 단추, 로그.
- * 차를 움직이는 단추(창문, 글로브 박스, 되돌리기)는 차가 P 로 서 있고 주행 규제가 없을 때만 동작함.
- * 나머지 단추도 주행 규제 중에는 동작하지 않음 (점검 화면은 서 있을 때 쓰는 화면).
+ * 단추는 주행 규제 중에는 동작하지 않음 (점검 화면은 서 있을 때 쓰는 화면).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -78,9 +76,6 @@ fun DiagScreen(app: GuideApp, onBack: () -> Unit) {
     /** 조건이 안 맞아 하지 않은 단추의 까닭 (단추 묶음 아래에 잠깐 보여 줌) */
     var refused by remember { mutableStateOf<String?>(null) }
 
-    // 차를 움직이는 단추: P 로 확인되고 주행 규제가 없을 때만
-    val canMove = v.parked && !u.restricted
-    val moveWhy = "차가 P 로 서 있고 주행 규제가 없을 때만 동작 (지금 기어 ${v.gear}, 규제 ${u.restricted})"
     val canUse = !u.restricted
     val useWhy = "주행 규제 중에는 동작하지 않음"
     val act: @Composable (String, Boolean, String, Color?, () -> Unit) -> Unit = { label, allowed, why, swatch, action ->
@@ -115,10 +110,9 @@ fun DiagScreen(app: GuideApp, onBack: () -> Unit) {
             listOf(
                 "차 상태" to listOf(
                     "기어" to v.gear, "정차" to yn(v.parked), "방향지시등" to v.turnSignal, "와이퍼" to yn(v.wiperOn), "전조등" to yn(v.lowBeamOn),
-                    "착석" to seatsOn(v.occupied), "벨트" to seatsOn(v.belts), "창문" to windowsOf(v.windows),
+                    "착석" to seatsOn(v.occupied),
                     "조명 색" to (v.ambientColor?.let { "#%06X".format(it and 0xFFFFFF) } ?: "-"), "밝기" to (v.ambientBrightness?.toString() ?: "-"),
                 ),
-                "글로브 박스 (보물 상자)" to listOf("잠금을 앱이 바꿀 수 있음" to yn(v.gloveSupported), "잠김" to yn(v.gloveLocked)),
                 "되돌리기와 오류" to listOf(
                     "앱이 바꾼 차 상태" to (if (app.vehicle.hasChanges) "있음" else "없음"), "마지막 오류" to (v.lastError ?: "-"),
                 ),
@@ -131,7 +125,7 @@ fun DiagScreen(app: GuideApp, onBack: () -> Unit) {
                     "상태" to n.status,
                     "다음 안내" to (n.tbtDistanceM?.let { "${formatDist(it)} ${n.tbtType ?: ""} ${n.tbtText ?: ""}".trim() } ?: "-"),
                     "남은 거리" to (n.remainDistanceM?.let { formatDist(it.toDouble()) } ?: "-"),
-                    "목적지" to (n.destinationName ?: "-"), "경유지" to (n.waypointCount?.let { "${it}곳" } ?: "-"),
+                    "목적지" to (n.destinationName ?: "-"),
                     "마지막 오류" to (naviErr ?: n.lastError ?: "-"),
                 ),
             ),
@@ -203,20 +197,13 @@ fun DiagScreen(app: GuideApp, onBack: () -> Unit) {
             act("영어로 읽기", canUse, useWhy, null) { app.speech.speak("On your right is the 63 Building.", "en") { } }
             act("듣기 시험", canUse, useWhy, null) { app.listen.listen("ko", { GLog.i("STT", "듣기 시험 결과: ${it}") }, { GLog.w("STT", "듣기 시험 실패: ${it}") }) }
             act("효과음", canUse, useWhy, null) { app.engine.sound.chime() }
-            act("파도 소리", canUse, useWhy, null) { app.engine.sound.waves(8) }
         }
         ActGroup("실내 조명", canUse, "주행 규제가 없을 때") {
             act("바다색", canUse, useWhy, Color(0xFF00B8D9)) { app.vehicle.setAmbient(0xFF00B8D9.toInt(), 85) }
             act("노을색", canUse, useWhy, Color(0xFFFF8A3D)) { app.vehicle.setAmbient(0xFFFF8A3D.toInt(), 85) }
             act("별빛", canUse, useWhy, Color(0xFF6C5CE7)) { app.vehicle.setAmbient(0xFF6C5CE7.toInt(), 60) }
             act("흰색", canUse, useWhy, Color.White) { app.vehicle.setAmbient(0xFFFFFFFF.toInt(), 70) }
-        }
-        ActGroup("앞 창문과 글로브 박스", canMove, if (canMove) "P 단, 주행 규제 없음" else "P 단에서만 (지금 기어 ${v.gear})") {
-            act("앞 창문 조금 열기", canMove, moveWhy, null) { app.vehicle.setWindows(2, VehicleBridge.FRONT_WINDOWS) }
-            act("앞 창문 닫기", canMove, moveWhy, null) { app.vehicle.setWindows(0, VehicleBridge.FRONT_WINDOWS) }
-            act("글로브 박스 풀기", canMove, moveWhy, null) { app.vehicle.setGloveBoxLock(false) { ok -> GLog.i("Diag", "글로브 박스 풀기 ${if (ok) "됨" else "안 됨"}") } }
-            act("글로브 박스 잠금", canMove, moveWhy, null) { app.vehicle.setGloveBoxLock(true) { ok -> GLog.i("Diag", "글로브 박스 잠금 ${if (ok) "됨" else "안 됨"}") } }
-            act("바꾼 것 되돌리기", canMove, moveWhy, null) { app.vehicle.restoreAll { ok -> GLog.i("Diag", if (ok) "되돌리기 끝" else "되돌리기: 아직 남은 것 있음") } }
+            act("바꾼 것 되돌리기", canUse, useWhy, null) { app.vehicle.restoreAll { ok -> GLog.i("Diag", if (ok) "되돌리기 끝" else "되돌리기: 아직 남은 것 있음") } }
         }
         ActGroup("내비게이션", canUse, "주행 규제가 없을 때") {
             act("첨성대로 길 안내", canUse, useWhy, null) { app.navi.routeTo("첨성대", LatLng(35.83470, 129.21898)) }
@@ -345,7 +332,4 @@ private fun seatsOn(m: Map<String, Boolean>) =
     m.filterValues { it }.keys.sortedBy { SEAT_ORDER.indexOf(it).let { i -> if (i < 0) 99 else i } }.joinToString(", ") { seatName(it) }.ifBlank { if (m.isEmpty()) "-" else "없음" }
 
 private val SEAT_ORDER = listOf("ROW_1_LEFT", "ROW_1_RIGHT", "ROW_2_LEFT", "ROW_2_CENTER", "ROW_2_RIGHT")
-
-private fun windowsOf(m: Map<String, Int>) =
-    if (m.isEmpty()) "-" else m.entries.sortedBy { SEAT_ORDER.indexOf(it.key).let { i -> if (i < 0) 99 else i } }.joinToString(", ") { "${seatName(it.key)} ${it.value}" }
 

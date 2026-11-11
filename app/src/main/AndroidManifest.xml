@@ -11,22 +11,19 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Pleos Connect SDK 권한. 여행 안내에 쓰는 것만: 읽어 주기, 듣기, 길 안내, 위치, 실내 조명, 창문과 와이퍼, 좌석, 글로브 박스, 기어, 벨트 경고 -->
+    <!-- Pleos Connect SDK 권한. 여행 안내에 쓰는 것만: 읽어 주기, 듣기, 길 안내, 위치, 조명과 방향지시등, 와이퍼, 좌석 착석, 기어 -->
     <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
     <uses-permission android:name="pleos.car.permission.STT_SERVICE" />
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH" />
     <uses-permission android:name="pleos.car.permission.FUSED_LOCATION" />
     <uses-permission android:name="pleos.car.permission.CAR_LIGHTS" />
-    <!-- AAR 표기상 조명 쓰기는 CAR_LIGHTS 로 충분하지만, 실차에서 확인하기 전까지 둠 -->
+    <!-- 실내 조명 쓰기. SDK 가 실행 중에 이 권한을 확인함 (LightImpl 의 RequiresCustomPermission) -->
     <uses-permission android:name="pleos.car.permission.CONTROL_CAR_LIGHTS" />
+    <!-- 와이퍼 읽기에 필요 (SDK 가 와이퍼를 창문 권한으로 묶음). 창문은 읽지도 움직이지도 않음 -->
     <uses-permission android:name="pleos.car.permission.CAR_WINDOWS" />
-    <uses-permission android:name="pleos.car.permission.CONTROL_CAR_WINDOWS" />
     <uses-permission android:name="pleos.car.permission.CAR_SEATS" />
-    <uses-permission android:name="pleos.car.permission.CAR_DOORS" />
-    <uses-permission android:name="pleos.car.permission.CONTROL_CAR_DOORS" />
     <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
-    <uses-permission android:name="pleos.car.permission.CAR_SAFETY" />
 
     <application
         android:name=".GuideApp"

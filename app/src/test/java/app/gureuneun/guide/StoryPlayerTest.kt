@@ -168,10 +168,10 @@ class StoryPlayerTest {
         val storyDone = mutableListOf<Boolean>()
         val askDone = mutableListOf<Boolean>()
         p.enqueue(item("story", "S1.", "S2.", done = storyDone))
-        p.interject(item("ask", "창문을 열까요?", done = askDone).copy(onDone = { askDone.add(it); if (it) p.hold("listen") }))
+        p.interject(item("ask", "가는 길에 들를까요?", done = askDone).copy(onDone = { askDone.add(it); if (it) p.hold("listen") }))
         // 지금 문장(S1)이 끝나는 대로 물음을 끼워 말함
         speaker.last().onEnd(Speaker.End.DONE)
-        assertEquals("창문을 열까요?", speaker.last().text)
+        assertEquals("가는 길에 들를까요?", speaker.last().text)
         speaker.last().onEnd(Speaker.End.DONE)
         assertEquals(listOf(true), askDone)
         // 듣는 동안은 이야기를 멈춤

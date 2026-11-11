@@ -19,25 +19,26 @@
     126.49294
   ],
   "destination": "hyeopjae",
+  "cover": "hyeopjae_1",
   "waypoints": [
     "iho",
     "aewol"
   ],
   "greeting": {
-    "ko": "오늘은 제주 서쪽 바닷길을 달려요. 지나갈 곳은 {places}예요. 뒤차도 같은 그룹이라 누가 장소를 고르든 두 차에 같이 떠요. 모두 안전벨트를 매면 출발할게요.",
-    "en": "Today we drive Jeju's west coast, passing {places}. The other car is in our group too, so any place you pick shows up in both cars. Buckle up and we'll go."
+    "ko": "오늘은 제주 서쪽 바닷길을 달려요. 지나갈 곳은 {places}예요. 뒤차도 같은 그룹이라 누가 장소를 고르든 두 차에 같이 떠요.",
+    "en": "Today we drive Jeju's west coast, passing {places}. The other car is in our group too, so any place you pick shows up in both cars."
   },
   "departure": {
-    "ko": "다들 벨트 맸죠? 바다 보러 출발해요!",
-    "en": "All buckled? Let's go see the sea!"
+    "ko": "바다 보러 출발해요!",
+    "en": "Let's go see the sea!"
   },
   "chapter": {
     "ko": "다시 출발해요. 다음 장은 {next}예요.",
     "en": "Back on the road. Next chapter: {next}."
   },
   "finale": {
-    "ko": "오늘 바닷길은 여기까지예요. 명소 {count}곳을 함께 지나왔어요. 사진을 그룹 페이지에 올리면 찍은 시각에 맞춰 오늘 지나온 길 위에 붙여 드릴게요.",
-    "en": "That's the end of today's coastal drive. We passed {count} places together. Add your photos on the group page, and I'll pin them along today's route by the time they were taken."
+    "ko": "오늘 바닷길은 여기까지예요. 명소 {count}곳을 함께 지나왔어요. 오늘 기록은 휴대폰으로 가져가실 수 있어요.",
+    "en": "That's the end of today's coastal drive. We passed {count} places together. You can take today's record with you on your phone."
   },
   "sights": [
     {"id": "airport", "name": {"ko": "제주국제공항", "en": "Jeju International Airport"}, "lat": 33.50707, "lon": 126.49164, "visible": 2500,
@@ -47,10 +48,6 @@
      "fact": {"ko": "바다 건너 보이는 섬은 비양도예요. 약 2만 7천 년 전 화산이 터져서 생긴 작은 섬이에요.", "en": "The island across the water is Biyangdo. It was formed by a volcanic eruption about 27,000 years ago."},
      "source": "위키백과 비양도"}
   ],
-  "quiz": {
-    "iho": {"q": {"ko": "이호테우 등대가 빨간색과 하얀색인 까닭은 무엇일까요?", "en": "Why are the Iho Tewoo lighthouses red and white?"}, "choices": {"ko": ["배가 나아갈 방향을 정하게 도우려고", "말이 좋아하는 색이라서", "그냥 예뻐 보이려고"], "en": ["To help boats choose their direction", "Horses like those colors", "Just to look pretty"]}, "answer": 0},
-    "hyeopjae": {"q": {"ko": "협재 바다 건너 보이는 섬의 이름은 무엇일까요?", "en": "What's the name of the island you can see from Hyeopjae?"}, "choices": {"ko": ["비양도", "독도", "마라도"], "en": ["Biyangdo", "Dokdo", "Marado"]}, "answer": 0}
-  },
   "places": [
     {
       "id": "jejucity",
@@ -63,7 +60,6 @@
       "lon": 126.4916,
       "radius": 3000,
       "color": "#3EC5FF",
-      "model": "beach",
       "story": {
         "ko": {
           "short": "제주에 왔어요! 오늘은 제주 서쪽 바닷가를 따라 협재까지 달려요.",
@@ -97,7 +93,6 @@
       "lon": 126.4525,
       "radius": 450,
       "color": "#FF5A5F",
-      "model": "horse_lighthouse",
       "announce": {
         "ko": "잠시 후 {side}에 이호테우 해변의 말 등대가 보여요.",
         "en": "The horse lighthouses of Iho Tewoo Beach are coming up {side}."
@@ -135,7 +130,6 @@
       "lon": 126.3076,
       "radius": 600,
       "color": "#00C2C7",
-      "model": "beach",
       "announce": {
         "ko": "{side}으로 애월 바다가 펼쳐져요.",
         "en": "The Aewol coast opens up {side}."
@@ -173,9 +167,7 @@
       "lon": 126.2397,
       "radius": 450,
       "color": "#00E5FF",
-      "model": "hyeopjae",
       "stop": true,
-      "ambience": "waves",
       "announce": {
         "ko": "잠시 후 {side}에 협재해수욕장이 보여요. 오늘 바닷길의 끝이에요.",
         "en": "Hyeopjae Beach is coming up {side}. This is the end of today's coastal drive."
@@ -207,9 +199,10 @@
     {
       "id": "aewol_cafe",
       "kind": "cafe",
+      "photo": "aewol",
       "name": {
-        "ko": "애월 바닷가 카페 (예시)",
-        "en": "Aewol seaside cafe (sample)"
+        "ko": "애월 한담 카페거리",
+        "en": "Aewol Handam cafe street"
       },
       "lat": 33.4627,
       "lon": 126.3109
@@ -217,6 +210,7 @@
     {
       "id": "hyeopjae_parking",
       "kind": "parking",
+      "photo": "hyeopjae",
       "name": {
         "ko": "협재해수욕장 주차장",
         "en": "Hyeopjae Beach parking"
@@ -227,6 +221,7 @@
     {
       "id": "iho_spot",
       "kind": "landmark",
+      "photo": "iho",
       "name": {
         "ko": "이호테우 해변",
         "en": "Iho Tewoo Beach"

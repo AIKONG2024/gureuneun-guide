@@ -27,7 +27,7 @@ import kotlin.math.sin
 enum class Ic {
     Replay, Pause, Play, Next, Mic, Pin, Star, StarOutline, Car, Users, Phone, Qr, Window, Check, Close,
     ChevronLeft, Sliders, Rain, Moon, Clock, Kid, Flag, Route, Gift, Cup, Parking,
-    Speaker, Send, Plus, Backspace, Bookmark, Navigation, Info, Home,
+    Speaker, Send, Plus, Backspace, Bookmark, Navigation, Info, Home, Arrow,
 }
 
 @Composable
@@ -70,6 +70,11 @@ fun DrawScope.drawIcon(ic: Ic, c: Color) {
         Ic.Replay -> {
             arc(12f, 12.5f, 7.5f, -90f, 300f)
             stroke(pathOf { m(13.8f, 2.2f); l(11f, 5f); l(13.8f, 7.8f) })
+        }
+        // 오른쪽을 가리키는 화살표 (보이는 쪽에 맞춰 돌려 씀)
+        Ic.Arrow -> {
+            line(4f, 12f, 19f, 12f)
+            stroke(pathOf { m(13f, 5.5f); l(19.5f, 12f); l(13f, 18.5f) })
         }
         Ic.Pause -> { box(6.5f, 5f, 10f, 19f, 1.4f, true); box(14f, 5f, 17.5f, 19f, 1.4f, true) }
         Ic.Play -> {
