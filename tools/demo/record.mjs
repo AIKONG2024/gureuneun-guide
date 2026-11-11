@@ -1,15 +1,13 @@
 // 구르는 가이드 시연 영상 녹화 도구
-// 에뮬레이터 화면(scrcpy, 없으면 adb screenrecord), 차 안내 음성, 동승자 휴대폰 화면, Virtual Console 화면을
-// 같은 시각 기준으로 녹화하고 장면별 자막 시각을 timeline.json 에 남긴다. 합치기는 compose.py 가 한다.
+// 에뮬레이터의 차 화면(scrcpy)과 차 소리, 동승자 휴대폰 화면, Virtual Console 화면을 같은 시각 기준으로 담고
+// 장면마다 언제 무슨 일이 있었는지(marks)와 앱 로그를 timeline.json 에 남긴다. 편집은 compose.py 가 한다.
 //
-// 준비: Pleos Connect 에뮬레이터 실행, 앱 설치, adb forward tcp:8088 tcp:8088, companion 서버 실행
-//       서버는 companion 폴더에서 npm run demo 로 켠다 (DEMO_LOCAL_TRUST=1). 이 도구의 2호차 접속, 발화 기록 조회,
-//       키 없는 휴대폰 주소(/g/번호)는 이 컴퓨터에서 온 요청일 때만 그 설정으로 허용된다
-//       차 소리까지 담으려면 에뮬레이터를 소리 파일 출력으로 띄운다
+// 준비: Pleos Connect 에뮬레이터 실행(넓은 창), 앱 설치, adb forward tcp:8088 tcp:8088,
+//       companion 폴더에서 npm run demo, 앱 [점검] 화면에서 [시연 명령 받기] 켜기
+//       차 소리를 담으려면 에뮬레이터를 소리 파일 출력으로 띄움
 //       QEMU_AUDIO_DRV=wav QEMU_WAV_PATH=/tmp/rgdev/emu_audio.wav emulator -avd <AVD> -audio wav
-// 사용: node record.mjs ./out              모든 장면
-//       node record.mjs ./out jeju,record  일부 장면만 다시 녹화 (같은 폴더의 다른 장면은 그대로 둠)
-//       장면: gyeongju(둘로 나뉨), jeju, record, seoul
+// 사용: node record.mjs ./out                 모든 장면
+//       node record.mjs ./out jeju,seoul      일부 장면만 다시 (같은 폴더의 다른 장면은 그대로 둠)
 import { chromium } from 'playwright-core';
 import { spawn, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -17,37 +15,25 @@ import path from 'node:path';
 
 const HOME = process.env.HOME;
 const ADB = process.env.ADB || path.join(HOME, 'Library/Android/sdk/platform-tools/adb');
-const SCRCPY = process.env.SCRCPY || '/opt/homebrew/bin/scrcpy';
-const USE_SCRCPY = process.env.REC !== 'screenrecord' && fs.existsSync(SCRCPY);
+const SCRCPY = process.env.SCRCPY || 'scrcpy';
 const VC = 'http://127.0.0.1:8088';
 const SRV = 'http://127.0.0.1:8787';
 const REPO = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
-// 질문 음성(16kHz 모노 PCM 과 같은 내용의 WAV). 앱 폴더(files/ask)에 PCM 을 미리 넣어 둠
-const ASK_DIR = process.env.ASK_DIR || '/tmp/rgdev/ask';
+// 질문 음성. 앱에 넣어 둔 것(assets/ask 의 PCM)과 같은 내용의 WAV 를 영상 소리에 겹침
+const ASK_DIR = process.env.ASK_DIR || path.join(REPO, 'tools/demo/ask');
 const SCN = Object.fromEntries(['gyeongju', 'jeju', 'seoul'].map(id => [id, JSON.parse(fs.readFileSync(path.join(REPO, 'app/src/main/assets/scenarios', id + '.json'), 'utf8'))]));
 const OUT = path.resolve(process.argv[2] || 'out');
 const ONLY = (process.argv[3] || '').split(',').filter(Boolean);
-const env = { ...process.env, ADB_LIBUSB: '1', ADB };
+const env = { ...process.env, ADB };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
+for (const d of ['emu', 'phone', 'vc', 'audio', 'shots']) fs.mkdirSync(path.join(OUT, d), { recursive: true });
 
-fs.mkdirSync(path.join(OUT, 'emu'), { recursive: true });
-fs.mkdirSync(path.join(OUT, 'phone'), { recursive: true });
-fs.mkdirSync(path.join(OUT, 'vc'), { recursive: true });
-fs.mkdirSync(path.join(OUT, 'audio'), { recursive: true });
-fs.mkdirSync(path.join(OUT, 'shots'), { recursive: true });
-
-// 새 규약(version 2) 서버는 차 키와 휴대폰 키를 요구함. 시연 예외(npm run demo)로 켰는지 미리 알려 줌
-try {
-  const info = await (await fetch(SRV + '/api/info')).json();
-  if (info.version >= 2) log('그룹 서버 v' + info.version + ': companion 폴더에서 npm run demo 로 켰는지 확인하세요 (키 없는 시연 접속 허용)');
-} catch { log('그룹 서버(' + SRV + ')에 닿지 않아요. companion 폴더에서 npm run demo 로 먼저 켜 주세요'); }
-
-// ------------------------------------------------------------ 차 안내 음성
-// 에뮬레이터는 소리가 날 때만 WAV 파일에 실시간으로 덧붙인다. 그래서 시각과 파일 크기를 짧은 간격으로 적어 두고
-// 장면이 끝나면 그 구간의 소리를 원래 시각 자리에 맞춰 장면별 WAV 로 잘라 낸다
+// ------------------------------------------------------------ 차 소리
+// 에뮬레이터는 소리가 날 때만 WAV 파일에 덧붙인다. 파일이 커진 시각을 적어 두었다가
+// 장면이 끝나면 그 구간의 소리를 원래 시각 자리에 놓아 장면별 WAV 로 만든다
 const WAV = process.env.EMU_WAV || '/tmp/rgdev/emu_audio.wav';
-const WAV_HDR = 44, WAV_RATE = 44100, WAV_BPS = WAV_RATE * 4; // 16비트 스테레오
+const WAV_HDR = 44, WAV_RATE = 44100, WAV_BPS = WAV_RATE * 4;
 const amap = [];
 let lastWavSize = -1;
 const wavPoll = setInterval(() => {
@@ -70,12 +56,12 @@ function sceneAudio(S, E, file) {
   const fd = fs.openSync(WAV, 'r');
   let expected = null, placed = 0;
   for (let k = 1; k < amap.length; k++) {
-    const [t0, s0] = amap[k - 1], [t1, s1] = amap[k];
+    const [, s0] = amap[k - 1], [t1, s1] = amap[k];
     const from = Math.max(s0, WAV_HDR), len = Math.floor((s1 - from) / 4) * 4;
     if (len <= 0) continue;
     const d = (len / WAV_BPS) * 1000;
     const observed = t1 - d;
-    // 이어서 나오는 소리면 바로 뒤에 붙이고(끊김 방지), 시각이 많이 어긋나면 관측 시각으로 다시 맞춘다
+    // 이어서 나오는 소리면 바로 뒤에 붙이고, 시각이 많이 어긋나면 관측 시각으로 다시 맞춤
     const at = expected !== null && Math.abs(expected - observed) <= 120 ? expected : observed;
     expected = at + d;
     if (at + d < S || at > E) continue;
@@ -92,254 +78,245 @@ function sceneAudio(S, E, file) {
   return file;
 }
 
-function adb(...a) { return execFileSync(ADB, a, { env, encoding: 'utf8' }); }
-function demo(cmd, ...more) { return adb('shell', 'am', 'start', '-n', 'app.gureuneun.guide/.MainActivity', '--es', 'demo', cmd, ...more); }
-function tap(x, y) { adb('shell', 'input', 'tap', String(x), String(y)); }
-async function vc(p) { try { const r = await fetch(VC + p, { method: 'POST' }); return r.ok; } catch { return false; } }
-
-// Virtual Console 은 브라우저가 붙어 있어야 조작 API 가 열린다. 녹화 내내 하트비트를 보낸다
+// ------------------------------------------------------------ 에뮬레이터와 Virtual Console
+function adb(...a) { return execFileSync(ADB, a, { env, encoding: 'utf8', maxBuffer: 64 << 20 }); }
+const q1 = a => /[\s?']/.test(a) ? "'" + a.replace(/'/g, "'\\''") + "'" : a;
+function demo(cmd, ...more) { try { adb('shell', 'am', 'start', '-n', 'app.gureuneun.guide/.MainActivity', '--es', 'demo', cmd, ...more.map(q1)); } catch (e) { log('명령 실패', cmd); } }
+async function vc(p) { try { return (await fetch(VC + p, { method: 'POST' })).ok; } catch { return false; } }
+// Virtual Console 은 브라우저가 붙어 있어야 조작을 받음
 const hb = setInterval(() => fetch(VC + '/browser/session?client=gg-demo', { method: 'POST' }).catch(() => {}), 1000);
 
-function groupCode() {
-  const out = adb('logcat', '-d', '-s', 'Gureuneun:*');
-  const m = [...out.matchAll(/그룹 서버 연결됨 \((\d{4})\)/g)].pop();
-  return m ? m[1] : null;
-}
-
-async function waitFor(fn, ms = 20000, step = 500) {
+async function waitFor(fn, ms = 20000, step = 400) {
   const end = Date.now() + ms;
   while (Date.now() < end) { const v = await fn(); if (v) return v; await sleep(step); }
   return null;
 }
 
-// ------------------------------------------------------------ 브라우저 (휴대폰, Virtual Console)
+// 화면에 보이는 글자와 그 자리. 읽는 데 2~3초가 걸려서 장면을 찍기 전에 한 번 읽어 두고 씀 (화면이 멈춰 있을 때만 읽힘)
+function screen() {
+  const found = [];
+  try {
+    adb('shell', 'uiautomator', 'dump', '/sdcard/gg-ui.xml');
+    const xml = adb('shell', 'cat', '/sdcard/gg-ui.xml');
+    for (const m of xml.matchAll(/<node [^>]*?text="([^"]*)"[^>]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/g)) {
+      if (m[1]) found.push({ text: m[1], x: (Number(m[2]) + Number(m[4])) >> 1, y: (Number(m[3]) + Number(m[5])) >> 1 });
+    }
+  } catch {}
+  return found;
+}
+function tap(at) { if (at) adb('shell', 'input', 'tap', String(at.x), String(at.y)); return !!at; }
+function tapText(re, list = screen()) {
+  const hit = list.find(n => re.test(n.text));
+  if (!hit) log('화면에서 찾지 못함', String(re));
+  return tap(hit);
+}
+
+// 앱 로그: 시각이 붙은 줄로 읽음 ("11-12 05:19:05.980 ... Gureuneun: [Speak] [ko] ...")
+function logTime(line) {
+  const m = /^(\d\d)-(\d\d) (\d\d):(\d\d):(\d\d)\.(\d{3})/.exec(line);
+  return m ? new Date(new Date().getFullYear(), +m[1] - 1, +m[2], +m[3], +m[4], +m[5], +m[6]).getTime() : null;
+}
+function appLog() { return adb('logcat', '-d', '-s', 'Gureuneun:*').split('\n').filter(l => l.includes('Gureuneun:')); }
+const body = l => l.replace(/^.*Gureuneun: /, '');
+// since 뒤에 re 에 맞는 줄이 나오면 그 시각을 돌려줌
+async function waitLog(re, ms = 30000, since = 0) {
+  return await waitFor(() => { for (const l of appLog()) { const t = logTime(l); if (t && t >= since && re.test(body(l))) return t; } return null; }, ms, 350);
+}
+const waitSpeak = (re, ms = 30000, since = 0) => waitLog(new RegExp('^\\[Speak\\] \\[\\w+\\] .*(?:' + re.source + ')', re.flags), ms, since);
+async function untilQuiet(ms = 40000) {
+  await sleep(1200);
+  return await waitFor(() => { const ls = appLog().filter(l => /\[Speak\]|\[Player\]/.test(l)); return /조용함/.test(ls[ls.length - 1] || ''); }, ms, 500);
+}
+function groupCode() {
+  const m = [...appLog().join('\n').matchAll(/그룹 서버 연결됨 \((\d{4})\)/g)].pop();
+  return m ? m[1] : null;
+}
+
+// ------------------------------------------------------------ 브라우저: 동승자 휴대폰과 Virtual Console
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
-const phoneCtx = await browser.newContext({ viewport: { width: 412, height: 880 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, recordVideo: { dir: path.join(OUT, 'phone'), size: { width: 412, height: 880 } } });
-// 휴대폰에 적어 둔 이름. 장면에서 바꾼 이름(서울 장면의 영어 손님)은 그대로 둠
-await phoneCtx.addInitScript(() => { if (!localStorage.getItem('gg_me')) localStorage.setItem('gg_me', '민지'); });
-// 같은 폴더에 이전 녹화가 있으면 장면 목록을 이어 쓴다. 휴대폰 영상은 실행마다 한 파일이라 장면마다 기록한다
-const TL = path.join(OUT, 'timeline.json');
-const prev = fs.existsSync(TL) ? JSON.parse(fs.readFileSync(TL, 'utf8')) : { scenes: [] };
-const T = { scenes: prev.scenes || [], phoneStart: Date.now() };
-const runScenes = [];
+const phoneCtx = await browser.newContext({ viewport: { width: 412, height: 880 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
 const phone = await phoneCtx.newPage();
 await phone.goto(SRV + '/', { waitUntil: 'domcontentloaded' });
 
-let scene = null, vcCtx = null, vcPage = null, emuRec = null, driving = false, curCode = null;
+const TL = path.join(OUT, 'timeline.json');
+const T = fs.existsSync(TL) ? JSON.parse(fs.readFileSync(TL, 'utf8')) : { scenes: [] };
+let scene = null, vcCtx = null, vcPage = null, emuRec = null, grabbing = false, moving = false;
 
-function caption(title, body = '') {
-  scene.captions.push({ at: Date.now() - scene.start, title, body });
-  log('[자막]', title, body);
+// 휴대폰 화면은 2배 해상도 캡처를 이어 붙여 씀 (브라우저 녹화는 1배라 글자가 흐림)
+async function grabPhone(dir) {
+  fs.mkdirSync(dir, { recursive: true });
+  const frames = [];
+  grabbing = true;
+  (async () => {
+    let i = 0;
+    while (grabbing) {
+      const t = Date.now();
+      if (moving) { await sleep(60); continue; }
+      try {
+        const buf = await phone.screenshot({ type: 'jpeg', quality: 88, timeout: 2000 });
+        const name = String(i++).padStart(5, '0') + '.jpg';
+        fs.writeFileSync(path.join(dir, name), buf);
+        frames.push([t, name]);
+      } catch {}
+      await sleep(Math.max(10, 90 - (Date.now() - t)));
+    }
+  })();
+  return frames;
 }
 
-// 에뮬레이터 화면 녹화. scrcpy 는 안드로이드 쪽 소리(차 안내 음성, 효과음)까지 함께 담는다
 function startEmuRec(name) {
-  if (USE_SCRCPY) {
-    const file = path.join(OUT, 'emu', name + '.mkv');
-    const proc = spawn(SCRCPY, ['-s', 'emulator-5554', '--no-window', '--no-playback', '--max-size=1280', '--max-fps=30',
-      '--video-bit-rate=8M', '--no-audio', '--record=' + file], { env });
-    const rec = { kind: 'scrcpy', proc, file, startedAt: null, spawnedAt: Date.now(), log: '' };
-    const onData = d => { const s = String(d); rec.log += s; if (!rec.startedAt && /Recording started/i.test(s)) rec.startedAt = Date.now(); };
-    proc.stdout.on('data', onData); proc.stderr.on('data', onData);
-    return rec;
-  }
-  const dev = '/sdcard/gg_' + name + '.mp4';
-  const proc = spawn(ADB, ['shell', 'screenrecord', '--size', '1280x720', '--bit-rate', '8000000', '--time-limit', '178', dev], { env });
-  return { kind: 'screenrecord', proc, dev, file: path.join(OUT, 'emu', name + '.mp4'), startedAt: Date.now() + 700 };
+  const file = path.join(OUT, 'emu', name + '.mkv');
+  const proc = spawn(SCRCPY, ['-s', 'emulator-5554', '--no-window', '--no-playback', '--max-size=1920', '--max-fps=30', '--video-bit-rate=12M', '--no-audio', '--record=' + file], { env });
+  const rec = { proc, file, startedAt: null, spawnedAt: Date.now(), log: '' };
+  const onData = d => { const s = String(d); rec.log += s; if (!rec.startedAt && /Recording started/i.test(s)) rec.startedAt = Date.now(); };
+  proc.stdout.on('data', onData); proc.stderr.on('data', onData);
+  return rec;
 }
 
 async function stopEmuRec(rec) {
   const exited = new Promise(r => { if (rec.proc.exitCode !== null) r(); else rec.proc.on('exit', r); });
-  if (rec.kind === 'scrcpy') {
-    rec.proc.kill('SIGINT');
-    await Promise.race([exited, sleep(10000)]);
-    if (rec.proc.exitCode === null) { log('scrcpy 가 끝나지 않아 강제 종료'); rec.proc.kill('SIGKILL'); }
-    if (!rec.startedAt) log('scrcpy 로그:', rec.log.slice(-600));
-    return;
-  }
-  try { adb('shell', 'pkill', '-INT', 'screenrecord'); } catch {}
-  await Promise.race([exited, sleep(4000)]);
-  await sleep(1200);
-  try { adb('pull', rec.dev, rec.file); } catch (e) { log('pull 실패', e.message); }
+  rec.proc.kill('SIGINT');
+  await Promise.race([exited, sleep(10000)]);
+  if (rec.proc.exitCode === null) rec.proc.kill('SIGKILL');
+  if (!rec.startedAt) log('scrcpy 로그:', rec.log.slice(-400));
 }
 
 async function beginScene(name) {
   log('=== 장면', name);
   adb('logcat', '-c');
-  vcCtx = await browser.newContext({ viewport: { width: 1280, height: 720 }, recordVideo: { dir: path.join(OUT, 'vc', name), size: { width: 960, height: 540 } } });
+  vcCtx = await browser.newContext({ viewport: { width: 1280, height: 720 }, recordVideo: { dir: path.join(OUT, 'vc', name), size: { width: 1280, height: 720 } } });
   const vcStart = Date.now();
   vcPage = await vcCtx.newPage();
   await vcPage.goto(VC + '/', { waitUntil: 'domcontentloaded' }).catch(() => {});
   emuRec = startEmuRec(name);
-  await waitFor(() => emuRec.startedAt, 8000, 200);
-  await sleep(800);
-  scene = { name, start: Date.now(), captions: [], overlays: [], vcStart, emuStart: emuRec.startedAt || emuRec.spawnedAt + 1500, emuKind: emuRec.kind, phoneStart: T.phoneStart };
+  await waitFor(() => emuRec.startedAt, 8000, 150);
+  await sleep(600);
+  const dir = path.join(OUT, 'phone', name);
+  for (const f of fs.existsSync(dir) ? fs.readdirSync(dir) : []) fs.unlinkSync(path.join(dir, f));
+  scene = { name, start: Date.now(), marks: {}, overlays: [], vcStart, emuStart: emuRec.startedAt || emuRec.spawnedAt + 1200, phoneDir: dir };
+  scene.phoneFrames = await grabPhone(dir);
+}
+
+// 편집할 때 쓸 시각 표시 (장면 시작부터 초)
+function mark(name, at = Date.now()) {
+  scene.marks[name] = +((at - scene.start) / 1000).toFixed(2);
+  log('·', name, scene.marks[name]);
 }
 
 async function endScene() {
-  driving = false;
   scene.end = Date.now();
+  grabbing = false;
+  await sleep(200);
   await stopEmuRec(emuRec);
   const video = vcPage.video();
   await vcCtx.close();
   scene.vcFile = video ? await video.path() : null;
   scene.emuFile = emuRec.file;
   scene.audioFile = sceneAudio(scene.start, scene.end, path.join(OUT, 'audio', scene.name + '.wav'));
-  // 이 장면 동안 차가 실제로 말한 문장 (서버의 발화 기록에서 시각으로 거름)
-  scene.code = scene.code || curCode;
-  if (scene.code) {
-    try {
-      const said = await (await fetch(SRV + '/api/groups/' + scene.code + '/said')).json();
-      scene.said = said.filter(s => s.at >= scene.start - 2000 && s.at <= scene.end).map(s => ({ ...s, t: s.at - scene.start }));
-    } catch {}
-  }
+  scene.phoneFrames = scene.phoneFrames.map(([t, f]) => [+((t - scene.start) / 1000).toFixed(3), f]);
+  // 이 장면의 앱 로그 (차가 말한 문장과 차 신호를 편집할 때 봄)
+  scene.log = appLog().map(l => ({ t: logTime(l), s: body(l) })).filter(x => x.t && x.t >= scene.start - 500 && x.t <= scene.end)
+    .map(x => ({ t: +((x.t - scene.start) / 1000).toFixed(2), s: x.s })).filter(x => !/실내 조명 색|Media\]|Audio\]/.test(x.s) || /실내 조명 색 FFC94D/.test(x.s));
   T.scenes = T.scenes.filter(s => s.name !== scene.name);
   T.scenes.push(scene);
-  runScenes.push(scene);
-  fs.writeFileSync(TL, JSON.stringify(T, null, 2));
+  fs.writeFileSync(TL, JSON.stringify(T, null, 1));
   log('=== 장면 끝', scene.name, Math.round((scene.end - scene.start) / 1000) + 's');
 }
 
-// 시연 주행 중에는 Virtual Console 가속 페달을 가끔 밟아 속도를 낸다 (계기판과 1인칭 화면이 움직임)
-(async function pedalLoop() {
-  while (true) {
-    await sleep(5000);
-    if (!driving || !vcPage) continue;
-    try {
-      await vcPage.locator('#acceleratorPad').dispatchEvent('pointerdown');
-      await sleep(1100);
-      await vcPage.locator('#acceleratorPad').dispatchEvent('pointerup');
-    } catch {}
-  }
-})();
-
-async function park() {
-  driving = false;
-  try { await vcPage.locator('#brakePad').dispatchEvent('pointerdown'); await sleep(2500); await vcPage.locator('#brakePad').dispatchEvent('pointerup'); } catch {}
-  await vc('/vehicle/gear?gear=Park');
-}
-
-async function drive() {
-  await vc('/vehicle/gear?gear=Drive');
-  driving = true;
-}
-
 async function resetCar() {
-  curCode = null;
   await vc('/vehicle/gear?gear=Park');
   await vc('/vehicle/turn-signal?mode=Off');
   await vc('/vehicle/body?front_wiper=Off');
   await vc('/vehicle/lights?feature=headlamp_mode&value=Off');
-  await vc('/vehicle/body?window_fl=0&window_fr=0&window_rl=0&window_rr=0');
   await vc('/vehicle/body?ambient_color=%23ffffff&ambient_brightness=70');
-  // 뒷좌석 착석 신호는 꺼 둠 (에뮬레이터는 이 값이 SDK 에 반대로 들어와 뒷좌석에 사람이 앉은 것으로 읽힘: 가족이 탄 상태)
-  await vc('/vehicle/seat?kind=occupied&area=rear_left&value=false');
-  await vc('/vehicle/seat?kind=occupied&area=rear_right&value=false');
-  try { demo('end'); } catch {}
-  await sleep(1500);
-  try { demo('clear'); } catch {}
+  demo('end'); await sleep(1500);
+  demo('clear'); await sleep(500);
+  demo('home'); await sleep(2500);
+}
+
+// Virtual Console 화면의 기어 단추를 누름 (녹화에 누르는 모습이 담김)
+async function gear(g) {
+  const title = { P: 'Park', D: 'Drive' }[g];
+  try { await vcPage.click('#gearButtons button[title="' + title + '"]', { timeout: 3000 }); }
+  catch { await vc('/vehicle/gear?gear=' + title); }
+}
+
+// Virtual Console 의 Emulation Controls 에서 방향지시등 카드를 열어 둠
+async function openTurnSignal() {
+  await vcPage.click('#apiBrowserOpen');
   await sleep(500);
-  try { demo('home'); } catch {}
-  await sleep(2500);
+  await vcPage.fill('#apiSearch', 'turn signal');
+  await sleep(600);
+}
+async function turnSignal(label) {
+  try { await vcPage.locator('button.api-action', { hasText: new RegExp('^' + label + '$') }).first().click({ timeout: 3000 }); }
+  catch { await vc('/vehicle/turn-signal?mode=' + (label === 'Off' ? 'Off' : 'BlinkRight')); }
 }
 
-// 화면의 여행지 카드와 [여행 시작]을 눌러 출발. 시작 로그가 안 보이면 명령으로 다시 시작
-async function startTrip(cardX, scenario, lang) {
-  // 넓은 창(앱 영역 전체, 2560x1440 화면)의 처음 화면: 여행지 카드 가운데 높이와 [여행 시작] 단추 자리 (기기 픽셀)
-  tap(cardX, 672); await sleep(800);
-  tap(1950, 1140);
-  const ok = await waitFor(() => /여행 시작:/.test(adb('logcat', '-d', '-s', 'Gureuneun:*')), 4000);
-  if (!ok) { log('탭으로 시작이 안 되어 명령으로 시작'); demo('start', '--es', 'scenario', scenario, '--es', 'lang', lang); }
+// 처음 화면에서 여행지 카드와 [여행 시작]을 눌러 시작. home 은 장면을 찍기 전에 읽어 둔 처음 화면
+async function startTrip(scenario, lang, home) {
+  const sc = SCN[scenario];
+  if (lang === 'en') { tapText(/^English$/, home); mark('lang'); await sleep(900); }
+  tapText(new RegExp('^' + sc.title.ko + '$'), home); mark('card_tap');
+  await sleep(1000);
+  tapText(/^여행 시작$/, home); mark('start_tap');
+  const ok = await waitLog(/^\[Trip\] 여행 시작:/, 5000, scene.start);
+  if (!ok) { log('눌러서 시작이 안 되어 명령으로 시작'); demo('start', '--es', 'scenario', scenario, '--es', 'lang', lang); }
+  mark('started', ok || Date.now());
+  // 순정 내비가 경로를 보여 주고 안내를 시작하면 1.5초 뒤 우리 화면(QR)으로 돌아옴
+  const route = await waitLog(/^\[Navi\] 경로 안내 시작/, 15000, scene.start);
+  mark('route', route || Date.now());
+  await sleep(Math.max(0, (route || Date.now()) + 2600 - Date.now()));
+  mark('qr');
 }
 
-async function phoneJoin(code) {
-  await phone.goto(SRV + '/g/' + code, { waitUntil: 'domcontentloaded' });
-  await sleep(2500);
+async function phoneJoin(code, name, lang) {
+  // 페이지를 옮기는 동안 캡처를 걸면 한참 멈춰 있을 때가 있어 잠깐 쉼
+  moving = true;
+  await phone.evaluate(([n, l]) => { localStorage.setItem('gg_me', n); if (l) localStorage.setItem('gg_lang', l); else localStorage.removeItem('gg_lang'); }, [name, lang || '']);
+  await phone.goto(SRV + '/g/' + code + '?car=1', { waitUntil: 'load' });
+  await sleep(300);
+  moving = false;
 }
 
 async function phonePick(id) {
-  await phone.click('#tPick');
+  await phone.click('#tPick'); mark('pick_tab');
+  await sleep(1800);
+  await phone.click('#picklist button[data-id="' + id + '"]'); mark('pick_select');
+  await sleep(1300);
+  await phone.click('#sendPick'); mark('pick_send');
+}
+
+// 휴대폰에 온 퀴즈의 정답을 누름. 차가 보기 순서를 섞어 보내므로 글자로 찾음
+async function phoneAnswer(scId, quizId, tag) {
+  const q = SCN[scId].quiz[quizId];
+  const want = [q.choices.ko[q.answer], q.choices.en[q.answer]];
+  const ready = await waitFor(async () => (await phone.locator('#quizCard:not(.hidden) #quizChoices button:not([disabled])').count()) > 0, 40000, 300);
+  if (!ready) { log('퀴즈가 휴대폰에 안 뜸', quizId); return; }
+  mark(tag + '_shown');
   await sleep(2200);
-  await phone.click('#picklist button[data-id="' + id + '"]');
-  await sleep(1200);
-  await phone.click('#sendPick');
+  const texts = await phone.locator('#quizChoices button').allTextContents();
+  const idx = Math.max(0, texts.findIndex(t => want.some(w => t.includes(w))));
+  await phone.locator('#quizChoices button').nth(idx).click();
+  mark(tag + '_tap');
 }
 
-// 휴대폰에서 3D 모형을 손가락으로 끌어 돌려 봄
-async function phoneOrbit() {
-  try {
-    await phone.click('#mOrbit');
-    await sleep(900);
-    const box = await phone.locator('#stage').boundingBox();
-    if (!box) return;
-    const y = box.y + box.height * 0.55;
-    await phone.mouse.move(box.x + box.width * 0.8, y);
-    await phone.mouse.down();
-    for (let i = 1; i <= 30; i++) {
-      await phone.mouse.move(box.x + box.width * (0.8 - 0.6 * i / 30), y - box.height * 0.08 * Math.sin(i / 30 * Math.PI));
-      await sleep(45);
-    }
-    await phone.mouse.up();
-  } catch (e) { log('3D 돌리기 실패', e.message); }
-}
-
-// ------------------------------------------------------------ 차가 말을 마칠 때까지 기다리기 (앱 로그 기준)
-function appLog() { return adb('logcat', '-d', '-s', 'Gureuneun:*'); }
-function spoken() {
-  return appLog().split('\n').filter(l => l.includes('[Speak]')).map(l => l.replace(/^.*\[Speak\] \[\w+\] /, '').trim());
-}
-// 이 정규식에 맞는 문장을 차가 말하면 그 문장을 돌려줌
-async function waitSpeak(re, ms = 30000) { return await waitFor(() => spoken().find(t => re.test(t)), ms, 600); }
-function playerIdle() {
-  const ls = appLog().split('\n').filter(l => /\[Speak\]|\[Player\]/.test(l));
-  return /조용함/.test(ls[ls.length - 1] || '');
-}
-// 들려줄 이야기가 다 끝나 조용해질 때까지
-async function untilQuiet(ms = 40000) { await sleep(1500); return await waitFor(() => playerIdle(), ms, 700); }
-async function waitLog(re, ms = 30000) { return await waitFor(() => re.test(appLog()), ms, 700); }
-
-// logcat 한 줄의 시각("11-10 07:47:59.123")을 밀리초로
-function logTime(line) {
-  const m = /^(\d\d)-(\d\d) (\d\d):(\d\d):(\d\d)\.(\d{3})/.exec(line);
-  if (!m) return null;
-  return new Date(new Date().getFullYear(), +m[1] - 1, +m[2], +m[3], +m[4], +m[5], +m[6]).getTime();
-}
-
-// 말로 묻기 시연: 녹음해 둔 질문을 음성 인식 SDK 에 넣고, 인식기가 음성을 받기 시작한 시각에 질문 목소리를 영상 소리에 겹침
-async function ask(name) {
+// 말로 묻기: 앱에 넣어 둔 질문 음성을 음성 인식 SDK 에 넣고, 인식기가 듣기 시작한 때에 같은 목소리를 영상 소리에 겹침
+async function ask(name, tag) {
   const t0 = Date.now();
   demo('ask', '--es', 'file', name + '.pcm');
-  const fed = await waitFor(() => {
-    const l = appLog().split('\n').filter(x => /음성 넣기 시작/.test(x)).pop();
-    const t = l && logTime(l);
-    return t && t >= t0 - 1000 ? t : null;
-  }, 15000, 300);
-  scene.overlays.push({ at: (fed || t0 + 6000) - scene.start, file: path.join(ASK_DIR, name + '.wav'), gain: 1.6 });
-  const heard = await waitFor(() => { const l = appLog().split('\n').filter(x => /\[STT\] 인식: /.test(x)).pop(); const t = l && logTime(l); return t && t >= t0 ? l.replace(/^.*인식: /, '') : null; }, 20000, 400);
-  log('질문 인식', heard);
+  const fed = await waitLog(/음성 넣기 시작/, 12000, t0 - 500);
+  mark(tag, fed || t0 + 1600);
+  scene.overlays.push({ at: +(((fed || t0 + 1600) - scene.start) / 1000).toFixed(2), file: path.join(ASK_DIR, name + '.wav'), gain: 1.5 });
+  const heard = await waitLog(/^\[STT\] 인식: /, 15000, t0);
+  if (heard) mark(tag + '_heard', heard); else log('질문을 알아듣지 못함', name);
   return heard;
 }
 
-// 휴대폰에 뜬 퀴즈에서 정답(right=false 면 오답)을 누름. 차가 보기 순서를 섞어 보내므로 글자로 찾음
-async function phoneAnswer(scId, quizId, right = true) {
-  const q = SCN[scId].quiz[quizId];
-  const want = [q.choices.ko[q.answer], q.choices.en[q.answer]];
-  await phone.click('#tNow').catch(() => {});
-  const ready = await waitFor(async () => (await phone.locator('#quizCard:not(.hidden) #quizChoices button:not([disabled])').count()) > 0, 40000, 400);
-  if (!ready) { log('퀴즈가 휴대폰에 안 뜸', quizId); return; }
-  await sleep(1800);
-  const texts = await phone.locator('#quizChoices button').allTextContents();
-  let idx = texts.findIndex(t => want.some(w => t.includes(w)));
-  if (idx < 0) idx = 0;
-  if (!right) idx = (idx + 1) % texts.length;
-  await phone.locator('#quizChoices button').nth(idx).click();
-  log('퀴즈 답', quizId, texts[idx]);
-}
-
-// README 용 화면 캡처. 차 화면은 원본 해상도, 휴대폰은 2배 해상도
+// README 와 기획서에 쓸 화면 캡처 (차 화면 원본 해상도, 휴대폰 2배)
 async function shot(name, which = 'both') {
   try {
-    if (which !== 'phone') fs.writeFileSync(path.join(OUT, 'shots', name + '_car.png'), execFileSync(ADB, ['exec-out', 'screencap', '-p'], { env, maxBuffer: 64 * 1024 * 1024 }));
+    if (which !== 'phone') fs.writeFileSync(path.join(OUT, 'shots', name + '_car.png'), execFileSync(ADB, ['exec-out', 'screencap', '-p'], { env, maxBuffer: 64 << 20 }));
     if (which !== 'car') await phone.screenshot({ path: path.join(OUT, 'shots', name + '_phone.png') });
   } catch (e) { log('캡처 실패', name, e.message); }
 }
@@ -347,272 +324,172 @@ async function shot(name, which = 'both') {
 const want = n => ONLY.length === 0 || ONLY.includes(n);
 adb('shell', 'settings', 'put', 'system', 'show_touches', '1');
 
-// ------------------------------------------------------------ 장면 1, 2: 경주 가족 여행
+// ------------------------------------------------------------ 경주: 가족이 차 한 대로
 if (want('gyeongju')) {
   await resetCar();
-  // 뒷좌석에 아이가 앉아 있음 (가족 코스라 명소 이야기 끝에 아이 이야기가 저절로 붙음)
-  await beginScene('gyeongju1');
-  caption('경주 가족 여행', '가족이 차 한 대로 경주에 가요. 출발 전에 [여행 시작] 하나만 누르면 돼요');
-  await sleep(2500);
-  await startTrip(1125, 'gyeongju', 'ko');
-  await sleep(2500);
-  caption('순정 내비게이션에 목적지가 바로 들어가요', '오늘 목적지 동궁과 월지와 경유지 두 곳 (NaviHelper)');
-  await sleep(8000);
-  await shot('rollcall', 'car');
-  const code = await waitFor(groupCode, 8000);
-  curCode = code;
-  caption('출발 전 좌석 점호', '모두 안전벨트를 매면 출발 안내가 나와요. 가족은 차 화면의 QR로 그룹 페이지에 들어와요');
-  if (code) await phoneJoin(code);
-  await sleep(3000);
-  demo('go');
-  await waitSpeak(/출발할게요/, 15000);
-  await sleep(2500);
-  await drive();
-  caption('D단으로 바꾸면 화면은 소리 위주로', '달리는 동안에는 영상과 QR, 긴 글을 숨겨요 (CarUxRestrictions)');
-  await waitLog(/영역 진입:/, 40000);
-  caption('경주에 들어서면 조명이 바뀌고 오프닝', '여행지에 들어서는 순간 실내 조명 색이 바뀌고 이야기가 시작돼요 (Vehicle 실내 조명)');
-  await sleep(6000);
-  await shot('driving');
-  await sleep(10000);
-  await endScene();
-
-  await beginScene('gyeongju2');
-  demo('jump');
-  await sleep(1500);
-  caption('창밖이 궁금하면 말로 물어봐요', '[물어보기]를 누르고 "오른쪽에 보이는 거 뭐야?" 하고 물으면 차가 듣고 답해요. 에뮬레이터엔 마이크가 없어 녹음한 질문을 넣었어요 (SpeechToText)');
-  const heard = await ask('q_right');
-  caption('지금 위치와 진행 방향으로 찾아 답해요', (heard ? '"' + heard + '" ' : '') + '코스에 없는 천마총도 알아보고 몇 미터 떨어졌는지까지 알려 줘요');
-  await sleep(3000);
-  await shot('ask');
-  // 답의 마지막 문장 (150m 안이면 거리 문장이 없어 천마총 소개 끝 문장으로)
-  await waitSpeak(/떨어져 있어요|11,297점/, 30000);
-  const ann = await waitSpeak(/대릉원이 보여요/, 25000);
-  caption('어느 쪽에 보일지 먼저 알려 줘요', (ann ? '"' + ann + '" ' : '') + '같은 순간 휴대폰에는 명소 영상이 떠요');
-  await sleep(4000);
-  await shot('story', 'phone');
-  await waitSpeak(/^뒷자리 친구들, 동산처럼/, 40000);
-  caption('뒷자리에 아이가 타면 아이 이야기도', '가족 코스에서 뒷좌석에 사람이 앉아 있으면 아이 이야기를 덧붙이고, 휴대폰으로 퀴즈가 가요 (Vehicle 좌석 착석)');
-  await phoneAnswer('gyeongju', 'daereungwon');
-  await waitSpeak(/정답이에요/, 20000);
-  caption('맞히면 별이 하나', '별을 다 모으면 차를 세웠을 때 보물 상자가 열려요');
+  const home = screen();
+  // 방향지시등 장면만 다시 찍을 때: STOP_AFTER=signal SCENE_AS=signal node record.mjs ./out gyeongju
+  await beginScene(process.env.SCENE_AS || 'gyeongju');
+  await shot('home', 'car');
   await sleep(2000);
-  await shot('quiz', 'phone');
-  await untilQuiet(40000);
-  demo('jump');
-  await waitSpeak(/^첨성대예요/, 25000);
-  await sleep(1600);
-  caption('방향지시등을 켜면 잠시 멈춤', '차선을 바꾸는 동안은 이야기를 멈춰요 (Vehicle 방향지시등)');
-  await vc('/vehicle/turn-signal?mode=BlinkRight');
-  await sleep(4000);
-  await vc('/vehicle/turn-signal?mode=Off');
-  caption('불이 꺼지면 이어서', '멈췄던 문장부터 다시 들려줘요');
-  await waitSpeak(/^뒷자리 친구들, 첨성대/, 50000);
-  await phoneAnswer('gyeongju', 'cheomseongdae');
-  await waitSpeak(/별을 다 모았어요/, 20000);
-  caption('별 두 개, 보물 상자 준비 끝', '차를 세우면 보물 상자를 열어 줄게요');
-  await untilQuiet(40000);
-  caption('비가 오면 비 오는 날 이야기로', '와이퍼가 움직이면 다음 이야기를 빗소리에 맞춰 바꿔요 (Vehicle 와이퍼)');
-  await vc('/vehicle/body?front_wiper=Low');
-  await waitSpeak(/비가 오네요/, 15000);
-  await untilQuiet(20000);
-  await vc('/vehicle/body?front_wiper=Off');
-  caption('어두워지면 밤 이야기로', '전조등이 켜지면 밤 풍경 이야기로 바꿔요 (Vehicle 전조등)');
-  await vc('/vehicle/lights?feature=headlamp_mode&value=LowBeam');
-  await waitSpeak(/전조등이 켜졌네요/, 15000);
-  await untilQuiet(20000);
-  demo('jump');
-  await waitSpeak(/동궁과 월지가 보여요/, 25000);
-  caption('동궁과 월지, 밤 이야기', '휴대폰에도 불이 켜진 동궁과 월지 장면이 떠요');
-  await waitSpeak(/^동궁과 월지예요/, 25000);
-  // 이야기와 뒷자리 친구들 이야기가 끝난 뒤에 세움 (하던 이야기 사이에 보물 상자 물음이 끼어들지 않게)
-  await untilQuiet(45000);
-  await sleep(1500);
-  await park();
-  await waitSpeak(/보물 상자를 열어 볼까요/, 20000);
-  caption('차를 세우면 보물 상자', '퀴즈 별을 다 모았으니 조수석 앞 글로브 박스를 열지 물어요 (Vehicle 글로브 박스)');
+  await startTrip('gyeongju', 'ko', home);
+  const code = await waitFor(groupCode, 8000);
+  if (code) await phoneJoin(code, '하준');
+  mark('phone_join');
   await sleep(2500);
-  await shot('treasure_offer', 'car');
-  demo('treasure', '--es', 'answer', 'yes');
-  await waitSpeak(/보물 상자가 열렸어요/, 15000);
-  caption('잠금이 풀리고 실내는 금빛으로', '휴대폰에도 보물 상자가 열렸다고 떠요. 다시 달리기 시작하면 잠가요');
-  await sleep(3000);
-  await shot('treasure');
+  await shot('before');
+  await sleep(1500);
+  // 기어를 D 로 바꾸면 출발
+  await gear('D'); mark('gear_d');
+  mark('depart', await waitSpeak(/출발할게요/, 15000, scene.start) || Date.now());
+  await waitLog(/영역 진입: 경주/, 40000, scene.start);
+  mark('city');
+  await untilQuiet(45000);
+  // 대릉원 앞: 코스에 없는 천마총을 말로 물어봄
+  demo('jump');
+  let t = Date.now();
+  await ask('q_right', 'ask');
+  mark('answer', await waitSpeak(/보이는 곳은/, 15000, t) || Date.now());
+  await sleep(2500); await shot('ask');
+  mark('announce', await waitSpeak(/대릉원이 보여요/, 40000, t) || Date.now());
+  await sleep(1500); await shot('announce');
+  mark('story', await waitSpeak(/대릉원이에요/, 20000, t) || Date.now());
+  await sleep(3500); await shot('story');
+  mark('kid', await waitSpeak(/뒷자리 친구들/, 60000, t) || Date.now());
+  await phoneAnswer('gyeongju', 'daereungwon', 'quiz');
+  mark('cheer', await waitSpeak(/정답이에요/, 15000, t) || Date.now());
+  await sleep(1200); await shot('quiz');
+  await untilQuiet(30000);
+  // 첨성대: 이야기 도중에 방향지시등
+  await openTurnSignal();
+  t = Date.now();
+  demo('jump');
+  mark('announce2', await waitSpeak(/첨성대가 보여요/, 40000, t) || Date.now());
+  mark('story2', await waitSpeak(/첨성대예요/, 20000, t) || Date.now());
+  // 길 안내 때문에 쉬는 중이 아니고 문장을 읽기 시작한 지 1~2초 됐을 때 방향지시등을 켬 (멈추는 모습이 또렷하게)
+  await waitFor(() => {
+    const last = appLog().filter(l => /\[Speak\]|길 안내 \d+m 앞|길 안내 지남/.test(l)).pop();
+    const age = last ? Date.now() - logTime(last) : 0;
+    return last && /\[Speak\]/.test(last) && !/첨성대예요\.$/.test(last) && age > 1100 && age < 2200;
+  }, 25000, 150);
+  await turnSignal('Blink right'); mark('turn_on');
   await sleep(4000);
-  caption('주차하면 차 화면에도 크게', '차가 서면 명소 장면과 QR, 오늘 코스를 크게 보여 줘요');
-  await sleep(6000);
-  await shot('parked');
-  await vc('/vehicle/lights?feature=headlamp_mode&value=Off');
+  await turnSignal('Off'); mark('turn_off');
+  mark('resume', await waitLog(/방향지시등 꺼짐/, 8000, t) || Date.now());
+  await sleep(1500);
+  await vcPage.click('#apiBrowserClose').catch(() => {});
+  if (process.env.STOP_AFTER === 'signal') { await sleep(7000); await endScene(); }
+  else {
+  await phoneAnswer('gyeongju', 'cheomseongdae', 'quiz2');
+  await untilQuiet(40000);
+  // 동궁과 월지: 마지막 목적지
+  t = Date.now();
+  demo('jump');
+  mark('announce3', await waitSpeak(/동궁과 월지가 보여요/, 40000, t) || Date.now());
+  await phoneAnswer('gyeongju', 'donggung', 'quiz3');
+  mark('allstars', await waitSpeak(/다 맞혔어요/, 20000, t) || Date.now());
+  await untilQuiet(40000);
+  await sleep(800);
+  t = Date.now();
+  await gear('P'); mark('park');
+  await sleep(2500); await shot('parked');
+  mark('end_ask', await waitSpeak(/여행을 끝낼까요/, 30000, t) || Date.now());
+  await sleep(3200); await shot('end_ask', 'car');
+  // 차가 서 있을 때는 사진이 천천히 움직여 화면 글자를 읽지 못함. 넓은 창 기준 자리를 누르고, 안 되면 명령으로
+  tap({ x: 1516, y: 707 }); mark('end_tap');
+  let fin = await waitSpeak(/여기까지예요/, 6000, t);
+  if (!fin) { demo('end'); fin = await waitSpeak(/여기까지예요/, 8000, t); }
+  mark('finale', fin || Date.now());
+  await sleep(6000); await shot('record', 'car');
+  tap({ x: 2207, y: 1103 }); mark('share');
+  await sleep(2500);
+  await phone.click('#tRecord').catch(() => {}); mark('phone_record');
+  await sleep(1500);
+  if (!(await phone.locator('#saveCard').isVisible().catch(() => false))) { log('보내기가 안 눌려 명령으로 보냄'); demo('share'); await sleep(3000); }
+  await sleep(2500); await shot('record_sent');
+  await phone.click('#saveCard').catch(() => {}); mark('postcard');
+  await sleep(3500);
   await endScene();
+  }
 }
 
-// ------------------------------------------------------------ 장면 3: 제주, 렌터카 두 대
-let jejuStart = 0, jejuCode = null;
+// ------------------------------------------------------------ 제주: 친구들이 두 대로
 if (want('jeju')) {
   await resetCar();
+  const home = screen();
   await beginScene('jeju');
-  jejuStart = Date.now();
-  caption('제주, 친구들이 렌터카 두 대로', '두 차를 네 자리 그룹 번호 하나로 묶어요');
-  await startTrip(1654, 'jeju', 'ko');
-  await sleep(10000);
-  jejuCode = await waitFor(groupCode, 8000);
-  curCode = jejuCode;
-  let car2 = null;
-  if (jejuCode) {
-    car2 = new WebSocket('ws://127.0.0.1:8787/ws?code=' + jejuCode + '&role=car&name=' + encodeURIComponent('2호차'));
-    await phoneJoin(jejuCode);
-  }
-  caption('뒤차도 같은 그룹', '친구들은 각자 QR을 찍어 같은 그룹 페이지를 봐요');
-  await sleep(3000);
-  demo('go');
-  await sleep(5000);
-  await drive();
-  await waitLog(/영역 진입:/, 40000);
-  await sleep(6000);
-  caption('휴대폰 지도에서 바닷가 카페를 찍으면', '그룹 차 모두에 같은 장소가 떠요');
-  await phonePick('aewol_cafe');
-  await waitSpeak(/들를까요/, 30000);
   await sleep(1500);
-  await shot('pick');
-  caption('운전자는 "응" 한마디', '차가 "가는 길에 들를까요?" 하고 물으면 말로 답해요. 순정 내비게이션 경유지로 들어가요 (NaviHelper)');
-  demo('answer', '--es', 'q', '응');
-  await sleep(9000);
-  await phone.click('#tNow').catch(() => {});
-  await sleep(2500);
-  demo('jump', '--es', 'to', 'iho');
-  await waitSpeak(/말 등대가 보여요/, 25000);
-  caption('이호테우 해변의 말 등대', '휴대폰에는 등대 영상과 손으로 돌려 보는 3D 모형이 떠요');
+  await startTrip('jeju', 'ko', home);
+  const code = await waitFor(groupCode, 8000);
+  let car2 = null;
+  if (code) {
+    const join = await (await fetch(SRV + '/api/groups/' + code + '/join', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ carName: '뒤차' }) })).json();
+    car2 = new WebSocket(SRV.replace('http', 'ws') + '/ws?code=' + code + '&role=car&key=' + encodeURIComponent(join.carKey));
+    await phoneJoin(code, '민지');
+  }
+  mark('phone_join');
   await sleep(3000);
-  await phoneOrbit();
-  await sleep(1200);
-  await phoneOrbit();
-  await untilQuiet(40000);
-  await phone.click('#mVideo').catch(() => {});
-  demo('jump', '--es', 'to', 'hyeopjae');
-  await waitSpeak(/협재해수욕장이 보여요/, 25000);
-  await untilQuiet(45000);
-  await park();
-  await sleep(3000);
-  caption('바닷가에 세우면 창문을 열지 물어요', '그러자고 하면 앞 창문만 조금 내려가고 파도 소리가 들려요 (Vehicle 창문)');
-  await sleep(2000);
-  await shot('window', 'car');
-  await sleep(2000);
-  demo('window', '--ez', 'open', 'true');
-  await sleep(9000);
-  caption('주차장도 휴대폰에서 골라요', '주차장은 "그리로 안내할까요?" 하고 묻고, 그러자고 하면 목적지가 바뀌어요');
-  await phonePick('hyeopjae_parking');
-  await waitSpeak(/안내할까요/, 30000);
-  await sleep(2500);
-  await shot('pick_parking', 'car');
-  demo('answer', '--es', 'q', '응');
-  await sleep(7000);
-  adb('shell', 'am', 'start', '-n', 'app.gureuneun.guide/.MainActivity');
-  await sleep(2500);
-  // 내리기 전에 앱이 내려 둔 앞 창문을 닫음 ([앞 창문 닫기] 단추와 같음)
-  demo('closewindows');
-  await sleep(4000);
-  caption('여행이 끝나면 하루 기록 카드', '지나온 길, 명소를 지난 시각, 들은 이야기가 모여요');
-  demo('end');
+  await gear('D'); mark('gear_d');
+  await waitLog(/영역 진입: 제주/, 40000, scene.start);
   await sleep(5000);
-  await shot('record', 'car');
-  await sleep(3000);
-  caption('기록은 물어보고 보내요', '지나온 길은 위치 정보라서 그룹 휴대폰으로 보낼지 먼저 묻고, 출발과 도착 근처의 길은 빼고 올려요');
-  await sleep(3500);
-  demo('share');
-  await sleep(5000);
+  // 뒷자리에서 바닷가 카페를 고르면 차가 묻고, 운전자는 "응"
+  let t = Date.now();
+  await phonePick('aewol_cafe');
+  mark('pick_say', await waitSpeak(/골랐어요/, 40000, t) || Date.now());
+  mark('pick_ask', await waitSpeak(/들를까요/, 15000, t) || Date.now());
+  await waitLog(/듣기 요청/, 8000, t);
+  await sleep(700); await shot('pick');
+  await ask('a_yes', 'yes');
+  const added = await waitLog(/경유지 다시 묶음/, 10000, t);
+  mark('added', added || Date.now());
+  // 순정 내비가 카페를 넣은 경로를 보여 주고, 안내를 시작하면 우리 화면으로 돌아옴
+  const route = await waitLog(/^\[Navi\] 경로 안내 시작/, 15000, added || t);
+  mark('route2', route || Date.now());
+  await shot('navi_stop', 'car');
+  await sleep(2600);
+  mark('back');
+  await sleep(3000); await shot('pick_done');
   if (car2) car2.close();
+  await gear('P');
   await endScene();
 }
 
-// ------------------------------------------------------------ 장면 4: 휴대폰 기록 (지나온 길과 사진)
-// 제주 장면을 앞선 실행에서 녹화했다면 그 그룹으로 휴대폰을 다시 들여보낸다
-if (want('record') && !jejuCode) {
-  const jejuPrev = T.scenes.find(s => s.name === 'jeju');
-  if (jejuPrev && jejuPrev.code) { jejuCode = jejuPrev.code; jejuStart = jejuPrev.start; await phoneJoin(jejuCode); }
-}
-if (want('record') && jejuCode) {
-  curCode = jejuCode;
-  await beginScene('record');
-  caption('휴대폰에 남는 오늘의 기록', '사진을 올리면 찍은 시각에 맞춰 지나온 길 위에 붙어요');
-  await phone.click('#tRecord');
-  await sleep(3000);
-  // 시연용 사진: 3D 장면 컷을 여행 중 시각으로 바꿔 올림
-  const web = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../companion/web/posters');
-  const photos = ['horse_lighthouse_1.jpg', 'beach_1.jpg', 'hyeopjae_2.jpg'].map((f, i) => {
-    const dst = path.join(OUT, 'photo_' + (i + 1) + '.jpg');
-    fs.copyFileSync(path.join(web, f), dst);
-    const t = new Date(jejuStart + (60 + i * 50) * 1000);
-    fs.utimesSync(dst, t, t);
-    return dst;
-  });
-  await phone.setInputFiles('#photoInput', photos);
-  await sleep(7000);
-  caption('두고두고 꺼내 보는 하루', '지나온 길, 명소를 지난 시각, 들은 이야기와 사진이 한곳에 모여요');
-  await sleep(5000);
-  await shot('phone_record', 'phone');
-  await sleep(5000);
-  await endScene();
-}
-
-// ------------------------------------------------------------ 장면 5: 서울, 외국인 손님 영어 안내
+// ------------------------------------------------------------ 서울: 외국인 손님을 태운 택시
 if (want('seoul')) {
   await resetCar();
+  const home = screen();
   await beginScene('seoul');
-  caption('서울, 외국인 손님을 태운 택시', '안내 언어를 영어로 바꾸면 차도 휴대폰도 영어로 안내해요');
-  await startTrip(2182, 'seoul', 'en');
-  await sleep(10000);
-  const code = await waitFor(groupCode, 8000);
-  curCode = code;
-  // 손님 휴대폰: 이름과 화면 언어를 영어 손님에 맞춤
-  await phone.evaluate(() => { localStorage.setItem('gg_me', 'Alex'); localStorage.removeItem('gg_lang'); }).catch(() => {});
-  if (code) await phoneJoin(code);
-  demo('go');
-  await sleep(4000);
-  await drive();
-  await waitLog(/영역 진입:/, 40000);
-  await sleep(9000);
-  demo('jump', '--es', 'to', 'building63');
-  const ann = await waitSpeak(/is the 63 Building/, 25000);
-  caption(ann ? '"' + ann.replace(/\.$/, '') + '"' : '63빌딩 영어 안내', '기사가 영어를 잘하지 못해도 차가 대신 안내해요');
-  await sleep(4000);
-  await shot('seoul');
-  await untilQuiet(40000);
-  // 손님이 휴대폰 지도에서 가고 싶은 곳을 고름. 차가 영어로 묻고, 기사는 화면의 큰 단추를 누름
-  caption('손님이 가고 싶은 곳을 고르면', '휴대폰 지도에서 고른 곳이 차 화면에 뜨고, 기사는 큰 단추 하나만 누르면 돼요 (NaviHelper)');
-  await phonePick('thehyundai');
-  await waitSpeak(/stop there on the way/i, 30000);
-  await sleep(2500);
-  await shot('seoul_pick');
-  demo('pick', '--es', 'mode', 'waypoint');
-  await sleep(8000);
-  adb('shell', 'am', 'start', '-n', 'app.gureuneun.guide/.MainActivity');
-  await phone.click('#tNow').catch(() => {});
-  await sleep(2500);
-  // 한강공원 앞으로 옮겨 손님이 영어로 물어봄 (오른쪽에 마포대교)
-  demo('seek', '--ei', 'm', '5300');
   await sleep(1500);
-  caption('손님이 영어로 물어도', '"What\'s that on the right?" 영어로 듣고 영어로 답해요 (SpeechToText)');
-  const q = await ask('q_en_right');
-  await waitSpeak(/Mapo Bridge/, 25000);
-  caption('코스 밖 마포대교까지', (q ? '"' + q + '" ' : '') + '정류장이 아닌 다리도 방향과 거리로 짚어 줘요');
-  await sleep(4000);
-  await shot('seoul_ask');
-  await waitSpeak(/meters away/, 25000);
-  await sleep(2000);
-  await park();
-  await sleep(4000);
+  await startTrip('seoul', 'en', home);
+  const code = await waitFor(groupCode, 8000);
+  if (code) await phoneJoin(code, 'Alex', 'en');
+  mark('phone_join');
+  await sleep(2500);
+  await gear('D'); mark('gear_d');
+  await waitLog(/영역 진입: Yeouido/, 40000, scene.start);
+  await sleep(2500);
+  let t = Date.now();
+  demo('jump', '--es', 'to', 'building63');
+  mark('announce', await waitSpeak(/is the 63 Building/, 40000, t) || Date.now());
+  await sleep(3500); await shot('seoul');
+  await untilQuiet(40000);
+  // 한강공원 앞에서 손님이 영어로 물어봄 (오른쪽에 마포대교)
+  demo('seek', '--ei', 'm', '5300');
+  await sleep(1200);
+  t = Date.now();
+  await ask('q_en_right', 'ask');
+  mark('answer', await waitSpeak(/Look to your right/, 15000, t) || Date.now());
+  await sleep(3000); await shot('seoul_ask');
+  await untilQuiet(30000);
+  await gear('P');
+  // 다음 실행을 위해 안내 언어를 한국어로 돌려 둠
+  demo('end'); await sleep(1500); demo('home'); await sleep(2000); tapText(/^한국어$/);
   await endScene();
 }
 
-const pv = phone.video();
-await phoneCtx.close();
-const phoneFile = pv ? await pv.path() : null;
-for (const s of runScenes) s.phoneFile = phoneFile;
-T.phoneFile = phoneFile;
-fs.writeFileSync(TL, JSON.stringify(T, null, 2));
 adb('shell', 'settings', 'put', 'system', 'show_touches', '0');
 clearInterval(hb);
 clearInterval(wavPoll);
 await browser.close();
 log('녹화 끝', OUT);
-// 가속 페달 반복(pedalLoop)이 계속 돌고 있으므로 여기서 끝냄
 process.exit(0);

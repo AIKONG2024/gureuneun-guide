@@ -1,0 +1,262 @@
+{
+ "notice": "Pleos Connect 에뮬레이터에서 실제로 동작하는 화면",
+ "music": {
+  "file": "out/music/acoustic-guitar.mp3",
+  "start": 5,
+  "gain": 1
+ },
+ "musicLevel": {
+  "scene": 0.045,
+  "card": 0.3
+ },
+ "clips": [
+  {
+   "scene": "gyeongju",
+   "from": "ask+0.55",
+   "to": "ask+2.8",
+   "layout": "car",
+   "caption": "창밖이 궁금하면, {물어보세요}",
+   "say": [
+    {
+     "text": "오른쪽에 보이는 거 뭐야?",
+     "at": "ask+0.95",
+     "dur": 2.4
+    }
+   ],
+   "music": 0
+  },
+  {
+   "scene": "gyeongju",
+   "from": "answer+1.45",
+   "to": "answer+9.75",
+   "layout": "car",
+   "caption": "창밖이 궁금하면, {물어보세요}",
+   "music": 0,
+   "fade": 0.15
+  },
+  {
+   "card": "title",
+   "dur": 3
+  },
+  {
+   "scene": "gyeongju",
+   "from": "card_tap-1.9",
+   "to": "started+0.75",
+   "layout": "car",
+   "zoom": {
+    "at": 0.7,
+    "dur": 0.9
+   },
+   "caption": "버튼 하나로 {여행 시작}",
+   "chip": "경주 · 가족 여행",
+   "mute": true,
+   "music": 0.22
+  },
+  {
+   "scene": "gyeongju",
+   "from": "route-3.6",
+   "to": "route-0.3",
+   "layout": "car",
+   "caption": "버튼 하나로 {여행 시작}",
+   "chip": "경주 · 가족 여행",
+   "mute": true,
+   "music": 0.22
+  },
+  {
+   "scene": "gyeongju",
+   "from": "qr+0.9",
+   "to": "qr+4.5",
+   "layout": "phone",
+   "caption": "가족은 {QR}로 함께 봐요",
+   "chip": "경주 · 가족 여행",
+   "mute": true,
+   "music": 0.22
+  },
+  {
+   "scene": "gyeongju",
+   "from": "gear_d-1.15",
+   "to": "depart+2.95",
+   "layout": "vc:gear",
+   "caption": "기어를 D로 옮기면 {출발}",
+   "chip": "경주 · 가족 여행"
+  },
+  {
+   "scene": "gyeongju",
+   "from": "announce+0.1",
+   "to": "kid+0.1",
+   "layout": "phone",
+   "caption": "명소가 가까워지면 {어느 쪽인지}부터",
+   "chip": "경주 · 가족 여행"
+  },
+  {
+   "scene": "gyeongju",
+   "from": "kid+0.1",
+   "to": "kid+7.0",
+   "layout": "phone",
+   "caption": "뒷자리 아이에겐 {아이 눈높이}로",
+   "chip": "경주 · 가족 여행",
+   "fade": 0.1
+  },
+  {
+   "scene": "gyeongju",
+   "from": "quiz_shown-2.2",
+   "to": "quiz_tap+0.25",
+   "layout": "phone",
+   "phone": [
+    0,
+    560,
+    824,
+    780
+   ],
+   "dim": "car",
+   "caption": "이야기가 끝나면 휴대폰에 {퀴즈}",
+   "chip": "경주 · 가족 여행"
+  },
+  {
+   "scene": "gyeongju",
+   "from": "quiz_tap+0.25",
+   "to": "cheer+3.1",
+   "layout": "vc:light",
+   "caption": "맞히면 {실내 조명}이 반짝",
+   "chip": "경주 · 가족 여행",
+   "fade": 0.12
+  },
+  {
+   "scene": "signal",
+   "from": "turn_on-1.15",
+   "to": "resume+1.3",
+   "layout": "vc:signal",
+   "caption": "방향지시등을 켜면 이야기도 {잠깐 멈춤}",
+   "chip": "경주 · 가족 여행"
+  },
+  {
+   "scene": "signal",
+   "from": "resume+1.3",
+   "to": "resume+4.65",
+   "layout": "car",
+   "caption": "방향지시등을 켜면 이야기도 {잠깐 멈춤}",
+   "chip": "경주 · 가족 여행"
+  },
+  {
+   "scene": "jeju",
+   "from": "pick_tab-0.5",
+   "to": "pick_send+0.9",
+   "layout": "phone",
+   "dim": "car",
+   "caption": "뒷자리에서 가고 싶은 곳을 {고르면}",
+   "chip": "제주 · 친구들과 차 두 대로",
+   "fade": 0.4,
+   "mute": true,
+   "music": 0.22
+  },
+  {
+   "scene": "jeju",
+   "from": "pick_say+0.3",
+   "to": "pick_ask+1.65",
+   "layout": "phone",
+   "caption": "뒷자리에서 가고 싶은 곳을 {고르면}",
+   "chip": "제주 · 친구들과 차 두 대로"
+  },
+  {
+   "scene": "jeju",
+   "from": "yes+0.6",
+   "to": "added+1.25",
+   "layout": "phone",
+   "caption": "운전자는 {“응” 한마디}",
+   "chip": "제주 · 친구들과 차 두 대로",
+   "say": [
+    {
+     "text": "응",
+     "at": "yes+0.85",
+     "dur": 0.95
+    }
+   ],
+   "fade": 0.1
+  },
+  {
+   "scene": "jeju",
+   "from": "route2-4.2",
+   "to": "route2-0.9",
+   "layout": "phone",
+   "caption": "운전자는 {“응” 한마디}",
+   "chip": "제주 · 친구들과 차 두 대로",
+   "mute": true,
+   "music": 0.22
+  },
+  {
+   "scene": "seoul",
+   "from": "announce+0.25",
+   "to": "announce+10.05",
+   "layout": "phone",
+   "caption": "외국인 손님에겐 {영어로}",
+   "chip": "서울 · 외국인 손님을 태운 택시",
+   "fade": 0.4
+  },
+  {
+   "scene": "seoul",
+   "from": "ask+0.55",
+   "to": "answer+4.4",
+   "layout": "car",
+   "caption": "외국인 손님에겐 {영어로}",
+   "chip": "서울 · 외국인 손님을 태운 택시",
+   "say": [
+    {
+     "text": "What's that on the right?",
+     "at": "ask+0.75",
+     "dur": 1.9
+    }
+   ]
+  },
+  {
+   "scene": "gyeongju",
+   "from": "park-0.85",
+   "to": "end_ask+2.15",
+   "layout": "vc:gear",
+   "caption": "목적지에 세우면 차가 먼저 물어요",
+   "chip": "경주 · 가족 여행",
+   "fade": 0.4
+  },
+  {
+   "scene": "gyeongju",
+   "from": "end_tap-0.85",
+   "to": "finale+5.05",
+   "layout": "car",
+   "caption": "하루가 {엽서 한 장}으로",
+   "chip": "경주 · 가족 여행"
+  },
+  {
+   "scene": "gyeongju",
+   "from": "finale+5.25",
+   "to": "share+1.9",
+   "layout": "car",
+   "caption": "하루가 {엽서 한 장}으로",
+   "chip": "경주 · 가족 여행",
+   "fade": 0.12
+  },
+  {
+   "scene": "gyeongju",
+   "from": "phone_record+0.3",
+   "to": "phone_record+4.0",
+   "layout": "phone",
+   "caption": "하루가 {엽서 한 장}으로",
+   "chip": "경주 · 가족 여행",
+   "mute": true,
+   "music": 0.22
+  },
+  {
+   "scene": "gyeongju",
+   "from": "postcard-0.4",
+   "to": "postcard+2.2",
+   "layout": "phone",
+   "caption": "하루가 {엽서 한 장}으로",
+   "chip": "경주 · 가족 여행",
+   "mute": true,
+   "music": 0.22,
+   "fade": 0.12
+  },
+  {
+   "card": "end",
+   "dur": 5
+  }
+ ]
+}
