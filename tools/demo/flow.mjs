@@ -36,7 +36,15 @@ const adb = (...a) => execFileSync(ADB, a, { encoding: 'utf8', maxBuffer: 64 << 
 // adb shell 은 인자를 공백으로 이어 붙이므로 띄어쓰기가 있는 값은 작은따옴표로 감쌈
 const q1 = a => /[\s?']/.test(a) ? "'" + a.replace(/'/g, "'\\''") + "'" : a;
 const demo = (cmd, ...extra) => { try { adb('shell', 'am', 'start', '-n', 'app.gureuneun.guide/.MainActivity', '--es', 'demo', cmd, ...extra.map(q1)); } catch (e) { log('demo 실패', cmd, e.message); } };
-const vc = async p => { try { return (await fetch(VC + p, { method: 'POST' })).status; } catch { return 'ERR'; } };
+// 조작이 한 번에 안 받아들여질 때가 있어 200 이 올 때까지 몇 번 다시 보냄
+const vc = async p => {
+  let last = 'ERR';
+  for (let i = 0; i < 8; i++) {
+    try { last = (await fetch(VC + p, { method: 'POST' })).status; if (last === 200) return last; } catch { last = 'ERR'; }
+    await sleep(600);
+  }
+  return last;
+};
 // Virtual Console 은 브라우저 세션이 살아 있어야 차량 조작 API 를 엶 (없으면 503 emulator_inactive)
 setInterval(() => fetch(VC + '/browser/session?client=gg-flow', { method: 'POST' }).catch(() => {}), 1000);
 async function vcReady() {
@@ -118,21 +126,18 @@ function newestCode(after) {
   return list[0] ? list[0].n : null;
 }
 
-// 휴대폰 흉내: 그룹 키로 들어와 퀴즈는 시나리오 자료의 정답 글자로 맞힘
+// 휴대폰 흉내: 그룹 키로 들어옴. autoFind 를 켜 두면 차가 찾을 것을 냈을 때 [찾았다]를 누름
 function phone(code, k, scenarioId, lang = 'ko', name = '하준') {
   const ws = new WebSocket(WS_URL + '/ws?code=' + code + (k ? '&k=' + k : ''));
-  const p = { ws, msgs: [], quiz: 0, answered: 0 };
+  const p = { ws, msgs: [], hunt: 0, found: 0, autoFind: false };
   ws.on('error', () => {});
   ws.on('message', d => {
     let m; try { m = JSON.parse(String(d)); } catch { return; }
     p.msgs.push(m);
-    if (m.type === 'quiz') {
-      p.quiz++;
-      const q = SCN[scenarioId].quiz[m.placeId || m.id];
-      const right = q ? q.choices[lang][q.answer] : null;
-      const idx = right ? m.choices.indexOf(right) : 0;
-      if ('answer' in m) log('!! 퀴즈 정답이 휴대폰에 들어옴', JSON.stringify(m));
-      setTimeout(() => { ws.send(JSON.stringify({ type: 'quiz_answer', id: m.id, choice: Math.max(0, idx), by: name })); p.answered++; log('휴대폰 퀴즈 답', m.placeId, '→', m.choices[idx]); }, 1500);
+    if (m.type === 'found') p.found++;
+    if (m.type === 'hunt') {
+      p.hunt++;
+      if (p.autoFind) setTimeout(() => { ws.send(JSON.stringify({ type: 'hunt_found', placeId: m.placeId, by: name })); log('휴대폰 [찾았다]', m.placeId); }, 3500);
     }
   });
   return new Promise(res => ws.on('open', () => res(p)));
@@ -170,10 +175,19 @@ async function gyeongju() {
   await resetCar();
   // 뒷자리에 아이가 탄 것으로
   await vc('/vehicle/seat?kind=occupied&area=rear_left&value=true');
+  const m0 = mark();
   const { code, k } = await startTrip('gyeongju', 'ko');
   if (!code) return;
   const ph = await phone(code, k, 'gyeongju');
   check('경주: 휴대폰(QR 키) 접속', ph.ws.readyState === 1);
+  // 뒷자리에 누가 앉았으니 아이 모드로 갈지 물음 → "응"
+  const kidAsk = await waitAfter(m0, /\[Speak\].*아이 모드로 갈까요/, 30000);
+  check('경주: 뒷자리에 누가 앉으면 아이 모드로 갈지 물음', !!kidAsk, tailOf(kidAsk));
+  await sleep(1500);
+  shot('g00_kidoffer');
+  let mk = mark();
+  demo('asktext', '--es', 'q', '응');
+  check('경주: "응" 하면 아이 모드', !!(await waitAfter(mk, /\[Speak\].*아이 모드로 갈게요/, 20000)));
   await sleep(3000);
   shot('g01_before');
   const pre = await waitScreen(/휴대폰으로 같이 봐요/, 6000);
@@ -188,20 +202,29 @@ async function gyeongju() {
   await sleep(4000);
   shot('g02_driving');
 
-  // 첫 명소: 어느 쪽에 보이는지 먼저, 이야기, 아이 이야기, 퀴즈
+  // 첫 명소: 어느 쪽에 보이는지 먼저, 창밖에서 찾을 것, "찾았다"에 스티커, 이야기, 아이 눈높이의 한마디
   m = mark();
   demo('jump');
   const ann = await waitAfter(m, /\[Speak\].*잠시 후 (오른쪽|왼쪽|앞쪽)에 대릉원/, 60000);
   check('경주: 명소가 어느 쪽에 보이는지 먼저 알림', !!ann, tailOf(ann));
-  await sleep(2500);
+  const hunt = await waitAfter(m, /\[Speak\].*둥근 언덕을 찾아보세요/, 40000);
+  check('경주: 아이 모드에서는 창밖에서 찾을 것을 냄', !!hunt, tailOf(hunt));
+  for (let i = 0; i < 20 && ph.hunt < 1; i++) await sleep(500);
+  check('경주: 찾을 것이 휴대폰에도 뜸', ph.hunt >= 1, 'hunt ' + ph.hunt);
+  await sleep(3500);
+  shot('g03_hunt');
+  // 말로 "찾았다"
+  demo('asktext', '--es', 'q', '찾았다');
+  const cheer = await waitAfter(m, /\[Speak\].*스티커 한 장 드릴게요/, 20000);
+  check('경주: "찾았다"에 차가 스티커를 줌', !!cheer, tailOf(cheer));
+  for (let i = 0; i < 20 && ph.found < 1; i++) await sleep(500);
+  check('경주: 모은 스티커가 휴대폰에도 감', ph.found >= 1, 'found ' + ph.found);
+  await sleep(1500);
   shot('g03_story');
-  const kid = await waitAfter(m, /\[Speak\].*뒷자리 친구들/, 90000);
-  check('경주: 뒷자리에 사람이 있으면 아이 이야기를 덧붙임', !!kid, tailOf(kid));
-  for (let i = 0; i < 60 && ph.answered < 1; i++) await sleep(1000);
-  check('경주: 이야기가 끝나면 휴대폰에 퀴즈', ph.quiz >= 1, 'quiz ' + ph.quiz);
-  check('경주: 퀴즈 정답이 휴대폰에 미리 가지 않음', ph.msgs.filter(x => x.type === 'quiz' && 'answer' in x).length === 0);
-  const cheer = await waitAfter(m, /\[Speak\].*정답이에요/, 30000);
-  check('경주: 맞히면 차가 같이 축하', !!cheer, tailOf(cheer));
+  const kid = await waitAfter(m, /\[Speak\].*임금님들이 잠든 무덤/, 90000);
+  check('경주: 이야기 끝에 아이 눈높이의 한마디를 덧붙임', !!kid, tailOf(kid));
+  // 다음 곳부터는 휴대폰의 [찾았다]로
+  ph.autoFind = true;
 
   // 창밖 묻기 (코스에 없는 곳)
   await sleep(3000);
@@ -244,14 +267,16 @@ async function gyeongju() {
   await vc('/vehicle/turn-signal?mode=Off');
   check('경주: 끄면 이어 감', !!(await waitAfter(m, /방향지시등 꺼짐/, 10000)));
 
-  // 이야기를 건너뛰면 그곳 퀴즈는 내지 않음
+  // 휴대폰에서 누른 [찾았다]도 스티커가 됨
+  check('경주: 휴대폰의 [찾았다]도 받음', history.slice(afterYes).some(l => /찾았다: cheomseongdae 하준/.test(l)));
+  // 이야기를 건너뛰면 아이에게 하는 한마디도 덧붙이지 않음
   await sleep(3500);
   m = mark();
   demo('next');
   const skipped = await waitAfter(m, /이야기 건너뜀: 첨성대/, 10000);
   await sleep(3000 * SCALE);
   pull();
-  if (skipped) check('경주: 건너뛴 이야기에는 퀴즈를 내지 않음', !history.slice(m).some(l => /퀴즈 보냄: 첨성대/.test(l)));
+  if (skipped) check('경주: 건너뛴 이야기에는 아이에게 하는 말을 덧붙이지 않음', !history.slice(m).some(l => /\[Speak\].*별을 보던 돌탑/.test(l)));
   else log('첨성대 이야기가 이미 끝나 건너뛰기를 확인하지 못함');
 
   // 안내 밖의 부탁
@@ -276,7 +301,8 @@ async function gyeongju() {
   m = mark();
   demo('answer', '--es', 'q', '응');
   const fin = await waitAfter(m, /\[Speak\].*여기까지예요/, 20000);
-  check('경주: "응"이면 여행을 끝내고 기록을 보여 줌', !!fin, tailOf(fin));
+  check('경주: "응"이면 여행을 끝냄', !!fin, tailOf(fin));
+  check('경주: 차 화면에서 여행 영상이 시작됨', !!(await waitAfter(m, /\[Reel\] 여행 영상 시작/, 30000)));
   check('경주: 앱이 바꾼 실내 조명을 원래대로', !!(await waitAfter(m, /앱이 바꾼 차 상태를 모두 되돌림/, 15000)));
   await sleep(5000);
   shot('g08_record');
@@ -288,6 +314,7 @@ async function gyeongju() {
   check('경주: [휴대폰으로 보내기]로 기록 올림', /"record":\{/.test(after));
   const recMsg = ph.msgs.find(x => x.type === 'record');
   check('경주: 휴대폰에 기록이 옴', !!recMsg);
+  check('경주: 기록에 찾은 것(스티커)이 들어 있음', !!(recMsg && recMsg.record.events.some(e => e.type === 'found')));
   shot('g09_record_sent');
   const page = await fetch(SRV + '/g/' + code + '/record?k=' + k + '&car=1').then(r => r.status).catch(() => 'ERR');
   check('경주: 휴대폰 기록 페이지 열림', page === 200, 'status ' + page);

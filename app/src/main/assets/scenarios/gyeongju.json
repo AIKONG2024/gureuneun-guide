@@ -99,14 +99,14 @@
       "color": "#FFB347",
       "story": {
         "ko": {
-          "short": "경주에 들어왔어요. 신라가 천 년 가까이 수도로 삼았던 도시예요.",
-          "medium": "경주에 들어왔어요. 신라가 천 년 가까이 수도로 삼았던 도시예요. 2000년에는 도시 곳곳의 신라 유적이 경주역사유적지구라는 이름으로 유네스코 세계유산이 됐어요.",
-          "long": "경주에 들어왔어요. 신라가 천 년 가까이 수도로 삼았던 도시예요. 2000년에는 도시 곳곳의 신라 유적이 경주역사유적지구라는 이름으로 유네스코 세계유산이 됐어요. 신라는 기원전 57년에 시작해 935년까지 이어졌어요. 왕들이 살고, 별을 보고, 잔치를 열던 자리가 지금 우리가 달리는 길 옆에 그대로 남아 있어요. 오늘은 그중에서 대릉원과 첨성대, 동궁과 월지를 차례로 만나요."
+          "short": "여기부터 신라예요. 경주는 신라가 천 년 가까이 수도로 삼았던 도시예요.",
+          "medium": "여기부터 신라예요. 경주는 신라가 천 년 가까이 수도로 삼았던 도시예요. 2000년에는 도시 곳곳의 신라 유적이 경주역사유적지구라는 이름으로 유네스코 세계유산이 됐어요.",
+          "long": "여기부터 신라예요. 경주는 신라가 천 년 가까이 수도로 삼았던 도시예요. 2000년에는 도시 곳곳의 신라 유적이 경주역사유적지구라는 이름으로 유네스코 세계유산이 됐어요. 신라는 기원전 57년에 시작해 935년까지 이어졌어요. 왕들이 살고, 별을 보고, 잔치를 열던 자리가 지금 우리가 달리는 길 옆에 그대로 남아 있어요. 오늘은 그중에서 대릉원과 첨성대, 동궁과 월지를 차례로 만나요."
         },
         "en": {
-          "short": "Welcome to Gyeongju. For nearly a thousand years, this city was the capital of the Silla kingdom.",
-          "medium": "Welcome to Gyeongju. For nearly a thousand years, this city was the capital of the Silla kingdom. In 2000, the Silla sites around the city became a UNESCO World Heritage site, the Gyeongju Historic Areas.",
-          "long": "Welcome to Gyeongju. For nearly a thousand years, this city was the capital of the Silla kingdom. In 2000, the Silla sites around the city became a UNESCO World Heritage site, the Gyeongju Historic Areas. Silla began in 57 BC and lasted until 935. The places where kings lived, watched the stars and held banquets are still right beside the road we're on. Today we'll meet Daereungwon, Cheomseongdae, and Donggung Palace and Wolji Pond."
+          "short": "From here on, it is Silla. For nearly a thousand years, Gyeongju was the capital of the Silla kingdom.",
+          "medium": "From here on, it is Silla. For nearly a thousand years, Gyeongju was the capital of the Silla kingdom. In 2000, the Silla sites around the city became a UNESCO World Heritage site, the Gyeongju Historic Areas.",
+          "long": "From here on, it is Silla. For nearly a thousand years, Gyeongju was the capital of the Silla kingdom. In 2000, the Silla sites around the city became a UNESCO World Heritage site, the Gyeongju Historic Areas. Silla began in 57 BC and lasted until 935. The places where kings lived, watched the stars and held banquets are still right beside the road we're on. Today we'll meet Daereungwon, Cheomseongdae, and Donggung Palace and Wolji Pond."
         }
       },
       "rain": {

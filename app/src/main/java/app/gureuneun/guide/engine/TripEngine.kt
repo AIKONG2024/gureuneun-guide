@@ -1478,6 +1478,12 @@ class TripEngine(private val app: GuideApp) {
         ui.update { it.copy(asking = true) }
         beginListening()
         app.listen.listen(lang, { onHeard(it) }, { onNotHeard(it) })
+        // 명소는 금방 지나가니 오래 기다리지 않음. 6초 안에 못 들으면 마이크를 닫고 이야기를 시작함 (단추는 그곳을 지날 때까지 남음)
+        app.scope.launch {
+            delay(6000)
+            val now = ui.value
+            if (now.hunt?.placeId == placeId && now.listening && now.asking) app.listen.cancel()
+        }
     }
 
     /** 찾았다: 말로, 휴대폰 단추로, 차 화면 단추로. 같은 곳은 스티커 한 장만. 차 안이 같이 축하함 */
