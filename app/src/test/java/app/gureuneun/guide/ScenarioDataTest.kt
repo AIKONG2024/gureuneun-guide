@@ -47,17 +47,20 @@ class ScenarioDataTest {
         }
     }
 
-    @Test fun quizzesAndKidLinesPointToRealPlaces() {
+    @Test fun kidLinesHuntsAndStickersPointToRealPlaces() {
+        val drawn = setOf("tombs", "tower", "pavilion", "bridge", "lighthouse", "sea", "tower63", "assembly")
         Scenarios.ids.map(Scenarios::load).forEach { sc ->
             sc.kid.keys.forEach { id -> assertTrue("${sc.id} 아이 이야기 $id", sc.findPlace(id) != null) }
-            sc.quiz.forEach { (id, q) ->
-                assertTrue("${sc.id} 퀴즈 $id 명소", sc.findPlace(id) != null)
-                val ko = q.choices("ko")
-                val en = q.choices("en")
-                assertEquals("${sc.id} 퀴즈 $id 보기 수", ko.size, en.size)
-                assertTrue("${sc.id} 퀴즈 $id 정답 번호", q.answer in ko.indices)
-                assertTrue("${sc.id} 퀴즈 $id 질문", q.question["ko"]!!.isNotBlank() && q.question["en"]!!.isNotBlank())
+            sc.hunt.forEach { (id, line) ->
+                assertTrue("${sc.id} 보물찾기 $id 명소", sc.findPlace(id) != null)
+                assertTrue("${sc.id} 보물찾기 $id 문장", line["ko"]!!.isNotBlank() && line["en"]!!.isNotBlank())
+                assertTrue("${sc.id} 보물찾기 $id 스티커", sc.stickers[id] != null)
             }
+            sc.stickers.forEach { (id, name) ->
+                assertTrue("${sc.id} 스티커 $id 명소", sc.findPlace(id) != null)
+                assertTrue("${sc.id} 스티커 $id 그림 $name", name in drawn)
+            }
+            if (sc.hunt.isNotEmpty()) assertTrue("${sc.id} 아이 모드 묻는 말", sc.kidOffer["ko"]!!.isNotBlank() && sc.kidOffer["en"]!!.isNotBlank())
         }
     }
 

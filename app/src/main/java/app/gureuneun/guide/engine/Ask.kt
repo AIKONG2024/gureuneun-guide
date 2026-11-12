@@ -24,8 +24,8 @@ object Ask {
     /** 차가 먼저 물어본 것(고른 장소, 여행 끝)에 대한 짧은 대답 */
     enum class Reply { YES, NO, LATER, DESTINATION, WAYPOINT }
 
-    /** 지금 떠 있는 물음의 종류 */
-    enum class Prompt { PICK, END }
+    /** 지금 떠 있는 물음의 종류: 고른 장소, 여행 끝, 아이 모드로 갈지, 창밖 보물찾기 */
+    enum class Prompt { PICK, END, KID, HUNT }
 
     enum class Side { LEFT, RIGHT, AHEAD, BEHIND }
 
@@ -113,6 +113,14 @@ object Ask {
         val t = squeeze(raw)
         val r = reply(raw)
         val q = parse(raw).intent
+        // 창밖 보물찾기는 "찾았다"만 답으로 봄 ("응" 한마디로 스티커를 주지 않음). 그 밖의 말은 보통 질문으로 처리
+        if (prompt == Prompt.HUNT) {
+            return when {
+                has(t, "찾았", "저기있", "저기다", "보인다", "보여요", "found", "iseeit", "seeit", "thereitis") -> Reply.YES
+                has(t, "넘어가", "모르겠", "못찾", "skip") -> Reply.NO
+                else -> null
+            }
+        }
         return when {
             has(t, "창문", "window") -> null
             r == Reply.LATER -> r

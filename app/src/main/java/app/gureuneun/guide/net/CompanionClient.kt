@@ -312,6 +312,19 @@ class CompanionClient(private val scope: CoroutineScope, private val prefs: Shar
         return r.code in 200..299
     }
 
+    /** 그룹에 올라온 사진들 (여행 영상에 넣음). 차 화면이 바로 열 수 있게 주소에 차 키를 붙여 돌려줌 */
+    suspend fun photos(): List<JSONObject> {
+        val code = state.value.code ?: return emptyList()
+        val key = carKey ?: return emptyList()
+        val list = request("GET", "/api/groups/$code", withCarKey = true)?.body?.optJSONArray("photos") ?: return emptyList()
+        val base = state.value.baseUrl.trimEnd('/')
+        return (0 until list.length()).mapNotNull { i ->
+            val p = list.optJSONObject(i) ?: return@mapNotNull null
+            val url = p.optString("url").takeIf { it.startsWith("/media/") } ?: return@mapNotNull null
+            JSONObject().put("url", base + url + "?ck=" + enc(key)).put("by", p.optString("by")).put("takenAt", p.optLong("takenAt"))
+        }
+    }
+
     fun leave() {
         cancelRetry()
         lastCreate = null

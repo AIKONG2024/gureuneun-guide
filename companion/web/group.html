@@ -8,6 +8,7 @@
 <title>구르는 가이드</title>
 <link rel="stylesheet" href="/vendor/fonts/asta-sans/asta-sans.css">
 <link rel="stylesheet" href="/vendor/leaflet.css">
+<link rel="stylesheet" href="/reel/reel.css">
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -24,19 +25,20 @@
     <div class="stage" id="stage">
       <img class="ph" id="phA" alt="" decoding="async">
       <img class="ph" id="phB" alt="" decoding="async">
+      <svg class="mark" id="mark" aria-hidden="true"></svg>
+      <div class="veil" aria-hidden="true"><span id="veilText"></span></div>
       <div class="dots" id="dots" aria-hidden="true"></div>
       <a class="credit" id="credit" target="_blank" rel="noopener"></a>
     </div>
+    <div class="sticker-book hidden" id="stickerBook" aria-live="polite"></div>
+    <article class="hunt hidden" id="huntCard">
+      <p class="hunt-hint" id="huntHint"></p>
+      <h3 id="huntText"></h3>
+      <button class="btn gold" id="huntBtn" type="button"></button>
+    </article>
     <h2 class="place" id="nowName"></h2>
     <div class="lines" id="lines"></div>
     <button class="more hidden" id="toRecord" type="button"><span id="toRecordL"></span><i data-ic="chevron"></i></button>
-
-    <article class="quiz hidden" id="quizCard">
-      <div class="stars" id="quizStars"></div>
-      <h3 id="quizQ"></h3>
-      <div class="choices" id="quizChoices"></div>
-      <p class="result" id="quizResult" role="status"></p>
-    </article>
 
     <ol class="places hidden" id="course"></ol>
   </section>
@@ -52,19 +54,20 @@
 
   <section id="tab-record" class="hidden" aria-labelledby="tRecord">
     <p class="blank" id="recEmpty"></p>
-    <article class="card hidden" id="card">
-      <div class="stage cover">
-        <img class="ph on" id="recCover" alt="">
-        <a class="credit" id="recCredit" target="_blank" rel="noopener"></a>
+    <article class="reel hidden" id="reelBox">
+      <button class="reel-stage" id="reelTap" type="button"><canvas id="reel" width="720" height="1280"></canvas><span class="reel-go" aria-hidden="true"><i data-ic="play"></i></span></button>
+      <div class="reel-bar" aria-hidden="true"><i id="reelBar"></i></div>
+      <div class="reel-acts">
+        <button class="btn" id="reelPlay" type="button"></button>
+        <button class="btn primary" id="reelSave" type="button"></button>
       </div>
-      <h2 class="place" id="recTitle"></h2>
-      <p class="card-date" id="recDate"></p>
-      <p class="card-fact" id="recFact"></p>
-      <div class="map" id="recMap"></div>
-      <ol class="places" id="recPlaces"></ol>
-      <button class="btn primary" id="saveCard" type="button"></button>
       <p class="keep" id="keepNote"></p>
     </article>
+    <div class="shotbar hidden" id="shotBar">
+      <label class="btn cam"><input type="file" id="shotInput" accept="image/*" hidden><i data-ic="camera"></i><span id="shotBtnL"></span></label>
+      <p class="hint" id="shotHint"></p>
+    </div>
+    <div class="shots" id="shots"></div>
   </section>
 
   <section class="problem hidden" id="problem">
@@ -92,6 +95,7 @@
 </div>
 
 <script src="/vendor/leaflet.js" defer></script>
+<script src="/reel/reel.js" defer></script>
 <script src="/js/app.js" defer></script>
 </body>
 </html>

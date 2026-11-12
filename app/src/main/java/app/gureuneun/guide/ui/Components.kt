@@ -113,7 +113,7 @@ fun BrandCard(modifier: Modifier = Modifier, padding: Dp = 36.dp, content: @Comp
 
 // ---------------------------------------------------------------- 단추
 
-enum class Tone { Primary, Secondary, OnBrand, Quiet, Danger }
+enum class Tone { Primary, Secondary, OnBrand, Quiet, Danger, Gold }
 
 /**
  * 단추. 누르면 95%로 줄고 살짝 밝아짐 (Pleos 버튼 인터랙션). 높이는 76dp 이상.
@@ -145,6 +145,8 @@ fun Btn(
         Tone.OnBrand -> C.onBrandRaised to Color.White
         Tone.Quiet -> Color.Transparent to C.text
         Tone.Danger -> C.warnSoft to Color(0xFFFFDCD5)
+        // 아이 모드의 [찾았다]
+        Tone.Gold -> Color(0xFFF2B632) to Color(0xFF12233F)
     }
     Row(
         modifier

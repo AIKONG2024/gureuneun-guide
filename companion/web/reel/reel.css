@@ -1,0 +1,6 @@
+/* 여행 영상 화면. 손글씨는 나눔손글씨 펜(OFL) */
+@font-face { font-family: "RG Pen"; src: url(fonts/NanumPenScript-Regular.ttf) format("truetype"); font-display: swap; }
+html, body.reel-page { margin: 0; height: 100%; background: #F8F4E8; overflow: hidden; }
+/* 차 화면(WebView)에서는 vh 가 0 으로 잡히는 일이 있어 % 로 채움 */
+body.reel-page canvas { position: fixed; left: 0; top: 0; display: block; width: 100%; height: 100%; object-fit: contain; }
+

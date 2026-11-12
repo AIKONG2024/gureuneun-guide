@@ -20,6 +20,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -71,6 +73,25 @@ object Photos {
             o.getString("file") to Credit(o.getString("file"), o.optString("title"), o.optString("author"), o.optString("license"), o.optString("source"))
         }
     }.getOrDefault(emptyMap()).also { credits = it }
+}
+
+/** 아이 모드의 스티커 그림 (assets/stickers/이름.png, 투명 배경). 휴대폰 페이지, 여행 영상과 같은 파일 */
+object Stickers {
+    private val cache = HashMap<String, ImageBitmap?>()
+
+    fun load(ctx: Context, name: String): ImageBitmap? = synchronized(cache) {
+        cache.getOrPut(name) { runCatching { ctx.assets.open("stickers/$name.png").use { BitmapFactory.decodeStream(it) } }.getOrNull()?.asImageBitmap() }
+    }
+}
+
+/** 스티커 한 장. shadow 면 아직 못 찾은 것이라 그림자만 보여 줌 */
+@Composable
+fun Sticker(name: String, modifier: Modifier = Modifier, shadow: Boolean = false) {
+    val ctx = LocalContext.current
+    val img by produceState<ImageBitmap?>(null, name) { value = withContext(Dispatchers.IO) { Stickers.load(ctx, name) } }
+    img?.let {
+        Image(it, contentDescription = null, contentScale = ContentScale.Fit, colorFilter = if (shadow) ColorFilter.tint(Color(0x4DFFFFFF)) else null, modifier = modifier)
+    }
 }
 
 /** 그 명소의 첫 사진 한 장 */

@@ -68,15 +68,6 @@ data class Sight(
     val source: String,
 )
 
-/** 명소마다 아이들에게 내는 퀴즈 */
-data class Quiz(
-    val question: L10n,
-    val choices: Map<String, List<String>>,
-    val answer: Int,
-) {
-    fun choices(lang: String): List<String> = choices[lang] ?: choices["ko"] ?: emptyList()
-}
-
 data class Scenario(
     val id: String,
     val title: L10n,
@@ -98,9 +89,18 @@ data class Scenario(
     val sights: List<Sight> = emptyList(),
     /** 뒷자리 아이들을 위한 짧은 이야기 (명소 id 별) */
     val kid: Map<String, L10n> = emptyMap(),
-    val quiz: Map<String, Quiz> = emptyMap(),
-    /** 가족 코스: 뒷좌석에 사람이 앉아 있으면 명소 이야기 끝에 아이 이야기를 덧붙임 */
+    /** 가족 코스: 뒷좌석에 사람이 앉아 있으면 아이 모드로 갈지 물어봄 */
     val kidAuto: Boolean = false,
+    /** 아이 모드로 갈지 묻는 말 */
+    val kidOffer: L10n = emptyMap(),
+    /** 아이 모드의 창밖 보물찾기: 명소마다 창밖에서 찾을 것 */
+    val hunt: Map<String, L10n> = emptyMap(),
+    /** 처음 찾을 것을 낼 때 덧붙이는 말 ("찾으면 찾았다 하고 외쳐요") */
+    val huntHow: L10n = emptyMap(),
+    /** 찾으면 주는 스티커 그림 이름 (명소 id 별, assets/stickers/이름.png) */
+    val stickers: Map<String, String> = emptyMap(),
+    /** 코스 파일 원문. 여행 영상(웹 화면)에 그대로 넘김 */
+    val raw: String = "",
     /** 여행지 카드와 기록에 쓰는 표지 사진 (사진 파일 이름에서 .jpg 를 뺀 것) */
     val cover: String = "",
 ) {
@@ -152,22 +152,18 @@ object ScenarioParser {
                     )
                 }
             } ?: emptyList(),
-            kid = o.optJSONObject("kid")?.let { k -> k.keys().asSequence().associateWith { id -> l10n(k.optJSONObject(id)) } } ?: emptyMap(),
-            quiz = o.optJSONObject("quiz")?.let { q ->
-                q.keys().asSequence().associateWith { id ->
-                    val z = q.getJSONObject(id)
-                    val ch = z.optJSONObject("choices")
-                    Quiz(
-                        question = l10n(z.optJSONObject("q")),
-                        choices = ch?.keys()?.asSequence()?.associateWith { lang -> ch.getJSONArray(lang).let { a -> (0 until a.length()).map { a.getString(it) } } } ?: emptyMap(),
-                        answer = z.optInt("answer", 0),
-                    )
-                }
-            } ?: emptyMap(),
+            kid = byPlace(o.optJSONObject("kid")),
             kidAuto = o.optBoolean("kidAuto", false),
+            kidOffer = l10n(o.optJSONObject("kidOffer")),
+            hunt = byPlace(o.optJSONObject("hunt")),
+            huntHow = l10n(o.optJSONObject("huntHow")),
+            stickers = o.optJSONObject("stickers")?.let { s -> s.keys().asSequence().associateWith { id -> s.optString(id) } } ?: emptyMap(),
+            raw = text,
             cover = o.optString("cover").ifBlank { o.getString("destination") + "_1" },
         )
     }
+
+    private fun byPlace(o: JSONObject?): Map<String, L10n> = o?.let { k -> k.keys().asSequence().associateWith { id -> l10n(k.optJSONObject(id)) } } ?: emptyMap()
 
     private fun objects(a: JSONArray): List<JSONObject> = (0 until a.length()).map { a.getJSONObject(it) }
 

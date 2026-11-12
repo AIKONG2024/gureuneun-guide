@@ -37,9 +37,16 @@
     "en": "Back on the road. Next up: {next}."
   },
   "finale": {
-    "ko": "여의도 투어는 여기까지예요. 명소 {count}곳을 함께 지나왔어요. 오늘 지나온 길과 들은 이야기는 휴대폰에 담아 가세요.",
-    "en": "That's the end of our Yeouido tour. We passed {count} places together. Keep today's route and stories on your phone."
+    "ko": "여의도 투어는 여기까지예요. 명소 {count}곳을 함께 지나왔어요. 오늘 지나온 길은 영상으로 엮어 드릴게요.",
+    "en": "That's the end of our Yeouido tour. We passed {count} places together. Here's today's route as a short video to take with you."
   },
+  "stickers": {"building63": "tower63", "assembly": "assembly"},
+  "tagline": {
+    "building63": {"ko": "노을을 닮은 금빛 빌딩", "en": "The golden tower on the Han"},
+    "hangang": {"ko": "서울 한가운데를 흐르는 강", "en": "The river through the heart of Seoul"},
+    "assembly": {"ko": "초록 돔을 얹은 국회의사당", "en": "The green dome of the National Assembly"}
+  },
+  "reelIntro": {"ko": "한강을 따라 여의도 한 바퀴", "en": "A loop around Yeouido, along the Han"},
   "sights": [
     {"id": "yeouidopark", "name": {"ko": "여의도공원", "en": "Yeouido Park"}, "lat": 37.52554, "lon": 126.92159, "visible": 900,
      "fact": {"ko": "여의도공원이에요. 넓이가 약 23만㎡이고 숲과 잔디마당, 한국 전통의 숲 같은 공간으로 나뉘어 있어요.", "en": "That's Yeouido Park. It covers about 230,000 square meters, with a nature forest, a lawn, and a traditional Korean forest."},

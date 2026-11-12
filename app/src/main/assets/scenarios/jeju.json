@@ -37,9 +37,16 @@
     "en": "Back on the road. Next chapter: {next}."
   },
   "finale": {
-    "ko": "오늘 바닷길은 여기까지예요. 명소 {count}곳을 함께 지나왔어요. 오늘 기록은 휴대폰으로 가져가실 수 있어요.",
-    "en": "That's the end of today's coastal drive. We passed {count} places together. You can take today's record with you on your phone."
+    "ko": "오늘 바닷길은 여기까지예요. 명소 {count}곳을 함께 지나왔어요. 오늘 여행을 영상으로 엮어 봤어요. 같이 볼까요?",
+    "en": "That's the end of today's coastal drive. We passed {count} places together. I've put today into a short video. Let's watch."
   },
+  "stickers": {"iho": "lighthouse", "hyeopjae": "sea"},
+  "tagline": {
+    "iho": {"ko": "빨간 말과 흰 말이 지키는 방파제", "en": "A red horse and a white horse guarding the pier"},
+    "aewol": {"ko": "차창 가득 들어오는 에메랄드빛 바다", "en": "Emerald sea filling the window"},
+    "hyeopjae": {"ko": "비양도가 떠 있는 옥빛 바다", "en": "Jade water with Biyangdo afloat"}
+  },
+  "reelIntro": {"ko": "바다 보러 출발!", "en": "Off to see the sea"},
   "sights": [
     {"id": "airport", "name": {"ko": "제주국제공항", "en": "Jeju International Airport"}, "lat": 33.50707, "lon": 126.49164, "visible": 2500,
      "fact": {"ko": "제주국제공항이에요. 제주도로 들어오는 관문인데, 인천국제공항을 빼면 우리나라 국제공항 가운데 비행기가 가장 많이 뜨고 내리는 곳으로 꼽혀요.", "en": "That's Jeju International Airport, the second-largest airport in Korea after Incheon. It's the home base of Jeju Air."},

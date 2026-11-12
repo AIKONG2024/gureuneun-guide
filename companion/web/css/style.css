@@ -103,28 +103,35 @@ body.title-below .top h1 { visibility: hidden; }
 .more { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; margin-top: 6px; font-size: 17px; font-weight: 600; }
 .more .ic { width: 18px; height: 18px; }
 
-/* 퀴즈: 지금 탭에 하나뿐인 카드 */
-.quiz { margin-top: 30px; padding: 22px 20px 20px; border-radius: 22px; background: var(--surface); scroll-margin: 24px; }
-.stars { display: flex; gap: 3px; margin-bottom: 10px; color: var(--sand); }
-.stars:empty { display: none; }
-.stars .ic { width: 26px; height: 26px; }
-.stars .pop { animation: pop .6s var(--ease) both; }
+/* 아이 모드: 스티커 판과 창밖 보물찾기. 차가 찾을 것을 내면 사진을 가리고 창밖을 보게 함 */
+.sticker-book { display: flex; align-items: center; gap: 6px; margin-top: 16px; padding: 10px 14px; border-radius: 18px; background: #F8F4E8; }
+.sticker-book .st { display: grid; place-items: center; width: 56px; height: 46px; }
+.sticker-book .st img { width: 100%; height: 100%; object-fit: contain; filter: brightness(0) opacity(.14); transition: filter .4s; }
+.sticker-book .st.on img { filter: none; }
+.sticker-book .st.pop img { animation: pop .7s var(--ease) both; }
+.sticker-book .st-count { margin-left: auto; color: #12233F; font-size: 15px; font-weight: 800; }
 @keyframes pop { 0% { transform: scale(0) rotate(-40deg); opacity: 0; } 60% { transform: scale(1.35) rotate(8deg); opacity: 1; } 100% { transform: none; } }
-.quiz h3 { font-size: 20px; line-height: 1.4; font-weight: 700; letter-spacing: -0.015em; }
-.choices { display: grid; gap: 10px; margin-top: 16px; }
-.choices button {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 12px 18px;
-  border-radius: 16px; background: var(--raised); font-size: 17px; font-weight: 600; line-height: 1.35; text-align: left;
-  transition: transform var(--fast) var(--ease), background-color var(--fast), color var(--fast), opacity var(--fast);
-}
-.choices button:active { transform: scale(.98); }
-.choices button:disabled { cursor: default; transform: none; }
-.choices .picked { background: #2C313B; }
-.choices .right { background: var(--text); color: var(--bg); }
-.choices .wrong { color: var(--text3); }
-.choices .off { opacity: .45; }
-.result { margin-top: 14px; font-size: 16px; font-weight: 600; }
-.result:empty { display: none; }
+.hunt { margin-top: 14px; padding: 20px 20px 18px; border-radius: 22px; background: #F8F4E8; color: #12233F; text-align: center; scroll-margin: 24px; }
+.hunt-hint { color: #8A7F63; font-size: 14px; font-weight: 700; }
+.hunt h3 { margin-top: 6px; font-family: "RG Pen", var(--font); font-size: 34px; line-height: 1.2; font-weight: 400; }
+.btn.gold { min-height: 72px; margin-top: 16px; border-radius: 22px; background: #F2B632; color: #12233F; font-size: 24px; font-weight: 800; }
+.btn.gold:disabled { background: #E9DFC4; color: #8A7F63; }
+.veil { position: absolute; inset: 0; z-index: 3; display: none; place-items: center; padding: 20px; background: #F8F4E8; color: #12233F; text-align: center; }
+.stage.veiled .veil { display: grid; }
+.veil span { font-family: "RG Pen", var(--font); font-size: 44px; line-height: 1.15; }
+
+/* 사진 위에 짚어 주는 선: 차가 그 대목을 읽을 때 손으로 그린 듯한 동그라미가 그려짐 */
+.mark { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; pointer-events: none; opacity: 0; }
+.mark.on { opacity: 1; }
+.mark path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.mark .halo { stroke: rgba(8, 10, 14, .35); stroke-width: 8; opacity: 0; }
+.mark .pen { stroke: #FFD24A; stroke-width: 4.5; stroke-dasharray: 100; stroke-dashoffset: 100; }
+.mark.on .pen { animation: draw 1.1s var(--ease) .15s forwards; }
+.mark.on .halo { animation: fadein .4s ease 1.1s forwards; }
+.mark text { font-family: "RG Pen", var(--font); font-size: 30px; fill: #FFD24A; paint-order: stroke; stroke: rgba(8, 10, 14, .7); stroke-width: 5px; opacity: 0; }
+.mark.on text { animation: fadein .5s ease 1.2s forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes fadein { to { opacity: 1; } }
 
 /* 오늘 코스, 지나온 곳: 사진과 이름 */
 .places { display: grid; gap: 14px; margin-top: 34px; padding: 22px 0 0; border-top: 1px solid var(--line); list-style: none; }
@@ -159,14 +166,23 @@ body.title-below .top h1 { visibility: hidden; }
 
 /* ---------------------------------------------------------------- 기록: 엽서 한 장 */
 .blank { padding: 30vh 12px 0; color: var(--text2); font-size: 17px; text-align: center; }
-.card.bare .stage { display: none; }
-.card-date { margin-top: 6px; color: var(--text3); font-size: 15px; }
-.card-fact { margin-top: 14px; font-size: 18px; font-weight: 600; line-height: 1.45; }
-.card-fact:empty { display: none; }
-.card .map { height: 230px; margin-top: 24px; }
-.card .places { margin-top: 24px; padding-top: 0; border-top: 0; }
-.card .places:empty { display: none; }
-.card .btn { margin-top: 30px; }
+/* 기록: 여행 영상과 올린 사진 */
+.reel-stage { position: relative; display: block; width: min(100%, 44vh); margin: 4px auto 0; padding: 0; border-radius: 22px; overflow: hidden; background: #F8F4E8; }
+.reel-stage canvas { display: block; width: 100%; height: auto; }
+.reel-go { position: absolute; inset: 0; display: grid; place-items: center; transition: opacity .3s; }
+.reel-go .ic { width: 76px; height: 76px; padding: 20px; border-radius: 50%; background: rgba(8, 10, 14, .55); color: #fff; }
+.reel.playing .reel-go { opacity: 0; }
+.reel-bar { width: min(100%, 44vh); height: 4px; margin: 10px auto 0; border-radius: 2px; background: var(--raised); overflow: hidden; }
+.reel-bar i { display: block; width: 0; height: 100%; background: var(--accent); }
+.reel-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+.shotbar { margin-top: 28px; }
+.btn.cam { gap: 10px; cursor: pointer; }
+.btn.cam .ic { width: 22px; height: 22px; }
+.shotbar .hint { text-align: center; }
+.shots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+.shots:empty { display: none; }
+.shot { aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: var(--surface); }
+.shot img { width: 100%; height: 100%; object-fit: cover; }
 .keep { margin-top: 12px; color: var(--text3); font-size: 13px; text-align: center; }
 .keep:empty { display: none; }
 
@@ -263,9 +279,9 @@ body.title-below .top h1 { visibility: hidden; }
   :root { --tabbar: 56px; }
   .app { max-width: 920px; }
   .top { min-height: 52px; }
-  #tab-now, .card { display: grid; grid-template-columns: minmax(0, 44%) minmax(0, 1fr); column-gap: 26px; align-items: start; }
-  #tab-now > *, .card > * { grid-column: 2; }
-  #tab-now > .stage, .card > .stage { grid-column: 1; grid-row: 1 / span 12; position: sticky; top: 8px; margin: 0; max-height: calc(100vh - var(--tabbar) - 76px); border-radius: 20px; }
+  #tab-now { display: grid; grid-template-columns: minmax(0, 44%) minmax(0, 1fr); column-gap: 26px; align-items: start; }
+  #tab-now > * { grid-column: 2; }
+  #tab-now > .stage { grid-column: 1; grid-row: 1 / span 12; position: sticky; top: 8px; margin: 0; max-height: calc(100vh - var(--tabbar) - 76px); border-radius: 20px; }
   .credit { padding-right: 14px; }
   .dots { left: 14px; }
   .place { margin-top: 2px; }

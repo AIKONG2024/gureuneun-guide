@@ -20,8 +20,8 @@
     lang: store('gg_lang'), group: null, scenario: null, photos: { places: {}, credits: {} },
     story: null, lines: [], kidLines: [], linePart: 'story', lineIdx: -1, storyDone: false, qa: null,
     passes: [], picks: [], record: null, cars: [], selected: null, online: false, tab: startTab, ended: false, fatal: null,
-    quizzes: [], answers: [], stars: null, level: key ? 'full' : 'basic',
-    pending: null, pickWait: null, pickMsg: null, quizPending: null, nowBadge: false, carGone: false
+    hunt: null, found: [], kid: false, shots: [], level: key ? 'full' : 'basic',
+    pending: null, pickWait: null, pickMsg: null, huntSent: false, mark: null, nowBadge: false, carGone: false
   };
   var me = store('gg_me') || '';
   // 휴대폰 구분 값(pid)은 서버가 정해 줌. 다시 들어올 때 그 값을 보내 내가 고른 답을 이어 봄
@@ -36,35 +36,37 @@
 
   var TXT = {
     ko: {
-      appName: '구르는 가이드', now: '지금', pick: '장소', record: '기록',
-      waitText: '명소에 가까워지면 여기에 떠요', ended: '여행이 끝났어요', seeRecord: '기록 보기',
+      appName: '구르는 가이드', now: '지금', pick: '장소', record: '영상',
+      waitText: '명소에 가까워지면 여기에 떠요', ended: '여행이 끝났어요', seeRecord: '오늘의 영상 보기',
       name: '이름', meAsk: '이름을 알려 주세요', meTitle: '내 이름', mePh: '예: 민지', meHint: '차가 이 이름으로 불러 줘요', start: '시작', done: '완료',
       passed: '지남', nowAt: '지금', next: '다음',
       send: '차로 보내기', pickIdle: '운전자가 확인하면 길이 바뀌어요', sent: '보냈어요. 운전자가 확인 중이에요', acked: '길이 바뀌었어요',
       pickLater: '운전자가 나중에 보기로 했어요', pickSoon: '{s}초 뒤에 보낼 수 있어요', pickBusy: '운전자가 ‘{name}’ 확인 중이에요',
       pickNoCar: '연결된 차가 없어요', pickBad: '보낼 수 없는 곳이에요', pickOther: '{by} 님이 골랐어요: {name}', custom: '지도에서 고른 곳',
       kind: { cafe: '카페', parking: '주차장', landmark: '명소', sea: '바다', place: '장소' },
-      quizNew: '퀴즈가 왔어요', right: '정답이에요!', wrong: '아쉬워요. 정답은 ‘{a}’{josa}', wrongShort: '아쉬워요', gotIt: '{by} 님이 맞혔어요',
-      recEmpty: '여행이 끝나면 오늘 기록이 여기 생겨요', recWait: '운전자가 기록을 보내면 여기 생겨요', recBasic: '기록은 차 화면의 QR로 들어오면 보여요',
-      km: '{n}km', places: '명소 {n}곳', stars: '퀴즈 별 {n}개',
-      save: '엽서 저장', saved: '엽서를 저장했어요', saveFail: '엽서를 만들지 못했어요', keep: '기록은 {d}일 뒤 지워져요', credit: '사진 {a}',
+      huntNew: '창밖에서 찾을 것이 생겼어요', huntHint: '창밖에서 찾아봐요', lookOut: '화면 말고 창밖을 봐요', foundBtn: '찾았다!', foundToast: '찾았다! 스티커를 모았어요', foundBy: '{by} 찾았다!',
+      play: '영상 보기', saving: '영상 만드는 중…',
+      addPhoto: '사진 올리기', shotHint: '올린 사진은 여행 영상에 들어가요', shotCount: '사진 {n}장이 영상에 들어가요', shotSending: '사진 올리는 중…', shotDone: '사진을 올렸어요', shotFail: '사진을 올리지 못했어요',
+      recEmpty: '여행이 끝나면 오늘의 영상이 여기 생겨요', recWait: '운전자가 보내면 오늘의 영상이 여기 생겨요', recBasic: '영상은 차 화면의 QR로 들어오면 보여요',
+      save: '영상 저장', saved: '영상을 저장했어요', saveFail: '영상을 만들지 못했어요', keep: '기록은 {d}일 뒤 지워져요. 영상은 저장해 두세요', credit: '사진 {a}',
       reconnecting: '다시 연결하는 중…', tooMany: '{s}초 뒤에 다시 연결해요', noCar: '차와 연결이 끊겼어요',
       problemTitle: '여행을 열 수 없어요', noGroup: '끝난 지 오래됐거나 번호가 달라요', badKey: '차 화면의 QR을 다시 찍어 주세요', again: '번호 다시 넣기',
       see: '보기', guest: '동승자', langBtn: 'EN', langAria: 'Show in English'
     },
     en: {
-      appName: 'Rolling Guide', now: 'Now', pick: 'Places', record: 'Record',
-      waitText: 'Stories show up here as we get close', ended: 'The trip has ended', seeRecord: 'See the record',
+      appName: 'Rolling Guide', now: 'Now', pick: 'Places', record: 'Video',
+      waitText: 'Stories show up here as we get close', ended: 'The trip has ended', seeRecord: "Watch today's video",
       name: 'Name', meAsk: "What's your name?", meTitle: 'Your name', mePh: 'e.g. Alex', meHint: 'The car will call you by this name', start: 'Start', done: 'Done',
       passed: 'Passed', nowAt: 'Now', next: 'Next',
       send: 'Send to the car', pickIdle: 'The route changes once the driver confirms', sent: 'Sent. The driver is checking', acked: 'Route updated',
       pickLater: 'The driver saved it for later', pickSoon: 'Send again in {s}s', pickBusy: 'The driver is checking “{name}”',
       pickNoCar: 'No car is connected', pickBad: "Can't send that spot", pickOther: '{by} picked {name}', custom: 'Spot on the map',
       kind: { cafe: 'Cafe', parking: 'Parking', landmark: 'Landmark', sea: 'Sea', place: 'Place' },
-      quizNew: 'A quiz arrived', right: 'Correct!', wrong: 'Not quite. It was “{a}”', wrongShort: 'Not quite', gotIt: '{by} got it right',
-      recEmpty: "Today's record appears here when the trip ends", recWait: 'The record appears here once the driver shares it', recBasic: 'Scan the QR on the car screen to see the record',
-      km: '{n} km', places: '{n} places', place1: '1 place', stars: '{n} quiz stars', star1: '1 quiz star',
-      save: 'Save postcard', saved: 'Postcard saved', saveFail: "Couldn't make the postcard", keep: 'The record is deleted in {d} days', credit: 'Photo: {a}',
+      recEmpty: "Today's video appears here when the trip ends", recWait: "Today's video appears here once the driver shares it", recBasic: 'Scan the QR on the car screen to see the video',
+      huntNew: 'Something to find outside!', huntHint: 'Look out the window', lookOut: 'Eyes up. Look outside', foundBtn: 'Found it!', foundToast: 'Found it! Sticker collected', foundBy: '{by} found it!',
+      play: 'Play', saving: 'Making the video…',
+      addPhoto: 'Add a photo', shotHint: 'Your photos go into the trip video', shotCount: '{n} photos will be in the video', shotSending: 'Uploading…', shotDone: 'Photo added', shotFail: "Couldn't upload the photo",
+      save: 'Save video', saved: 'Video saved', saveFail: "Couldn't make the video", keep: 'The record is deleted in {d} days. Save the video to keep it', credit: 'Photo: {a}',
       reconnecting: 'Reconnecting…', tooMany: 'Reconnecting in {s}s', noCar: 'The car is offline',
       problemTitle: "Can't open this trip", noGroup: 'It ended a while ago, or the code is different', badKey: 'Scan the QR on the car screen again', again: 'Enter the code again',
       see: 'View', guest: 'Passenger', langBtn: '한국어', langAria: '한국어로 보기'
@@ -106,7 +108,9 @@
     close: '<path d="M6.2 6.2L17.8 17.8M17.8 6.2L6.2 17.8"/>',
     chevron: '<path d="M9 5.5L15.5 12L9 18.5"/>',
     cup: '<path d="M4.6 9.4H15.6V15C15.6 17.8 13.4 20 10.6 20H9.6C6.8 20 4.6 17.8 4.6 15Z"/><path d="M15.6 11.2H17.2C18.7 11.2 19.8 12.3 19.8 13.7C19.8 15.1 18.7 16.2 17.2 16.2H15.6"/><path d="M8.2 3.6V6.2M12 3.6V6.2"/>',
-    parking: '<rect x="4" y="3.5" width="16" height="17" rx="4"/><path d="M9.6 16.6V7.4H13.2C15 7.4 16.2 8.7 16.2 10.4C16.2 12.1 15 13.4 13.2 13.4H9.6"/>'
+    parking: '<rect x="4" y="3.5" width="16" height="17" rx="4"/><path d="M9.6 16.6V7.4H13.2C15 7.4 16.2 8.7 16.2 10.4C16.2 12.1 15 13.4 13.2 13.4H9.6"/>',
+    camera: '<path d="M4 8.2H7.4L8.9 5.8H15.1L16.6 8.2H20A1.5 1.5 0 0 1 21.5 9.7V17.6A1.5 1.5 0 0 1 20 19.1H4A1.5 1.5 0 0 1 2.5 17.6V9.7A1.5 1.5 0 0 1 4 8.2Z"/><circle cx="12" cy="13.4" r="3.4"/>',
+    play: '<path class="f" d="M8.2 5.4L18.6 12L8.2 18.6Z"/>',
   };
   function icon(name, cls) { return '<svg class="ic' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + (ICON[name] || '') + '</svg>'; }
   Array.prototype.forEach.call(document.querySelectorAll('i[data-ic]'), function (el) { el.outerHTML = icon(el.getAttribute('data-ic')); });
@@ -212,7 +216,7 @@
     renderBadge();
     if (was !== tab) window.scrollTo(0, 0);
     if (tab === 'pick') setTimeout(drawPickMap, 50);
-    if (tab === 'record') setTimeout(drawRecMap, 50);
+    if (tab === 'record') renderRecord();
   }
   // 열 수 없는 그룹이면 탭 대신 안내만. 여행 이름을 화면이 크게 보여 줄 때는 머리 줄의 이름을 숨김
   function renderShell() {
@@ -323,7 +327,8 @@
     } else {
       var place = placeById(st.placeId), list = photosFor(st.placeId, st.night);
       if (!list.length) list = coverPhotos();
-      setStage(list, 'p:' + list[0]);
+      // 차가 사진 속 한 곳을 짚고 있으면 그 사진에 머무름
+      if (S.mark && S.mark.placeId === st.placeId) setStage([S.mark.m.photo], 'mark:' + S.mark.m.photo); else setStage(list, 'p:' + list[0]);
       $('nowName').textContent = place ? nm(place.name) : st.name;
       renderLines();
     }
@@ -339,7 +344,7 @@
     $('lines').innerHTML = '<p>' + spans(S.lines, storyOn) + '</p>' + (S.kidLines.length ? '<p>' + spans(S.kidLines, kidOn) + '</p>' : '');
     // 읽는 문장이 화면 밖이면 따라감 (방금 손으로 민 사람은 그대로 둠)
     var cur = $('lines').querySelector('.cur');
-    if (cur && S.tab === 'now' && !sheetMode && Date.now() - touchedAt > 4000) {
+    if (cur && S.tab === 'now' && !sheetMode && !S.hunt && Date.now() - touchedAt > 4000) {
       var r = cur.getBoundingClientRect(), bottom = window.innerHeight - $('tabs').offsetHeight - 12;
       if (r.bottom > bottom || r.top < 0) cur.scrollIntoView({ behavior: smooth(), block: 'center' });
     }
@@ -364,7 +369,8 @@
     S.story = m; S.lines = sentences(m.text); S.kidLines = sentences(m.kid);
     S.linePart = 'story'; S.lineIdx = m.done ? -1 : 0; S.storyDone = !!m.done;
     if (!quiet) endQa(true);
-    renderNow(); renderQuiz(); renderCourse();
+    if (moved) clearMark();
+    renderNow(); renderHunt(); renderCourse();
     if (quiet) return;
     if (moved) toTop();
     if (S.tab !== 'now') { var p = placeById(m.placeId); toast(p ? nm(p.name) : m.name, function () { setTab('now'); }); nowNews(); }
@@ -380,7 +386,7 @@
     S.qa = { placeId: m.placeId, name: p ? nm(p.name) : (m.title || ''), a: m.a, night: !!(S.story && S.story.night) };
     clearTimeout(qaTimer);
     qaTimer = setTimeout(endQa, Math.min(40000, Math.max(8000, 3000 + m.a.length * (/[가-힣]/.test(m.a) ? 170 : 75))));
-    renderNow(); renderQuiz();
+    renderNow(); renderHunt();
     toTop();
     if (S.tab !== 'now') { toast(S.qa.name || m.a, function () { setTab('now'); }); nowNews(); }
   }
@@ -388,7 +394,7 @@
     clearTimeout(qaTimer);
     if (!S.qa) return;
     S.qa = null;
-    if (silent !== true) { renderNow(); renderQuiz(); }
+    if (silent !== true) { renderNow(); renderHunt(); }
   }
 
   $('toRecord').onclick = function () { setTab('record'); };
@@ -406,65 +412,92 @@
     }).join('');
   }
 
-  // ---------------------------------------------------------------- 퀴즈와 별
-  // 서버가 이 휴대폰이 한 답(mine)에만 고른 번호와 정답을 붙여 줌. 다른 사람 답은 맞혔는지만
-  function myAnswer(id) { return S.answers.filter(function (a) { return a.id === id && a.mine; })[0] || null; }
-  // 가장 최근 퀴즈 하나. 내가 답한 뒤 다른 명소 이야기가 시작되면 거둠
-  function currentQuiz() {
-    var q = S.quizzes.filter(function (q) { return mineCar(q); }).sort(function (a, b) { return b.at - a.at; })[0] || null;
-    if (!q || S.ended) return null;
-    var st = S.story;
-    if (myAnswer(q.id) && st && st.at > q.at && st.placeId !== q.placeId) return null;
-    return q;
+  // ---------------------------------------------------------------- 아이 모드: 창밖 보물찾기와 스티커
+  // 차가 찾을 것을 내면 사진을 가리고 창밖을 보게 함. 찾으면 [찾았다]를 누르거나 차 안에서 외침. 스티커는 차가 줌
+  function huntNow() { var h = S.hunt; return h && mineCar(h) && !S.ended ? h : null; }
+  function foundList() { return S.found.filter(function (x) { return mineCar(x); }); }
+  function isFound(placeId) { return foundList().some(function (x) { return x.placeId === placeId; }); }
+  // 이 코스에서 모을 수 있는 스티커 (찾을 것이 있는 명소만)
+  function stickerSlots() {
+    var sc = S.scenario; if (!sc || !sc.hunt || !sc.stickers) return [];
+    return courseStops().filter(function (p) { return sc.hunt[p.id] && sc.stickers[p.id]; }).map(function (p) { return { placeId: p.id, name: sc.stickers[p.id] }; });
   }
-  function starCount() {
-    var mine = {}, ok = {};
-    S.quizzes.forEach(function (q) { if (mineCar(q)) mine[q.id] = 1; });
-    S.answers.forEach(function (a) { if (a.correct && mine[a.id]) ok[a.id] = 1; });
-    return Math.max(S.stars ? S.stars.stars : 0, Object.keys(ok).length);
+  var justFound = null;
+  function renderHunt() {
+    var h = huntNow(), slots = stickerSlots(), got = foundList(), on = (S.kid || got.length > 0 || !!h) && slots.length > 0;
+    // 스티커 판: 모은 것은 색으로, 아직 못 찾은 것은 그림자로
+    $('stickerBook').classList.toggle('hidden', !on);
+    $('stickerBook').innerHTML = !on ? '' : slots.map(function (s) {
+      var ok = isFound(s.placeId);
+      return '<span class="st' + (ok ? ' on' : '') + (ok && justFound === s.placeId ? ' pop' : '') + '"><img src="/stickers/' + esc(s.name) + '.png" alt=""></span>';
+    }).join('') + '<span class="st-count">' + got.length + ' / ' + slots.length + '</span>';
+    $('huntCard').classList.toggle('hidden', !h);
+    $('stage').classList.toggle('veiled', !!h);
+    if (!h) return;
+    $('veilText').textContent = t('lookOut');
+    $('huntHint').textContent = t('huntHint');
+    $('huntText').textContent = h.text;
+    $('huntBtn').textContent = t('foundBtn');
+    $('huntBtn').disabled = !!S.huntSent;
   }
-  var shownStars = null;
-  function renderQuiz() {
-    var q = currentQuiz(), card = $('quizCard');
-    if (!q || nowMode() === 'qa') { card.classList.add('hidden'); return; }
-    card.classList.remove('hidden');
-    var n = starCount(), stars = '';
-    for (var s = 0; s < n; s++) stars += icon('star', shownStars !== null && s >= shownStars ? 'pop' : '');
-    $('quizStars').innerHTML = stars;
-    $('quizStars').setAttribute('aria-label', n ? '★ ' + n : '');
-    shownStars = n;
-    $('quizQ').textContent = q.q;
-    var mine = myAnswer(q.id);
-    if (mine && S.quizPending && S.quizPending.id === q.id) S.quizPending = null;
-    var waiting = !mine && S.quizPending && S.quizPending.id === q.id ? S.quizPending.i : null;
-    // 다시 들어온 경우 정답 번호는 모를 수 있음 (맞혔으면 고른 것이 정답)
-    var correctIdx = mine ? (typeof mine.answer === 'number' ? mine.answer : (mine.correct ? mine.choice : null)) : null;
-    $('quizChoices').innerHTML = q.choices.map(function (c, i) {
-      var cls = mine ? (i === correctIdx ? 'right' : i === mine.choice ? 'wrong' : 'off') : (i === waiting ? 'picked' : '');
-      return '<button type="button" data-i="' + i + '" class="' + cls + '"' + (mine || waiting != null ? ' disabled' : '') + '><span>' + esc(c) + '</span>' + (cls === 'right' ? icon('check') : cls === 'wrong' ? icon('close') : '') + '</button>';
-    }).join('');
-    Array.prototype.forEach.call($('quizChoices').querySelectorAll('button'), function (b) {
-      b.onclick = function () { answerQuiz(q, Number(b.dataset.i)); };
-    });
-    var others = S.answers.filter(function (a) { return a.id === q.id && a.correct && !a.mine; }).map(function (a) { return a.by; });
-    var res = '';
-    if (mine) {
-      if (mine.correct) res = t('right');
-      else if (correctIdx != null) res = f('wrong', { a: q.choices[correctIdx], josa: josa(q.choices[correctIdx], '이에요', '예요') });
-      else res = t('wrongShort');
-    }
-    if (others.length) res += (res ? ' ' : '') + f('gotIt', { by: others.join(', ') });
-    $('quizResult').textContent = res;
+  $('huntBtn').onclick = function () {
+    var h = huntNow();
+    if (!h || !S.ws || S.ws.readyState !== 1) return;
+    S.ws.send(JSON.stringify({ type: 'hunt_found', placeId: h.placeId, by: me || '' }));
+    S.huntSent = true;
+    renderHunt();
+    // 차의 답이 오지 않으면(그사이 연결이 끊김 등) 6초 뒤 다시 누를 수 있게
+    setTimeout(function () { if (S.huntSent) { S.huntSent = false; renderHunt(); } }, 6000);
+  };
+  function onFound(m) {
+    S.found = S.found.filter(function (x) { return !(x.placeId === m.placeId && sameCar(x, m)); }).concat([m]);
+    if (S.hunt && S.hunt.placeId === m.placeId) S.hunt = null;
+    S.huntSent = false; S.kid = true; justFound = m.placeId;
+    renderHunt();
+    toast(m.by ? f('foundBy', { by: m.by }) : t('foundToast'));
+    setTimeout(function () { justFound = null; }, 1500);
   }
 
-  function answerQuiz(q, i) {
-    if (myAnswer(q.id) || !S.ws || S.ws.readyState !== 1) return;
-    S.ws.send(JSON.stringify({ type: 'quiz_answer', id: q.id, choice: i, by: me || t('guest') }));
-    S.quizPending = { id: q.id, i: i };
-    renderQuiz();
-    // 답이 오지 않으면(그사이 연결이 끊김 등) 8초 뒤 다시 고를 수 있게
-    setTimeout(function () { if (S.quizPending && S.quizPending.id === q.id && !myAnswer(q.id)) { S.quizPending = null; renderQuiz(); } }, 8000);
+  // ---------------------------------------------------------------- 사진 위에 짚어 주는 선
+  // 차가 그 대목을 읽을 때 사진 위에 손으로 그린 듯한 동그라미를 그림 (코스 파일의 marks)
+  var markTimer = null;
+  function showMark(placeId, sentence) {
+    var list = (S.scenario && S.scenario.marks && S.scenario.marks[placeId]) || [];
+    var m = list.filter(function (x) { var k = nm(x.match); return k && String(sentence || '').indexOf(k) >= 0; })[0];
+    if (!m || huntNow()) return;
+    clearTimeout(markTimer);
+    S.mark = { placeId: placeId, m: m };
+    setStage([m.photo], 'mark:' + m.photo);
+    drawMark();
+    markTimer = setTimeout(clearMark, 14000);
   }
+  function clearMark() {
+    clearTimeout(markTimer);
+    if (!S.mark) return;
+    S.mark = null;
+    $('mark').classList.remove('on'); $('mark').innerHTML = '';
+    renderNow();
+  }
+  function drawMark() {
+    var mk = S.mark, el = $('mark');
+    if (!mk) return;
+    var img = layers.filter(function (l) { return l.getAttribute('src') === '/photos/' + mk.m.photo && l.naturalWidth; })[0];
+    if (!img) { setTimeout(drawMark, 200); return; }
+    // 사진은 칸에 꽉 차게(넘치는 쪽은 잘려) 그려지므로 같은 셈으로 사진 속 자리를 화면 자리로 옮김
+    var sw = $('stage').clientWidth, sh = $('stage').clientHeight, k = Math.max(sw / img.naturalWidth, sh / img.naturalHeight);
+    var dw = img.naturalWidth * k, dh = img.naturalHeight * k, cx = (sw - dw) / 2 + mk.m.x * dw, cy = (sh - dh) / 2 + mk.m.y * dh, rx = mk.m.rx * dw, ry = mk.m.ry * dh;
+    // 손으로 그린 듯 살짝 찌그러지고 끝이 겹치는 동그라미
+    var d = '', n = 48;
+    for (var i = 0; i <= n + 5; i++) {
+      var a = -1.9 + i / n * Math.PI * 2, w = 1 + 0.04 * Math.sin(i * 1.3) + i * 0.0015;
+      d += (i ? 'L' : 'M') + (cx + Math.cos(a) * rx * w).toFixed(1) + ' ' + (cy + Math.sin(a) * ry * w).toFixed(1);
+    }
+    var note = nm(mk.m.note), ny = cy + ry + 30 > sh - 12 ? cy - ry - 14 : cy + ry + 30;
+    el.setAttribute('viewBox', '0 0 ' + sw + ' ' + sh);
+    el.innerHTML = '<path class="halo" d="' + d + '"/><path class="pen" pathLength="100" d="' + d + '"/>' + (note ? '<text x="' + cx.toFixed(1) + '" y="' + ny.toFixed(1) + '" text-anchor="middle">' + esc(note) + '</text>' : '');
+    el.classList.remove('on'); void el.getBoundingClientRect(); el.classList.add('on');
+  }
+  window.addEventListener('resize', function () { if (S.mark) drawMark(); });
 
   // ---------------------------------------------------------------- 장소: 골라서 차로 보내기
   var pickMap, pickLayer, pickFitFor = null;
@@ -586,210 +619,133 @@
     return pl ? nm(pl.name) : (p && p.custom ? t('custom') : (fallback || (p && p.name) || ''));
   }
 
-  // ---------------------------------------------------------------- 기록: 엽서 한 장
+  // ---------------------------------------------------------------- 기록: 여행 영상
+  // 차가 올린 여행 기록과 함께 탄 사람이 올린 사진으로 영상 한 편을 만듦 (reel.js). 저장하면 영상 파일로 받음
   function hasRecord() { return !!(S.scenario && S.record && full()); }
-  function routePoints() {
-    var r = S.record && S.record.route;
-    if (r && r.length > 1) return r.map(function (p) { return [p[1], p[2]]; });
-    return S.scenario ? S.scenario.route.map(function (p) { return [p[0], p[1]]; }) : [];
+  function shotUrl(p) { return p.url + (key ? '?k=' + encodeURIComponent(key) : ''); }
+  function myShots() { return S.shots.slice().sort(function (a, b) { return (a.takenAt || 0) - (b.takenAt || 0); }); }
+  var reel = null, reelKey = null, reelBusy = false;
+  function makeReel() {
+    var keyNow = [lang(), S.record.tripId, S.record.endedAt, S.shots.length, Object.keys(S.photos.places).length].join(':');
+    if (reel && reelKey === keyNow) return reel;
+    if (reel) reel.stop();
+    var model = Reel.build(S.record, S.scenario, myShots().map(function (p) { return { url: shotUrl(p), by: p.by, takenAt: p.takenAt }; }), {
+      lang: lang(), base: '/', photoFor: function (id) { var file = photosFor(id, false)[0]; return file ? '/photos/' + file : null; }
+    });
+    reel = Reel.create($('reel'), model, { onProgress: function (p) { $('reelBar').style.width = Math.round(p * 100) + '%'; } });
+    reelKey = keyNow;
+    reel.poster();
+    return reel;
   }
-  // 지나온 곳(차례대로), 날짜, 한 줄 사실
-  function recordInfo() {
-    var rec = S.record, seen = {}, places = [], stars = {};
-    var add = function (id, name) {
-      var p = placeById(id);
-      if (!id || seen[id] || (p && p.kind === 'city')) return;
-      seen[id] = 1; places.push({ id: id, kind: p && p.kind, name: p ? nm(p.name) : name, lat: p && p.lat, lon: p && p.lon });
-    };
-    (rec.events || []).forEach(function (e) { if (e.type === 'pass') add(e.placeId, e.title); else if (e.type === 'quiz_ok') stars[e.placeId || e.title] = 1; });
-    if (!places.length) S.passes.forEach(function (p) { if (mineCar(p)) add(p.placeId, p.name); });
-    var nStars = Object.keys(stars).length, km = (rec.distanceM || 0) / 1000, parts = [];
-    if (km >= 0.1) parts.push(f('km', { n: km.toFixed(1) }));
-    if (places.length) parts.push(count('places', 'place1', places.length));
-    if (nStars) parts.push(count('stars', 'star1', nStars));
-    var at = rec.startedAt || rec.endedAt || Date.now();
-    return { places: places, parts: parts, fact: parts.join(' · '), at: at, date: new Date(at).toLocaleDateString(lang() === 'en' ? 'en-US' : 'ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }) };
-  }
-
   function renderRecord() {
-    var has = hasRecord();
+    var has = hasRecord() && !!window.Reel;
     renderShell();
-    $('card').classList.toggle('hidden', !has);
+    $('reelBox').classList.toggle('hidden', !has);
     $('recEmpty').classList.toggle('hidden', has);
-    if (!has) { $('recEmpty').textContent = t(!full() ? 'recBasic' : S.ended ? 'recWait' : 'recEmpty'); return; }
-    var info = recordInfo(), file = coverPhotos()[0];
-    $('card').classList.toggle('bare', !file);
-    if (file && $('recCover').getAttribute('src') !== '/photos/' + file) $('recCover').src = '/photos/' + file;
-    setCredit($('recCredit'), file);
-    $('recTitle').textContent = nm(S.scenario.title);
-    $('recDate').textContent = info.date;
-    $('recFact').textContent = info.fact;
-    $('recPlaces').innerHTML = info.places.map(function (p) { return '<li>' + thumb(p.id, p.kind) + '<span class="pname">' + esc(p.name) + '</span></li>'; }).join('');
-    $('saveCard').textContent = t('save');
+    renderShots();
+    if (!has) {
+      $('recEmpty').textContent = t(!full() ? 'recBasic' : S.ended ? 'recWait' : 'recEmpty');
+      if (reel) { reel.stop(); reel = null; reelKey = null; }
+      return;
+    }
+    $('reelPlay').textContent = t('play');
+    if (!reelBusy) $('reelSave').textContent = t('save');
+    $('reelSave').classList.toggle('hidden', !Reel.canSave());
     var days = S.group && typeof S.group.keepDays === 'number' ? S.group.keepDays : 3;
     $('keepNote').textContent = days > 0 ? f('keep', { d: days }) : '';
-    if (S.tab === 'record') drawRecMap();
-    cardBlob().catch(function () {});
+    if (!reelBusy) makeReel();
   }
-
-  var recMap, recLayer, recFitFor = null;
-  function drawRecMap() {
-    if (!hasRecord() || !window.L || S.tab !== 'record' || S.fatal) return;
-    // 보기만 하는 지도라 손가락으로 움직이지 않게 둠 (화면을 위아래로 밀 때 걸리지 않게)
-    if (!recMap) { recMap = L.map('recMap', { zoomControl: false, dragging: false, touchZoom: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false }); tiles(recMap); recLayer = L.layerGroup().addTo(recMap); }
-    recLayer.clearLayers();
-    var pts = routePoints();
-    routeLine(recLayer, pts);
-    recordInfo().places.forEach(function (p) {
-      if (typeof p.lat === 'number') L.marker([p.lat, p.lon], { icon: photoMarker(p.id, p.kind, false), interactive: false, keyboard: false }).addTo(recLayer);
-    });
-    recMap.invalidateSize();
-    var fitKey = S.scenario.id + ':' + pts.length;
-    if (recFitFor !== fitKey && pts.length) { recFitFor = fitKey; recMap.fitBounds(L.latLngBounds(pts), { padding: [34, 34] }); }
+  function reelState(playing, saving) {
+    reelBusy = playing;
+    $('reelBox').classList.toggle('playing', playing);
+    $('reelPlay').disabled = playing; $('reelSave').disabled = playing;
+    $('reelSave').textContent = t(saving ? 'saving' : 'save');
+    if (!playing) $('reelBar').style.width = '0';
   }
-
-  // [엽서 저장]: 표지 사진, 이름, 날짜, 한 줄 사실, 길 모양을 PNG 한 장으로 그림. 서버 기록은 며칠 뒤 지워지므로 이것이 간직하는 방법
-  var card = null;
-  function cardBlob() {
-    var keyNow = [lang(), S.record.tripId, S.record.endedAt, coverPhotos()[0], Object.keys(S.photos.credits).length].join(':');
-    if (!card || card.key !== keyNow) card = { key: keyNow, blob: drawCard().then(function (c) { return new Promise(function (ok, no) { c.toBlob(function (b) { if (b) ok(b); else no(new Error('blob')); }, 'image/png'); }); }) };
-    return card.blob;
-  }
-  function loadImage(url) {
-    return new Promise(function (ok) {
-      if (!url) return ok(null);
-      var img = new Image();
-      img.onload = function () { ok(img); };
-      img.onerror = function () { ok(null); };
-      img.src = url;
-    });
-  }
-  function drawCard() {
-    var sc = S.scenario, info = recordInfo(), W = 1080, H = 1350, PH = 870, M = 72;
-    var file = coverPhotos()[0], credit = file ? creditLine(file) : '', title = nm(sc.title);
-    var fam = '"Asta Sans", -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
-    // 캔버스는 아직 받지 않은 글꼴 조각을 기다려 주지 않으므로 쓸 글자를 먼저 불러 둠
-    var all = title + info.date + info.fact + t('appName') + credit;
-    var fonts = document.fonts && document.fonts.load ? Promise.all(['700 68px', '600 36px', '400 30px'].map(function (w) { return document.fonts.load(w + ' "Asta Sans"', all); })).catch(function () {}) : Promise.resolve();
-    return Promise.all([loadImage(file && '/photos/' + file), fonts]).then(function (r) {
-      var img = r[0], c = document.createElement('canvas'), x = c.getContext('2d');
-      c.width = W; c.height = H;
-      x.fillStyle = '#0E1015'; x.fillRect(0, 0, W, H);
-      if (img) {
-        var k = Math.max(W / img.naturalWidth, PH / img.naturalHeight), sw = W / k, sh = PH / k;
-        x.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, 0, 0, W, PH);
-      } else { x.fillStyle = '#002C5F'; x.fillRect(0, 0, W, PH); }
-      if (credit) {
-        var g = x.createLinearGradient(0, PH - 150, 0, PH);
-        g.addColorStop(0, 'rgba(14,16,21,0)'); g.addColorStop(1, 'rgba(14,16,21,.6)');
-        x.fillStyle = g; x.fillRect(0, PH - 150, W, 150);
-        x.font = '400 24px ' + fam; x.textAlign = 'right'; x.fillStyle = 'rgba(255,255,255,.86)';
-        x.fillText(fit(x, credit, W - 80), W - 40, PH - 30);
-        x.textAlign = 'left';
-      }
-      // 길 모양 (오른쪽)과 지나온 곳
-      cardRoute(x, routePoints(), info.places, W - M - 270, PH + 56, 270, 270);
-      // 이름, 날짜, 한 줄 사실 (왼쪽)
-      var maxW = W - M * 2 - 270 - 48, size = 68, lines;
-      for (;;) { x.font = '700 ' + size + 'px ' + fam; lines = wrap(x, title, maxW, ' '); if (lines.length <= 2 || size <= 48) break; size -= 6; }
-      var y = PH + 122;
-      x.fillStyle = '#F7F8FA';
-      lines.slice(0, 3).forEach(function (l) { x.fillText(l, M, y); y += Math.round(size * 1.22); });
-      y += 62 - Math.round(size * 1.22) + 6;
-      x.font = '400 30px ' + fam; x.fillStyle = '#9AA0AA';
-      x.fillText(info.date, M, y);
-      x.font = '600 36px ' + fam; x.fillStyle = '#F7F8FA';
-      wrap(x, info.parts.join('\u0001'), maxW, '\u0001', ' · ').forEach(function (l) { y += 58; x.fillText(l, M, y); });
-      // 왼쪽 아래에 마크와 앱 이름
-      var my = H - M - 44;
-      x.save();
-      x.translate(M, my); x.scale(44 / 49, 44 / 49); x.translate(-33, -27);
-      x.lineWidth = 4.6; x.lineCap = 'round'; x.lineJoin = 'round'; x.strokeStyle = '#fff';
-      x.stroke(new Path2D('M47.52 64.8H58.68C62.28 64.8 64.44 62.28 64.44 59.22C64.44 55.98 62.1 53.64 59.04 53.64H48.96C45.9 53.64 43.56 51.3 43.56 48.24C43.56 45.18 45.72 43.2 48.96 43.2H60.48'));
-      [[43.2, 64.8], [64.8, 43.2]].forEach(function (p) { x.beginPath(); x.arc(p[0], p[1], 4.32, 0, Math.PI * 2); x.stroke(); });
-      x.beginPath(); x.arc(73.5, 34.5, 4.6, 0, Math.PI * 2); x.fillStyle = '#00AAD2'; x.fill();
-      x.restore();
-      x.font = '600 28px ' + fam; x.fillStyle = '#9AA0AA';
-      x.fillText(t('appName'), M + 58, my + 32);
-      return c;
-    });
-  }
-  // 폭에 맞춰 줄을 나눔. sep 으로 자르고 glue 로 다시 이음
-  function wrap(x, text, maxW, sep, glue) {
-    var out = [], cur = '';
-    glue = glue === undefined ? sep : glue;
-    String(text).split(sep).forEach(function (w) {
-      var tryLine = cur ? cur + glue + w : w;
-      if (cur && x.measureText(tryLine).width > maxW) { out.push(cur); cur = w; } else cur = tryLine;
-    });
-    if (cur) out.push(cur);
-    return out;
-  }
-  function fit(x, text, maxW) {
-    if (x.measureText(text).width <= maxW) return text;
-    while (text.length > 4 && x.measureText(text + '…').width > maxW) text = text.slice(0, -1);
-    return text + '…';
-  }
-  function cardRoute(x, pts, places, bx, by, bw, bh) {
-    if (pts.length < 2) return;
-    var k = Math.cos(pts[0][0] * Math.PI / 180), minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    pts.forEach(function (p) { minX = Math.min(minX, p[1] * k); maxX = Math.max(maxX, p[1] * k); minY = Math.min(minY, -p[0]); maxY = Math.max(maxY, -p[0]); });
-    var pad = 16, s = Math.min((bw - pad * 2) / (maxX - minX || 1e-9), (bh - pad * 2) / (maxY - minY || 1e-9));
-    var ox = bx + (bw - (maxX - minX) * s) / 2, oy = by + (bh - (maxY - minY) * s) / 2;
-    var at = function (lat, lon) { return [ox + (lon * k - minX) * s, oy + (-lat - minY) * s]; };
-    x.save();
-    x.lineCap = 'round'; x.lineJoin = 'round'; x.strokeStyle = '#F7F8FA'; x.lineWidth = 7;
-    x.beginPath();
-    pts.forEach(function (p, i) { var q = at(p[0], p[1]); if (i) x.lineTo(q[0], q[1]); else x.moveTo(q[0], q[1]); });
-    x.stroke();
-    places.forEach(function (p) {
-      if (typeof p.lat !== 'number') return;
-      var q = at(p.lat, p.lon);
-      x.beginPath(); x.arc(q[0], q[1], 11, 0, Math.PI * 2); x.fillStyle = '#0E1015'; x.fill(); x.lineWidth = 5; x.stroke();
-    });
-    x.restore();
-  }
-  function cardName() { var d = new Date(recordInfo().at); return 'rolling-guide-' + d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) + '.png'; }
-  function download(blob) {
+  $('reelPlay').onclick = $('reelTap').onclick = function () {
+    if (!hasRecord() || reelBusy) return;
+    reelState(true, false);
+    makeReel().play().then(function () { reelState(false, false); });
+  };
+  function reelName(ext) { var d = new Date(S.record.startedAt || Date.now()); return 'rolling-guide-' + d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) + '.' + ext; }
+  function download(blob, name) {
     var a = document.createElement('a'), url = URL.createObjectURL(blob);
-    a.href = url; a.download = cardName();
+    a.href = url; a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
     toast(t('saved'));
   }
-  // 휴대폰에서는 공유 창(사진 앱에 저장, 메신저로 보내기), 공유가 안 되는 브라우저에서는 내려받기
-  $('saveCard').onclick = function () {
-    if (!hasRecord()) return;
-    var btn = $('saveCard');
-    btn.disabled = true;
-    cardBlob().then(function (blob) {
-      var file = typeof File === 'function' ? new File([blob], cardName(), { type: 'image/png' }) : null;
+  // [영상 저장]: 처음부터 한 번 틀면서 영상 파일로 담음. 휴대폰에서는 공유 창(사진 앱에 저장, 메신저로 보내기), 공유가 안 되면 내려받기
+  $('reelSave').onclick = function () {
+    if (!hasRecord() || reelBusy) return;
+    reelState(true, true);
+    makeReel().save().then(function (out) {
+      var name = reelName(out.ext), file = typeof File === 'function' ? new File([out.blob], name, { type: out.blob.type }) : null;
       if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        return navigator.share({ files: [file], title: nm(S.scenario.title) }).catch(function (e) { if (!e || e.name !== 'AbortError') download(blob); });
+        return navigator.share({ files: [file], title: nm(S.scenario.title) }).catch(function (e) { if (!e || e.name !== 'AbortError') download(out.blob, name); });
       }
-      download(blob);
-    }).catch(function () { card = null; toast(t('saveFail')); }).then(function () { btn.disabled = false; });
+      download(out.blob, name);
+    }).catch(function () { toast(t('saveFail')); }).then(function () { reelState(false, false); });
   };
+
+  // 함께 탄 사람이 찍어 올린 사진. 여행 영상에 들어감
+  function renderShots() {
+    var list = myShots();
+    $('shotBar').classList.toggle('hidden', !full() || !S.scenario);
+    $('shotBtnL').textContent = t('addPhoto');
+    $('shotHint').textContent = list.length ? f('shotCount', { n: list.length }) : t('shotHint');
+    $('shots').innerHTML = list.map(function (p) { return '<span class="shot"><img src="' + esc(shotUrl(p)) + '" alt="" loading="lazy" decoding="async"></span>'; }).join('');
+  }
+  // 올리기 전에 긴 쪽을 1600px 로 줄임 (찍은 위치 같은 정보도 이때 떨어져 나감)
+  function shrink(file) {
+    return new Promise(function (ok, no) {
+      var url = URL.createObjectURL(file), im = new Image();
+      im.onload = function () {
+        var s = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement('canvas');
+        c.width = Math.round(im.naturalWidth * s); c.height = Math.round(im.naturalHeight * s);
+        c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        ok(c.toDataURL('image/jpeg', 0.86));
+      };
+      im.onerror = function () { URL.revokeObjectURL(url); no(new Error('image')); };
+      im.src = url;
+    });
+  }
+  $('shotInput').onchange = function () {
+    var file = this.files && this.files[0];
+    this.value = '';
+    if (!file || !code) return;
+    toast(t('shotSending'));
+    shrink(file).then(function (dataUrl) {
+      return fetch('/api/groups/' + code + '/photos', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Group-Key': key }, body: JSON.stringify({ dataUrl: dataUrl, by: me || '', takenAt: file.lastModified || Date.now() }) });
+    }).then(function (r) { if (!r.ok) throw new Error('upload'); return r.json(); }).then(function (p) { addShot(p); toast(t('shotDone')); }).catch(function () { toast(t('shotFail')); });
+  };
+  function addShot(p) {
+    if (!p || !p.id || S.shots.some(function (x) { return x.id === p.id; })) return;
+    S.shots.push(p);
+    renderRecord();
+  }
 
   // ---------------------------------------------------------------- 그룹 상태 받기
   function apply(summary) {
     S.group = summary;
-    S.quizPending = null;   // 다시 붙으면 서버가 받은 답만 믿음 (못 받았으면 다시 고를 수 있음)
+    S.huntSent = false;
     if (summary.access) S.level = summary.access;
     S.cars = summary.cars || S.cars;
     S.passes = summary.passes || [];
     S.record = summary.record || null;
     S.ended = !!summary.ended;
-    S.quizzes = summary.quizzes || [];
-    S.answers = summary.answers || [];
-    S.stars = summary.stars && mineCar(summary.stars) ? summary.stars : null;
+    S.hunt = summary.hunt && mineCar(summary.hunt) && !summary.ended ? summary.hunt : null;
+    S.found = summary.found || [];
+    S.kid = !!summary.kid || S.found.length > 0 || !!S.hunt;
+    if (summary.photos) S.shots = summary.photos;
     // 다시 연결하면 지금 하는 이야기를 다시 그림 (끊긴 사이에 바뀌었거나 끝났을 수 있음)
     var st = myStory(summary);
     if (st && (!S.story || S.story.placeId !== st.placeId || S.story.at !== st.at || S.story.kid !== st.kid)) showStory(st, true);
     if (st && S.story) {
       var ln = (summary.lines || []).concat(summary.line ? [summary.line] : []).filter(function (l) { return l && l.placeId === st.placeId && sameCar(l, st); })[0];
       S.storyDone = !!st.done;
-      if (ln && !ln.kid && !st.done) { S.linePart = 'story'; S.lineIdx = ln.index; }
+      if (ln && !ln.kid && !st.done) { S.linePart = 'story'; S.lineIdx = ln.index; showMark(st.placeId, S.lines[ln.index]); }
     }
   }
   // 이 휴대폰이 따르는 차의 마지막 이야기
@@ -802,8 +758,10 @@
   function loadScenario(id) {
     return fetch('/api/scenarios/' + id).then(function (r) { if (!r.ok) throw new Error('scenario'); return r.json(); }).then(function (sc) {
       S.scenario = sc;
-      pickFitFor = null; recFitFor = null; S.selected = null;
+      pickFitFor = null; S.selected = null;
       renderAll();
+      // 코스를 늦게 받았으면 지금 읽는 대목의 선을 이제 그림
+      if (S.story && !S.storyDone && S.linePart === 'story' && S.lineIdx >= 0) showMark(S.story.placeId, S.lines[S.lineIdx]);
     }).catch(function () { setNet(t('reconnecting')); });
   }
   function loadPhotos() {
@@ -816,7 +774,7 @@
   }
 
   function renderAll() {
-    renderTop(); renderNow(); renderQuiz(); renderCourse(); renderPickList(); renderRecord(); renderBadge(); renderBanner();
+    renderTop(); renderNow(); renderHunt(); renderCourse(); renderPickList(); renderRecord(); renderBadge(); renderBanner();
     if (S.tab === 'pick') drawPickMap();
   }
 
@@ -894,9 +852,10 @@
           if (!S.story || m.placeId !== S.story.placeId || !sameCar(m, S.story)) break;
           if (S.qa) endQa();   // 답을 다 말하고 하던 이야기로 돌아옴
           setLine(m.kid ? 'kid' : 'story', m.index);
+          if (!m.kid) showMark(m.placeId, S.lines[m.index]);
           break;
         case 'story_end':
-          if (S.story && m.placeId === S.story.placeId && sameCar(m, S.story)) { S.storyDone = true; S.story.done = true; renderNow(); renderCourse(); if (S.tab === 'pick') drawPickMarkers(); }
+          if (S.story && m.placeId === S.story.placeId && sameCar(m, S.story)) { S.storyDone = true; S.story.done = true; renderNow(); renderCourse(); if (S.tab === 'pick') drawPickMarkers(); setTimeout(clearMark, 6000); }
           break;
         case 'kid':
           if (!mineCar(m) || !S.story || m.placeId !== S.story.placeId) break;
@@ -933,22 +892,23 @@
           if (minePick && S.tab !== 'pick') toast(ackText);
           renderPickButton();
           break;
-        case 'record': S.record = m.record; S.ended = true; card = null; renderNow(); renderQuiz(); renderCourse(); renderRecord(); break;
+        case 'record': S.record = m.record; S.ended = true; S.hunt = null; renderNow(); renderHunt(); renderCourse(); renderRecord(); break;
         case 'trip_end':
-          S.ended = true; watchCar(); renderNow(); renderQuiz(); renderCourse(); renderRecord();
+          S.ended = true; S.hunt = null; watchCar(); renderNow(); renderHunt(); renderCourse(); renderRecord();
           // 지금 탭은 화면이 이미 같은 말을 하므로 장소 탭에 있을 때만 알림
           if (S.tab === 'pick') toast(t('ended'), function () { setTab('record'); }, t('seeRecord'));
           break;
-        case 'quiz':
-          S.quizzes = S.quizzes.filter(function (q) { return q.id !== m.id; }).concat([m]);
+        case 'hunt':
           if (!mineCar(m)) break;
-          renderQuiz();
-          // 지금 탭이면 퀴즈가 보이게 내려가고, 다른 탭이면 눌러서 갈 수 있는 알림만
-          if (S.tab === 'now') setTimeout(function () { if (!$('quizCard').classList.contains('hidden') && !sheetMode) $('quizCard').scrollIntoView({ behavior: smooth(), block: 'center' }); }, 80);
-          else { toast(t('quizNew'), function () { setTab('now'); setTimeout(function () { $('quizCard').scrollIntoView({ block: 'center' }); }, 80); }); nowNews(); }
+          S.hunt = m; S.huntSent = false; S.kid = true;
+          renderHunt();
+          // 지금 탭이면 찾을 것이 보이게 올라가고, 다른 탭이면 눌러서 갈 수 있는 알림만
+          if (S.tab === 'now') toTop(); else { toast(t('huntNew'), function () { setTab('now'); }); nowNews(); }
           break;
-        case 'quiz_answer': S.answers.push(m); renderQuiz(); break;
-        case 'stars': if (mineCar(m)) { S.stars = m; renderQuiz(); } break;
+        case 'hunt_end': if (S.hunt && S.hunt.placeId === m.placeId && sameCar(S.hunt, m)) { S.hunt = null; S.huntSent = false; renderHunt(); } break;
+        case 'found': if (mineCar(m)) onFound(m); break;
+        case 'kidmode': if (mineCar(m)) { S.kid = !!m.on; renderHunt(); } break;
+        case 'photo': addShot(m.photo); break;
         case 'qa': if (mineCar(m)) showQa(m); break;
       }
     };

@@ -37,8 +37,8 @@
     "en": "Back on the road. Next chapter: {next}."
   },
   "finale": {
-    "ko": "오늘 경주 여행은 여기까지예요. 명소 {count}곳을 함께 지나왔어요. 오늘 기록은 휴대폰으로 가져가실 수 있어요.",
-    "en": "That's all for today's Gyeongju trip. We passed {count} places together. You can take today's record with you on your phone."
+    "ko": "오늘 경주 여행은 여기까지예요. 명소 {count}곳을 함께 지나왔어요. 오늘 여행을 영상으로 엮어 봤어요. 같이 볼까요?",
+    "en": "That's all for today's Gyeongju trip. We passed {count} places together. I've put today into a short video. Let's watch."
   },
   "sights": [
     {"id": "cheonmachong", "name": {"ko": "천마총", "en": "Cheonmachong"}, "lat": 35.83859, "lon": 129.2105, "visible": 700,
@@ -61,15 +61,29 @@
      "source": "위키백과 국립경주박물관"}
   ],
   "kid": {
-    "daereungwon": {"ko": "뒷자리 친구들, 동산처럼 생긴 언덕 보이죠? 저게 다 옛날 신라 임금님들이 잠든 무덤이에요. 몇 개나 보이는지 세어 볼까요?", "en": "Hey, back seat! See those big grassy hills? Each one is the tomb of a Silla king or royal from long ago. How many can you count?"},
-    "cheomseongdae": {"ko": "뒷자리 친구들, 첨성대는 옛날 사람들이 별을 보던 돌탑이에요. 선덕여왕 때 쌓았대요.", "en": "Hey, back seat! Cheomseongdae is a stone tower where people watched the stars long ago. It was built in Queen Seondeok's time."},
-    "donggung": {"ko": "뒷자리 친구들, 동궁과 월지는 신라 왕자님이 살던 궁궐과 연못이에요. 연못 가운데 섬이 세 개 있대요. 찾아볼까요?", "en": "Hey, back seat! Donggung and Wolji are the palace and pond where a Silla prince lived. There are three islands in the pond. Can you spot them?"}
+    "daereungwon": {"ko": "저 언덕이 다 옛날 신라 임금님들이 잠든 무덤이에요. 몇 개나 보이는지 세어 볼까요?", "en": "Each of those hills is the tomb of a Silla king or royal from long ago. How many can you count?"},
+    "cheomseongdae": {"ko": "첨성대는 옛날 사람들이 별을 보던 돌탑이에요. 선덕여왕 때 쌓았대요.", "en": "Cheomseongdae is a stone tower where people watched the stars long ago. It was built in Queen Seondeok's time."},
+    "donggung": {"ko": "동궁과 월지는 신라 왕자님이 살던 궁궐과 연못이에요. 연못 가운데 섬이 세 개 있대요.", "en": "Donggung and Wolji are the palace and pond where a Silla prince lived. There are three islands in the pond."}
   },
   "kidAuto": true,
-  "quiz": {
-    "daereungwon": {"q": {"ko": "대릉원의 둥근 언덕은 무엇일까요?", "en": "What are the round hills at Daereungwon?"}, "choices": {"ko": ["신라 왕과 왕족의 무덤", "옛날 놀이터", "쌀 창고"], "en": ["Tombs of Silla royals", "An old playground", "Rice storehouses"]}, "answer": 0},
-    "cheomseongdae": {"q": {"ko": "첨성대에서 옛날 사람들은 무엇을 봤을까요?", "en": "What did people watch from Cheomseongdae?"}, "choices": {"ko": ["별", "물고기", "기차"], "en": ["Stars", "Fish", "Trains"]}, "answer": 0},
-    "donggung": {"q": {"ko": "동궁과 월지 연못 가운데에는 섬이 몇 개 있을까요?", "en": "How many islands are in Wolji Pond?"}, "choices": {"ko": ["세 개", "한 개", "열 개"], "en": ["Three", "One", "Ten"]}, "answer": 0}
+  "kidOffer": {"ko": "뒷자리에 친구가 탔네요. 아이 모드로 갈까요?", "en": "Looks like someone's in the back seat. Shall we turn on kid mode?"},
+  "hunt": {
+    "daereungwon": {"ko": "뒷자리 친구들, 창밖에서 풀로 덮인 둥근 언덕을 찾아보세요.", "en": "Back seat explorers, look outside for round, grassy hills."},
+    "cheomseongdae": {"ko": "이번에는 돌탑 꼭대기에 네모나게 얹힌 돌을 찾아보세요.", "en": "This time, find the square stones sitting on top of the stone tower."},
+    "donggung": {"ko": "마지막이에요. 연못가에 선 기와지붕 누각을 찾아보세요.", "en": "Last one. Find the tiled-roof pavilion by the pond."}
+  },
+  "huntHow": {"ko": "찾으면 찾았다 하고 외쳐요.", "en": "When you spot it, shout found it!"},
+  "stickers": {"daereungwon": "tombs", "cheomseongdae": "tower", "donggung": "pavilion"},
+  "tagline": {
+    "daereungwon": {"ko": "신라 왕들이 잠든 둥근 언덕", "en": "Round hills where Silla kings rest"},
+    "cheomseongdae": {"ko": "천삼백 년 전 별을 보던 돌탑", "en": "A stone tower for stargazing, 1,300 years old"},
+    "donggung": {"ko": "달이 뜨는 연못과 왕자의 궁궐", "en": "A prince's palace by the moon pond"}
+  },
+  "reelIntro": {"ko": "여기부터 신라예요", "en": "From here on, it's Silla"},
+  "marks": {
+    "daereungwon": [{"photo": "daereungwon_1.jpg", "match": {"ko": "언덕 하나하나가", "en": "Each of these"}, "x": 0.47, "y": 0.5, "rx": 0.4, "ry": 0.2, "note": {"ko": "이게 다 무덤", "en": "All of these are tombs"}}],
+    "cheomseongdae": [{"photo": "cheomseongdae_window.jpg", "match": {"ko": "네모난 창", "en": "square window"}, "x": 0.609, "y": 0.52, "rx": 0.06, "ry": 0.07, "note": {"ko": "여기로 드나들었대요", "en": "The way in"}}],
+    "donggung": [{"photo": "donggung_1.jpg", "match": {"ko": "섬 세 개", "en": "three islands"}, "x": 0.54, "y": 0.55, "rx": 0.13, "ry": 0.11, "note": {"ko": "연못가의 누각", "en": "The pavilion by the pond"}}]
   },
   "places": [
     {

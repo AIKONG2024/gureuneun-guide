@@ -75,6 +75,8 @@ class MainActivity : ComponentActivity() {
                 )
                 ui.phase == TripEngine.Phase.ENDED -> RecordScreen(
                     ui, engine.recorder, group,
+                    parked = vehicle.parked && !ux.restricted,
+                    payload = { engine.reelPayload() },
                     onShare = { engine.shareRecord() },
                 ) { engine.goHome() }
                 else -> TripScreen(ui, vehicle, ux, group, engine, partial, level)

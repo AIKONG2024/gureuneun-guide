@@ -58,9 +58,9 @@ android {
         compose = true
         buildConfig = true
     }
-    // 차 앱에는 명소 사진(photos)만 넣고 웹 페이지와 스크립트, 웹 글꼴(vendor)은 뺌
+    // 차 앱에는 명소 사진(photos)과 스티커, 여행 영상 화면(reel)만 넣고 휴대폰 웹 페이지와 그 스크립트, 웹 글꼴(vendor)은 뺌
     androidResources {
-        ignoreAssetsPattern = "!vendor:!js:!css:!*.html:!.DS_Store"
+        ignoreAssetsPattern = "!vendor:!js:!css:!group.html:!index.html:!.DS_Store"
     }
     packaging {
         resources {

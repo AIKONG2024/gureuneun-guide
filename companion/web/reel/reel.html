@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>여행 영상</title>
+<link rel="stylesheet" href="../vendor/fonts/asta-sans/asta-sans.css">
+<link rel="stylesheet" href="reel.css">
+</head>
+<body class="reel-page">
+<canvas id="reel" width="1280" height="720"></canvas>
+<script src="reel.js"></script>
+<script>
+// 차 화면(WebView)에서 여는 쪽. 차 앱이 startReel 에 여행 기록과 코스를 넘겨 주면 그 자리에서 재생함
+(function () {
+  var canvas = document.getElementById('reel'), player = null;
+  // 화면 칸의 모양에 맞춰 캔버스를 잡음 (긴 쪽 1280, 가로세로 비는 9:16 과 16:9 사이)
+  function size() {
+    var a = (window.innerWidth || 16) / (window.innerHeight || 9);
+    if (a >= 1) { canvas.width = 1280; canvas.height = Math.round(1280 / Math.min(a, 16 / 9)); }
+    else { canvas.height = 1280; canvas.width = Math.round(1280 * Math.max(a, 9 / 16)); }
+  }
+  /** p: { record, scenario, photos, lang, mute, still } */
+  window.startReel = function (p) {
+    if (player) player.stop();
+    size();
+    var model = Reel.build(p.record, p.scenario, p.photos || [], { lang: p.lang, base: '../' });
+    player = Reel.create(canvas, model, { onEnd: function () { if (window.RG && RG.onReelEnd) RG.onReelEnd(); } });
+    if (p.still) player.poster(); else player.play({ mute: !!p.mute });
+    return player.duration;
+  };
+  window.stopReel = function () { if (player) player.stop(); };
+  window.replayReel = function (mute) { if (player) player.play({ mute: !!mute }); };
+
+  // 시험: 그룹 서버에서 /reel/reel.html?test=gyeongju&kid=1&photos=2&t=12 로 열면 지어낸 기록으로 그 시각의 화면을 그림
+  var q = new URLSearchParams(location.search), id = q.get('test');
+  if (id) {
+    fetch('/api/scenarios/' + id).then(function (r) { return r.json(); }).then(function (sc) {
+      var ev = [], t = Date.now() - 3600000, dist = 0;
+      (sc.places || []).forEach(function (p, i) {
+        ev.push({ t: t + i * 600000, type: 'pass', placeId: p.id, title: '' });
+        if (q.get('kid') && sc.hunt && sc.hunt[p.id]) ev.push({ t: t + i * 600000 + 20000, type: 'found', placeId: p.id, title: '', detail: i % 2 ? '' : '하준' });
+      });
+      var route = sc.route.map(function (r, i) { if (i) { var a = sc.route[i - 1], x = (r[1] - a[1]) * 88800, y = (r[0] - a[0]) * 111000; dist += Math.sqrt(x * x + y * y); } return [t + i * 1000, r[0], r[1]]; });
+      var photos = [];
+      for (var k = 0; k < Number(q.get('photos') || 0); k++) photos.push({ url: '../photos/' + ((sc.places[k + 1] || sc.places[0]).id) + '_2.jpg', by: k % 2 ? '엄마' : '하준', takenAt: t + k * 1000 });
+      if (q.get('w')) { canvas.width = Number(q.get('w')); canvas.height = Number(q.get('h')); } else size();
+      var model = Reel.build({ startedAt: t, distanceM: dist, route: route, events: ev, lang: q.get('lang') || 'ko' }, sc, photos, { base: '../' });
+      player = Reel.create(canvas, model, {});
+      document.title = 'dur=' + player.duration.toFixed(1);
+      if (q.get('t') != null) player.ready.then(function () { player.drawAt(Number(q.get('t'))); document.body.setAttribute('data-drawn', '1'); });
+      else player.play({ mute: !!q.get('mute') });
+    });
+  } else if (window.RG && RG.onReelReady) RG.onReelReady();
+})();
+</script>
+</body>
+</html>
+

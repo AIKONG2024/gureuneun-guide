@@ -1,11 +1,13 @@
 package app.gureuneun.guide.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -35,6 +37,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -127,6 +130,8 @@ private fun sceneOf(ui: TripEngine.Ui, prompt: Prompt?, parked: Boolean, partial
     val listening = ui.listening && !ui.asking
 
     val photo = when {
+        // 창밖에서 찾는 동안에는 답이 될 사진을 띄우지 않음 (뒷자리에서도 이 화면이 보이니까)
+        prompt?.hunt == true -> null
         // 고른 곳을 묻는 동안에는 그곳 사진, 물어본 것에 답하는 동안에는 답한 곳 사진 (사진이 있을 때만)
         prompt?.photoId != null && hasPhoto(prompt.photoId) -> prompt.photoId
         answering && hasPhoto(ui.answerPlaceId) -> ui.answerPlaceId
@@ -189,9 +194,20 @@ private fun Stage(
         )
         if (!parked) Box(Modifier.fillMaxSize().background(Color(0x1F000000)))
         SideGlow(scene.side)
+        // 아이 모드: 찾는 동안에는 사진 대신 그림자만 보여 주고 찾으면 스티커가 잠깐 크게 뜸
+        val big = if (compact) 0.7f else 1f
+        ui.hunt?.sticker?.takeIf { it.isNotBlank() && prompt?.hunt == true && ui.newSticker == null }?.let {
+            Sticker(it, Modifier.align(Alignment.TopCenter).padding(top = 110.dp * big).size(width = 760.dp * big, height = 520.dp * big), shadow = true)
+        }
+        ui.newSticker?.let { NewSticker(it, big, Modifier.align(Alignment.TopCenter).padding(top = 80.dp * big)) }
 
         Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(pad), verticalAlignment = Alignment.CenterVertically) {
-            if (ui.stars > 0) StarCount(ui.stars)
+            if (ui.stickers.isNotEmpty()) StickerTray(ui.stickers)
+            // 아이 모드는 차가 섰을 때 켜고 끌 수 있음 (찾을 것이 있는 코스에서만)
+            if (parked && ui.scenario?.hunt?.isNotEmpty() == true && !ui.kidOffer) {
+                if (ui.stickers.isNotEmpty()) Spacer(Modifier.width(14.dp))
+                KidChip(ui.kidMode, lang) { engine.setKidMode(!ui.kidMode) }
+            }
             Spacer(Modifier.weight(1f))
             // 사진을 찍은 사람과 라이선스 (글자는 차가 섰을 때만)
             if (parked) PhotoCredit(file)
@@ -280,14 +296,36 @@ private fun SideChip(side: String, lang: String) {
     }
 }
 
+/** 아이 모드에서 모은 스티커 */
 @Composable
-private fun StarCount(stars: Int) {
+private fun StickerTray(names: List<String>) {
     Row(
-        Modifier.clip(RoundedCornerShape(18.dp)).background(Color(0x66000000)).padding(horizontal = 18.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Modifier.clip(RoundedCornerShape(22.dp)).background(Color(0x66000000)).padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Icon(Ic.Star, C.sand, 30.dp)
-        Text("$stars", style = T.label, color = Color.White)
+        names.takeLast(5).forEach { Sticker(it, Modifier.size(width = 76.dp, height = 60.dp)) }
+    }
+}
+
+@Composable
+private fun KidChip(on: Boolean, lang: String, onClick: () -> Unit) {
+    Row(
+        Modifier.clip(RoundedCornerShape(22.dp)).background(if (on) Color(0xE6F2B632) else Color(0x66000000)).clickable(onClick = onClick).padding(horizontal = 22.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(Ic.Kid, if (on) Color(0xFF12233F) else Color.White, 30.dp)
+        Text(if (on) t(lang, "아이 모드 켜짐", "Kid mode on") else t(lang, "아이 모드", "Kid mode"), style = T.label, color = if (on) Color(0xFF12233F) else Color.White, maxLines = 1)
+    }
+}
+
+/** 방금 모은 스티커: 금빛 바탕 위로 통 하고 한 번 튀어나옴 */
+@Composable
+private fun NewSticker(name: String, big: Float, modifier: Modifier) {
+    val pop = remember(name) { Animatable(0.5f) }
+    LaunchedEffect(name) { pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 380f)) }
+    Box(modifier.size(width = 820.dp * big, height = 600.dp * big), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(640.dp * big).background(Brush.radialGradient(listOf(Color(0xCCFFC94D), Color.Transparent)), CircleShape))
+        Sticker(name, Modifier.size(width = 760.dp * big, height = 540.dp * big).graphicsLayer { scaleX = pop.value; scaleY = pop.value })
     }
 }
 
@@ -392,11 +430,14 @@ private class Prompt(
     val onYes: () -> Unit,
     val onNo: () -> Unit,
     val photoId: String? = null,
+    /** 창밖 보물찾기 물음 (무대에 사진 대신 그림자를 띄움) */
+    val hunt: Boolean = false,
 )
 
 private fun promptOf(ui: TripEngine.Ui, engine: TripEngine): Prompt? {
     val lang = Lang.screen
     val pick = ui.pick
+    val hunt = ui.hunt
     return when {
         ui.confirmEnd -> Prompt(
             null, t(lang, "오늘 여행을 끝낼까요?", "End today's trip?"), null,
@@ -421,6 +462,19 @@ private fun promptOf(ui: TripEngine.Ui, engine: TripEngine): Prompt? {
                 photoId = ui.scenario?.photoOf(pick.placeId),
             )
         }
+        ui.kidOffer -> Prompt(
+            null, t(lang, "아이 모드로 갈까요?", "Turn on kid mode?"),
+            t(lang, "뒷자리에 누가 탔어요. 창밖에서 찾을 것을 내 드려요", "Someone's in the back. I'll give them things to find outside"),
+            t(lang, "아이 모드 켜기", "Turn it on"), t(lang, "괜찮아요", "No thanks"),
+            t(lang, "‘응’ · ‘아니’", "“yes” · “no”"),
+            { engine.setKidMode(true) }, { engine.setKidMode(false) },
+        )
+        hunt != null -> Prompt(
+            t(lang, "창밖 보물찾기", "Look outside"), hunt.text, null,
+            t(lang, "찾았다!", "Found it!"), t(lang, "넘어가기", "Skip"),
+            t(lang, "‘찾았다’", "“found it”"),
+            { engine.onHuntFound(hunt.placeId) }, { engine.skipHunt() }, hunt = true,
+        )
         else -> null
     }
 }
@@ -428,7 +482,7 @@ private fun promptOf(ui: TripEngine.Ui, engine: TripEngine): Prompt? {
 @Composable
 private fun AnswerButtons(p: Prompt, onPhoto: Boolean) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-        Btn(p.yes, Modifier.weight(1.4f), tone = Tone.Primary, height = 108.dp, onClick = p.onYes)
+        Btn(p.yes, Modifier.weight(1.4f), tone = if (p.hunt) Tone.Gold else Tone.Primary, height = 108.dp, onClick = p.onYes)
         Btn(p.no, Modifier.weight(1f), tone = if (onPhoto) Tone.OnBrand else Tone.Secondary, height = 108.dp, onClick = p.onNo)
     }
 }
