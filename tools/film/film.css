@@ -198,26 +198,6 @@ canvas#gl{position:absolute;left:0;top:0;width:1920px;height:1080px}
 .ing b{font-weight:600;color:#F2CF98}
 .reelfull{position:absolute;inset:0;background:#000}
 .reelfull video{position:absolute;left:0;top:0;width:1920px;height:1080px;object-fit:cover}
-/* 지금까지는: 휴대폰에서 찾고 내비게이션에 다시 입력하던 방식 (설명용 그림) */
-.mk-ph{position:absolute;inset:0;background:#F4F5F7;padding:62px 22px 0;color:#1B2128}
-.mk-h{font-weight:700;font-size:25px;margin:0 6px 18px}
-.mk-it{display:flex;align-items:center;gap:16px;height:112px;margin-bottom:14px;padding:0 16px;border-radius:20px;background:#fff;opacity:.45}
-.mk-it img,.mk-it .ic{width:76px;height:76px;border-radius:14px;object-fit:cover;flex:none}
-.mk-it .ic{display:grid;place-items:center;background:#F1E7DC}
-.mk-it b{display:block;font-weight:600;font-size:23px}
-.mk-it small{display:block;margin-top:5px;font-weight:500;font-size:17px;color:#6A727B}
-.mk-nv{position:absolute;inset:0;background:#14181D;padding:40px 46px;color:#E9EDF1}
-.mk-nh{font-weight:600;font-size:24px;color:#AEB7C0;margin-bottom:22px}
-.mk-f{display:flex;align-items:center;gap:16px;height:78px;margin-bottom:14px;padding:0 24px;border-radius:14px;background:#1E242B;border:2px solid transparent;opacity:0;font-weight:500;font-size:29px}
-.mk-f svg{width:28px;height:28px;flex:none}
-.mk-f .ty{display:inline-block;white-space:nowrap}
-.mk-kb{position:absolute;left:46px;right:46px;bottom:36px;display:grid;grid-template-columns:repeat(10,1fr);gap:9px}
-.mk-kb i{height:50px;border-radius:9px;background:#232A32}
-.who{position:absolute;display:flex;align-items:center;gap:10px;opacity:0;z-index:36;font-weight:600;font-size:19px;color:#fff;white-space:nowrap;padding:5px 0 5px 12px;border-radius:8px 0 0 8px;background:rgba(13,16,20,.78)}
-.who small{font-weight:500;font-size:17px;opacity:.78}
-.who::after{content:'';width:26px;height:1.5px;background:rgba(255,255,255,.7)}
-.credit3.ink{color:rgba(27,33,40,.38)}
-.note3{position:absolute;left:40px;bottom:28px;font-weight:500;font-size:16px;color:rgba(255,255,255,.62);z-index:30}
 
 @keyframes tap{0%{opacity:0;transform:scale(.35)}25%{opacity:1}100%{opacity:0;transform:scale(1.5)}}
 @keyframes hlIn{0%{opacity:0;transform:scale(1.12)}100%{opacity:1;transform:scale(1)}}
@@ -240,9 +220,4 @@ canvas#gl{position:absolute;left:0;top:0;width:1920px;height:1080px}
 @keyframes thFly{from{opacity:1;transform:none}to{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.3)}}
 @keyframes rcIn{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}
 @keyframes rcFull{from{opacity:1;transform:scale(1);border-radius:14px}to{opacity:1;transform:scale(3);border-radius:0}}
-@keyframes mkOn{from{opacity:.45}to{opacity:1}}
-@keyframes mkOff{from{opacity:1}to{opacity:.45}}
-@keyframes fIn{from{opacity:0;border-color:transparent}to{opacity:1;border-color:#00AAD2}}
-@keyframes fDone{from{border-color:#00AAD2}to{border-color:transparent}}
-@keyframes typeIn{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
 

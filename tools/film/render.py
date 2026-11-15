@@ -38,7 +38,7 @@ subprocess.run([FF, '-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', lst
 os.makedirs(os.path.dirname(os.path.abspath(OUT)), exist_ok=True)
 # 저장소에 올릴 수 있게 다시 압축 (장면 렌더는 고화질이라 2분에 190MB 안팎)
 subprocess.run([FF, '-y', '-v', 'error', '-i', video, '-i', os.path.join(HERE, 'assets', 'audio.m4a'), '-map', '0:v', '-map', '1:a',
-                '-c:v', 'libx264', '-preset', 'slow', '-crf', '21', '-maxrate', '4200k', '-bufsize', '8400k', '-pix_fmt', 'yuv420p',
+                '-c:v', 'libx264', '-preset', 'slow', '-crf', '20', '-maxrate', '4500k', '-bufsize', '9000k', '-pix_fmt', 'yuv420p',
                 '-c:a', 'copy', '-shortest', '-movflags', '+faststart', OUT], check=True)
 print('완성', OUT)
 
