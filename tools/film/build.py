@@ -1,24 +1,30 @@
 #!/usr/bin/env python3
-"""구르는 가이드 시연 필름 (HyperFrames)
+"""구르는 가이드 시연 필름 v5 (HyperFrames + three.js)
   python3 tools/film/media.py /tmp/rec tools/film/assets     # 녹화 → MP4 재료
-  python3 tools/film/build.py /tmp/rec                        # index.html, assets/audio.m4a
-  hyperframes render tools/film -o /tmp/film_video.mp4        # 화면
-  python3 tools/film/build.py /tmp/rec --mux /tmp/film_video.mp4 apk/구르는가이드_시연영상.mp4
+  python3 tools/film/world.py                                 # 3D 지도 재료 (경로, 지도 텍스처)
+  python3 tools/film/build.py /tmp/rec                        # compositions/*.html, assets/audio.m4a
+  python3 tools/film/render.py apk/구르는가이드_시연영상.mp4    # 장면별 렌더 → 이어 붙이기 → 소리 합치기
 
-장면마다 설명 문구를 붙이지 않고, 차와 사람이 하는 말(자막), 창밖 라벨, 실내 빛, 화면 자체로 보여 준다.
-차량 화면은 Pleos Connect 에뮬레이터 실제 실행 녹화, 차 실내 두 장은 생성 이미지, 목소리는 macOS say(Yuna) 합성.
+한 컷에 한 동작만 보여 준다. 휴대폰에서 담기 → 차 일정 → 버튼 하나로 출발 → 요금소 → 달리는 동안 → 도착과 기록.
+차량·휴대폰 화면은 Pleos Connect 에뮬레이터와 휴대폰 웹 화면 실제 실행 녹화.
+지도 장면은 앱이 쓰는 경주 지도와 경로를 three.js 로 그린 것(src/film3d.js).
+차 실내·요금소·도로는 생성 이미지와 스톡 영상, 목소리는 AI 합성 음성(voice/), 음악은 Pixabay 음원.
 """
-import hashlib, html, json, math, os, shutil, subprocess, sys
+import html, json, math, os, re, shutil, subprocess, sys
 from PIL import Image, ImageFilter
+import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
-REC = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith('--') else '/tmp/rec'
+ARGS = [a for a in sys.argv[1:] if not a.startswith('--')]
+REC = ARGS[0] if ARGS else '/tmp/rec'
 A = os.path.join(HERE, 'assets')
 FF = shutil.which('ffmpeg') or '/opt/homebrew/bin/ffmpeg'
 FP = FF.replace('ffmpeg', 'ffprobe')
-PLATES = os.environ.get('PLATES', os.path.join(HERE, 'plates'))     # 차 실내 생성 이미지 두 장 (ChatGPT 이미지 생성)
-MUSIC = os.environ.get('MUSIC', os.path.join(A, 'music.mp3'))      # Pixabay 'Emotive Inspiring Background Acoustic Music' (저장소에는 넣지 않음)
+PLATES = os.path.join(HERE, 'plates')        # 차 실내(창은 초록), 요금소, 도로 생성 이미지
+VOICE = os.path.join(HERE, 'voice')          # AI 합성 음성 (차 a01~a10, 아빠 b01, 둘째 c01)
+MUSIC = os.environ.get('MUSIC', os.path.join(A, 'music.mp3'))      # Pixabay 'Chill Reel' (Kulakovka). 저장소에는 넣지 않음
+ROAD = 'stock_road_1.mp4'                    # Pexels 'Vehicle Traveling on Roadway'. 저장소에는 넣지 않음
 W, H = 1920, 1080
 
 
@@ -59,73 +65,92 @@ def pev(word):
     return next(t for t, e in PEV if word in e)
 
 
-c_add, c_start, c_appr, c_enter = ev('phone_add'), ev('navi:'), ev('approach'), ev('enter:')
-c_welcome = ev('speak:경주에 들어왔어요')
+c_add, c_start, c_enter = ev('phone_add'), ev('navi:'), ev('enter:')
 c_offer, c_reply = ev('offer:'), ev('reply:')
 c_sight = ev('sight:cheomseongdae')
 c_pause, c_resume = ev('pause:', c_sight), ev('resume', c_sight)
 c_ask = ev('ask:')
 c_arrive, c_record = ev('arrive'), ev('record')
-c_recv, c_close = pev('알림 뜸'), pev('영상 닫음')
-p_tap = pev('우리 여행에 담기 누름') - P_OFF        # 휴대폰 영상 시각
-p_ticket = pev('여행 티켓 보이게') - P_OFF
+c_recv = pev('알림 뜸')
+p_tab, p_paste, p_tap = pev('담기 탭'), pev('붙여 넣기 누름'), pev('우리 여행에 담기 누름')      # 차량 시각
+p_ticket = pev('여행 티켓 보이게') - P_OFF                                                    # 휴대폰 영상 시각
 
 # ------------------------------------------------------------------ 재료
-os.makedirs(os.path.join(A, 'photos'), exist_ok=True)
-os.makedirs(os.path.join(A, 'fonts'), exist_ok=True)
-os.makedirs(os.path.join(A, 'tts'), exist_ok=True)
+for d_ in ['photos', 'fonts']:
+    os.makedirs(os.path.join(A, d_), exist_ok=True)
 for w in ['regular', 'medium', 'semibold', 'bold', 'extrabold']:
     shutil.copy(os.path.join(ROOT, 'app/src/main/res/font/asta_%s.otf' % w), os.path.join(A, 'fonts'))
-for k in ['a', 'b']:
-    im = Image.open(os.path.join(PLATES, 'plate_%s.jpg' % k)).convert('RGB').resize((W, 1081), Image.LANCZOS)
-    im.filter(ImageFilter.UnsharpMask(radius=1.2, percent=40, threshold=2)).save(os.path.join(A, 'plate_%s.jpg' % k), quality=93)
 CREDITS = {c['file']: c for c in json.load(open(os.path.join(ROOT, 'companion/web/photos/credits.json'), encoding='utf-8'))}
-for f in ['cheomseongdae_1.jpg', 'gyerim_1.jpg']:
+PHOTOS = ['hwangridan_1.jpg', 'daereungwon_1.jpg', 'cheomseongdae_1.jpg', 'gyerim_1.jpg', 'donggung_night_1.jpg']
+for f in PHOTOS:
     shutil.copy(os.path.join(ROOT, 'companion/web/photos', f), os.path.join(A, 'photos', f))
-navi = Image.open(os.path.join(REC, 'navi_route.png')).convert('RGB').crop((853, 90, 2535, 1300)).resize((840, 604), Image.LANCZOS)
-navi.save(os.path.join(A, 'navi.jpg'), quality=92)
-rec_shot = os.path.join(A, 'phone_record.jpg')          # 가족 휴대폰 뒤 배경: 휴대폰 '여행 기록' 화면 한 장
+
+
+def credit(files):
+    seen = []
+    for f in files:
+        c = CREDITS.get(f) or {}
+        s = '%s (%s)' % (c.get('author', ''), c.get('license', ''))
+        if s not in seen:
+            seen.append(s)
+    return '사진 ' + ', '.join(seen)
+
+
+def key_cabin(name, out):
+    """실내 이미지의 초록 창을 투명하게 (가장자리 초록 번짐도 지움)"""
+    if os.path.exists(out):
+        return
+    im = Image.open(os.path.join(PLATES, name)).convert('RGB').resize((W, 1081), Image.LANCZOS)
+    a = np.asarray(im).astype(np.float32)
+    r, g, b = a[..., 0], a[..., 1], a[..., 2]
+    green = g - np.maximum(r, b)
+    alpha = 1.0 - np.clip((green - 30.0) / 80.0, 0, 1)
+    g = np.where(green > 4, g - np.clip(green, 0, None) * np.clip((green - 4) / 30.0, 0, 1), g)
+    img = Image.fromarray(np.dstack([r, g, b, alpha * 255]).clip(0, 255).astype(np.uint8), 'RGBA')
+    img.putalpha(img.getchannel('A').filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(0.8)))
+    img.save(out)
+
+
+key_cabin('cabin_key.png', os.path.join(A, 'cabin_day.png'))
+key_cabin('cabin_gold_key.png', os.path.join(A, 'cabin_gold.png'))
+for n in ['gate', 'road']:
+    if not os.path.exists(os.path.join(A, n + '.jpg')):
+        Image.open(os.path.join(PLATES, n + '.png')).convert('RGB').resize((W, 1081), Image.LANCZOS).save(os.path.join(A, n + '.jpg'), quality=92)
+if not os.path.exists(os.path.join(A, 'navi.jpg')):
+    Image.open(os.path.join(REC, 'navi_route.png')).convert('RGB').crop((853, 90, 2535, 1300)).resize((840, 604), Image.LANCZOS).save(os.path.join(A, 'navi.jpg'), quality=92)
+rec_shot = os.path.join(A, 'phone_record.jpg')          # 가족 휴대폰 화면: 휴대폰 '여행 기록' 한 장
 if not os.path.exists(rec_shot):
-    tt_ = pev('여행 티켓 보이게') - P_OFF + 0.5
-    run([FF, '-y', '-ss', '%.2f' % tt_, '-i', os.path.join(REC, 'phone.webm'), '-frames:v', '1', '-vf', 'scale=600:-2', rec_shot])
+    run([FF, '-y', '-ss', '%.2f' % (p_ticket + 0.5), '-i', os.path.join(REC, 'phone.webm'), '-frames:v', '1', '-vf', 'scale=600:-2', rec_shot])
+SEGS = [(4.0, 8.4), (15.0, 16.9), (24.6, 26.5), (42.3, 44.1), (57.0, 61.0)]      # 여행 영상에서 보여 줄 구간
+poster = os.path.join(A, 'reel_poster.jpg')
+if not os.path.exists(poster):
+    run([FF, '-y', '-ss', '%.2f' % SEGS[0][0], '-i', os.path.join(A, 'reel.mp4'), '-frames:v', '1', poster])
+if not os.path.exists(os.path.join(A, 'world_data.js')):
+    run([sys.executable, os.path.join(HERE, 'world.py')])
+WORLD = json.load(open(os.path.join(A, 'world.json'), encoding='utf-8'))
+AN = WORLD['anchors']
+js_src, js_out = os.path.join(HERE, 'src', 'film3d.js'), os.path.join(A, 'film3d.js')
+if not os.path.exists(js_out) or os.path.getmtime(js_out) < os.path.getmtime(js_src):
+    esb = os.environ.get('ESBUILD') or shutil.which('esbuild')
+    cmd = ([esb] if esb else ['npx', '--yes', 'esbuild']) + [js_src, '--bundle', '--format=iife', '--outfile=' + js_out,
+                                                              '--alias:three=' + os.path.join(HERE, 'vendor/three/build/three.module.js')]
+    run(cmd)
 
-
-def credit(f):
-    c = CREDITS.get(f) or {}
-    return '사진 %s · %s' % (c.get('author', ''), c.get('license', ''))
-
-
-# ------------------------------------------------------------------ 목소리 (차: Yuna, 사람: 같은 목소리를 높낮이만 바꿈)
-def tts(text, who='car'):
-    key = hashlib.md5((who + text).encode()).hexdigest()[:10]
-    wav = os.path.join(A, 'tts', key + '.wav')
-    if not os.path.exists(wav):
-        aiff = wav.replace('.wav', '.aiff')
-        rate = {'car': 186, 'dad': 170, 'kid': 182}[who]
-        subprocess.run(['say', '-v', 'Yuna', '-r', str(rate), '-o', aiff, text], check=True)
-        af = 'aresample=48000'
-        if who == 'dad':
-            af = 'asetrate=%d,aresample=48000,atempo=%f' % (int(22050 * 0.86), 1 / 0.86)
-        if who == 'kid':
-            af = 'asetrate=%d,aresample=48000,atempo=%f' % (int(22050 * 1.22), 1 / 1.22)
-        run([FF, '-y', '-i', aiff, '-af', af + ',silenceremove=start_periods=1:start_threshold=-50dB', '-ac', '2', wav])
-    return wav, dur(wav)
-
-
+# ------------------------------------------------------------------ 목소리와 효과음
 CUES = []          # (시각, 파일, 볼륨, 앞쪽 필터)
 
 
-def say(t, text, who='car', cut=None):
-    wav, d = tts(text, who)
-    if cut is not None and cut < d:
-        CUES.append((t, wav, 1.0, 'atrim=0:%.3f,afade=t=out:st=%.3f:d=0.12,' % (cut, max(0, cut - 0.12))))
-        d = cut
-    else:
-        CUES.append((t, wav, 1.0 if who == 'car' else 0.95, ''))
-    return d
+def say(t, key, vol=1.25):
+    f = os.path.join(VOICE, key + '.mp3')
+    CUES.append((t, f, vol, ''))
+    return dur(f)
 
 
-# ------------------------------------------------------------------ HTML 조각
+def fx(t, kind, vol):
+    CUES.append((t, 'sfx:' + kind, vol, ''))
+
+
+# ------------------------------------------------------------------ HTML 조각 (@A@ 는 재료 폴더 자리)
 def esc(s):
     return html.escape(s, quote=False)
 
@@ -136,7 +161,7 @@ VID = [0]
 def video(src, start, d, media, rate=1.0, cls='', style=''):
     VID[0] += 1
     extra = (' data-playback-rate="%g"' % rate) if abs(rate - 1) > 1e-3 else ''
-    return ('<video id="v%02d" class="clip %s" src="assets/%s" data-start="%.3f" data-duration="%.3f" data-media-start="%.3f"%s muted playsinline style="%s"></video>'
+    return ('<video id="v%02d" class="clip %s" src="@A@/%s" data-start="%.3f" data-duration="%.3f" data-media-start="%.3f"%s muted playsinline style="%s"></video>'
             % (VID[0], cls, src, start, d, media, extra, style))
 
 
@@ -144,361 +169,487 @@ def anim(*parts):
     return 'animation:' + ', '.join(parts) + ';'
 
 
-INK = [False]      # 밝은 스튜디오 장면이면 자막과 장 제목을 어두운 글씨로
-
-
-def sub(t, d, text, who=None, s0=0.0, ink=None):
-    """자막: t 는 장면 안 시각. who=None 이면 차가 하는 말(아래 얇은 빛 선), 아니면 사람 이름을 앞에 흐리게"""
-    ink = INK[0] if ink is None else ink
+def sub(t, d, text, who=None, s0=0.0, ink=False, inst=False):
+    """자막: 차가 하는 말은 아래 얇은 빛 선, 사람 말은 앞에 흐린 이름. inst 는 앞 장면에서 이어지는 말"""
     cls = ('car' if who is None else 'person') + (' ink' if ink else '')
     lead = '' if who is None else '<em>%s</em>' % esc(who)
-    return ('<div class="sub %s" style="%s"><span>%s%s</span></div>'
-            % (cls, anim('subIn .3s ease %.3fs both' % (t - s0), 'fadeOut .25s ease %.3fs forwards' % (t - s0 + d)), lead, esc(text)))
+    a = ['reveal .01s linear %.3fs both' % (t - s0)] if inst else ['subIn .3s ease %.3fs both' % (t - s0)]
+    a.append('fadeOut .25s ease %.3fs forwards' % (t - s0 + d))
+    return '<div class="sub %s" style="%s"><span>%s%s</span></div>' % (cls, anim(*a), lead, esc(text))
 
 
-def glow(t, d, kind='speak', s0=0.0):
-    if kind != 'listen':
-        return ''      # 차가 말할 때의 빛은 자막 아래 선으로 그림
+def listen(t, d, s0=0.0):
     return '<div class="listen" style="%s"></div>' % anim('listenIn .35s ease %.3fs both' % (t - s0), 'fadeOut .3s ease %.3fs forwards' % (t - s0 + d))
 
 
 def cam(name, d, stops, k=0.55):
-    """화면을 띄운 장면의 카메라. stops=[(시각, 초점x, 초점y, 배율)] — 초점이 화면 가운데 쪽으로 k 만큼 오도록 당기고 확대"""
+    """기기 카드 장면의 카메라. stops=[(시각, 초점x, 초점y, 배율)] — 초점이 화면 가운데 쪽으로 k 만큼 오도록 당기고 확대"""
     rules = []
-    for tt, fx, fy, s in stops:
-        tx = fx + k * (960 - fx) - s * fx
+    for tt, fx_, fy, s in stops:
+        tx = fx_ + k * (960 - fx_) - s * fx_
         ty = fy + k * (540 - fy) - s * fy
         rules.append('%.2f%%{transform:translate(%.1fpx,%.1fpx) scale(%.4f);animation-timing-function:cubic-bezier(.45,0,.25,1)}' % (min(100.0, tt / d * 100), tx, ty, s))
     return '<style>@keyframes %s{%s}</style>' % (name, ''.join(rules)), 'transform-origin:0 0;animation:%s %.3fs linear 0s both' % (name, d)
 
 
-def chapter(num, title, s0=0.0, at=0.35, hold=3.4, ink=None):
-    ink = INK[0] if ink is None else ink
+def chapter(title, at=0.35, hold=3.2, ink=False):
     return ('<div class="chap%s" style="%s">%s</div>'
             % (' ink' if ink else '', anim('chapIn .6s cubic-bezier(.2,.8,.2,1) %.2fs both' % at, 'fadeOut .5s ease %.2fs forwards' % (at + hold)), esc(title)))
 
 
-# 차량 앱 영역(에뮬레이터 853,90 ~ 2535,1300)을 카드 폭에 맞춰 잘라 보이기: car.mp4 는 2560→1920 축소본
+def tap(x, y, t):
+    return '<i class="tap" style="left:%.0fpx;top:%.0fpx;%s"></i>' % (x, y, anim('tap .75s ease-out %.2fs both' % t))
+
+
+def step(n, text, t_in, t_out, style, cls=''):
+    return ('<div class="stp %s" style="%s;%s"><b>%s</b>%s</div>'
+            % (cls, style, anim('subIn .4s ease %.2fs both' % t_in, 'fadeOut .3s ease %.2fs forwards' % t_out), n, esc(text)))
+
+
+# 차량 녹화 car.mp4 는 2560→1920 축소본. 앱 영역은 (640,68)~(1901,975): 왼쪽 절반 지도, 오른쪽 절반 안내 패널
 def car_card(cw, start, d, media, rate=1.0):
     s = cw / 1261.5
     st = 'width:%.1fpx;height:%.1fpx;left:%.1fpx;top:%.1fpx' % (1920 * s, 1080 * s, -639.75 * s, -67.5 * s)
     return video('car.mp4', start, d, media, rate, 'cv', st), cw, 907.5 * s
 
 
+def panel_card(pw, start, d, media, rate=1.0):
+    s = pw / 630.75
+    st = 'width:%.1fpx;height:%.1fpx;left:%.1fpx;top:%.1fpx' % (1920 * s, 1080 * s, -1270.5 * s, -67.5 * s)
+    return video('car.mp4', start, d, media, rate, 'cv', st), pw, 907.5 * s
+
+
 def phone_card(pw, start, d, media):
     return video('phone.mp4', start, d, media, 1.0, 'pv', 'width:%dpx;height:%.1fpx' % (pw, pw * 1688 / 780)), pw, pw * 1688 / 780
 
 
-# 실내 이미지 속 화면 자리 (plate 1672x941 → 1920x1081 배율 1.1483)
-PS = 1920 / 1672
-SCR = (728 * PS, 397 * PS, (1118 - 728) * PS, (581 - 397) * PS)
+def inset(start, d, media, t_in=0.3, t_out=None, pw=540, left=1300, top=108):
+    """3D 지도 장면 오른쪽에 띄우는 차량 화면(안내 패널)"""
+    v, pw, ph = panel_card(pw, start, d, media)
+    a = ['insetIn .7s cubic-bezier(.2,.8,.2,1) %.2fs both' % t_in]
+    if t_out is not None:
+        a.append('insetOut .5s ease %.2fs forwards' % t_out)
+    return '<div class="card car inset" style="left:%dpx;top:%dpx;width:%dpx;height:%.0fpx;%s">%s<i class="sheen"></i></div>' % (left, top, pw, ph, anim(*a), v)
 
 
-def screen_video(start, d, media, rate=1.0):
-    # 에뮬레이터 화면 위 상태 막대와 아래 독을 뺀 (0,90)~(2560,1297) 을 화면 자리에 맞춤
-    s = SCR[2] / 1920
-    st = 'width:%.1fpx;height:%.1fpx;left:0;top:%.1fpx' % (1920 * s, 1080 * s, -67.5 * s)
-    return video('car.mp4', start, d, media, rate, 'sv', st)
+# ---- 3D 지도 장면
+def gl(cfg):
+    """canvas 와 스크립트. cfg 는 src/film3d.js 의 SCENE3D"""
+    tail = ('<script src="@A@/world_data.js"></script>\n<script>window.WORLD.map.src="@A@/map.jpg";window.SCENE3D=%s;</script>\n<script src="@A@/film3d.js"></script>'
+            % json.dumps(cfg, ensure_ascii=False))
+    return '<canvas id="gl" width="1920" height="1080"></canvas><div class="shade"></div>', tail
 
 
+def l3(lid, inner, t_in, t_out=None, cls='', a_in='l3In'):
+    """3D 위치를 따라다니는 글자 (창밖 HUD 라벨처럼 글자와 가는 선)"""
+    a = ['%s .5s cubic-bezier(.2,.8,.2,1) %.2fs both' % (a_in, t_in)]
+    if t_out is not None:
+        a.append('fadeOut .3s ease %.2fs forwards' % t_out)
+    return '<div class="l3 %s" id="%s"><div class="in" style="%s">%s<span class="ln"></span></div></div>' % (cls, lid, anim(*a), inner)
+
+
+def project(c, P):
+    """film3d.js 와 같은 카메라 식으로 3D 점이 화면 어디에 오는지 (카메라가 멈춘 구간에서 DOM 을 맞출 때)"""
+    p, y = math.radians(c['pitch']), math.radians(c.get('yaw', 0))
+    T = (c['tx'], c.get('ty', 0), c['tz'])
+    C = (T[0] + c['dist'] * math.cos(p) * math.sin(y), T[1] + c['dist'] * math.sin(p), T[2] + c['dist'] * math.cos(p) * math.cos(y))
+    f = [T[i] - C[i] for i in range(3)]
+    n = math.sqrt(sum(v * v for v in f))
+    f = [v / n for v in f]
+    r = [f[1] * 0 - f[2] * 1, f[2] * 0 - f[0] * 0, f[0] * 1 - f[1] * 0]
+    n = math.sqrt(sum(v * v for v in r))
+    r = [v / n for v in r]
+    u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]]
+    d_ = [P[i] - C[i] for i in range(3)]
+    xc, yc, zc = sum(d_[i] * r[i] for i in range(3)), sum(d_[i] * u[i] for i in range(3)), sum(d_[i] * f[i] for i in range(3))
+    th = math.tan(math.radians(c.get('fov', 30)) / 2)
+    return ((xc / (zc * th * 16 / 9)) * 0.5 + 0.5) * 1920 + c.get('sx', 0), (-(yc / (zc * th)) * 0.5 + 0.5) * 1080 + c.get('sy', 0)
+
+
+def xz(k):
+    return [AN[k]['x'], AN[k]['z']]
+
+
+MOM, DAD, KID1 = '#C2416B', '#2F6FD0', '#2E9C78'
 SCENES = []
 
 
-def scene(sid, start, d, body, cls=''):
+def scene(sid, start, d, body, cls='', tail=''):
     d = round(d * 30) / 30.0                 # 장면 길이를 프레임(1/30초) 단위로 맞춰 이어 붙여도 소리와 어긋나지 않게
-    SCENES.append((sid, start, d, body, cls))
+    SCENES.append((sid, start, d, body, cls, tail))
     return round((start + d) * 30) / 30.0
 
 
-def plate(kind, body_inside, push, origin=(1060, 560)):
-    return ('<div class="cam" style="transform-origin:%dpx %dpx;%s"><img class="plate" src="assets/plate_%s.jpg">%s</div>'
-            % (origin[0], origin[1], push, kind, body_inside))
-
-
-def strips(cls, style=''):
-    # 대시보드 무드등 (왼쪽은 살짝 기울어짐)
-    return ('<div class="strip %s" style="left:%dpx;top:%dpx;width:%dpx;transform:rotate(-0.8deg);%s"></div>'
-            '<div class="strip %s" style="left:%dpx;top:%dpx;width:%dpx;%s"></div>'
-            % (cls, 247, 584, 584, style, cls, 1288, 579, 412, style))
-
+MARK = ('<svg class="mark" viewBox="0 0 120 120"><rect width="120" height="120" rx="34" fill="#0B4A8F"/>'
+        '<path d="M24 52 q9 -10 18 0 t18 0 t18 0 t18 0" stroke="#00AAD2" stroke-width="9" fill="none" stroke-linecap="round"/>'
+        '<path d="M24 76 q9 -10 18 0 t18 0 t18 0 t18 0" stroke="#BFE6F2" stroke-width="9" fill="none" stroke-linecap="round"/></svg>')
 
 # ================================================================== 장면
 t = 0.0
-# ---- S1 시작: 노을 진 경주 길, 차가 먼저 말을 건다 → 첨성대
-d1 = 7.6
-L1 = say(t + 0.9, '곧 오른쪽에 첨성대가 보여요.')
-L2 = say(t + 4.55, '신라 선덕여왕 때 세운 천문대예요.')
-inside = ('<div class="scr" style="left:%.1fpx;top:%.1fpx;width:%.1fpx;height:%.1fpx">%s<i class="gl"></i></div>'
-          % (SCR[0], SCR[1], SCR[2], SCR[3], screen_video(t, 4.4, c_sight - 0.2))) + strips('warmw')
-body = plate('a', inside, anim('push 7.6s linear 0s both'))
-body += ('<div class="ar" style="left:1290px;top:258px;%s"><span class="t"><i>→</i>오른쪽 · 첨성대<small>240m</small></span><span class="ln"></span><span class="ring"></span></div>'
-         % anim('arIn .6s cubic-bezier(.2,.8,.2,1) .75s both', 'fadeOut .3s ease 3.8s forwards'))
-body += glow(t + 0.9, L1 + 0.2) + sub(t + 0.9, L1 + 0.15, '곧 오른쪽에 첨성대가 보여요')
-body += ('<div class="photo" style="%s"><img src="assets/photos/cheomseongdae_1.jpg" style="%s"><div class="vign"></div><div class="credit">%s</div></div>'
-         % (anim('photoIn .55s cubic-bezier(.6,0,.2,1) 3.95s both'), anim('kb1 4.2s linear 3.95s both'), esc(credit('cheomseongdae_1.jpg'))))
-body += glow(t + 4.55, L2 + 0.2) + sub(t + 4.55, L2 + 0.2, '신라 선덕여왕 때 세운 천문대예요')
-CUES.append((3.85, 'sfx:whoosh', 0.5, ''))
-CUES.append((0.75, 'sfx:pop', 0.35, ''))
-t = scene('s1', t, d1, body)
+# ---- S1 제목
+body = ('<div class="studio"></div><div class="lock ink" style="%s">%s<div><h1>구르는 가이드</h1><p>내 차의 여행 모드</p></div></div>'
+        % (anim('lockIn .8s cubic-bezier(.2,.8,.2,1) .25s both', 'fadeOut .45s ease 2.9s forwards'), MARK))
+fx(0.3, 'chime', 0.2)
+t = scene('s1', t, 3.4, body)
 
-# ---- S2 제목: 손글씨처럼 그려지는 한 줄 → 앱 이름
-d2 = 5.2
-body = ('<div class="title-bg"></div>'
-        '<div class="ask" style="%s">어디로 떠날까요?</div>'
-        '<div class="lock" style="%s">%s<div><h1>구르는 가이드</h1><p>내 차의 여행 모드</p></div></div>'
-        % (anim('askIn .9s cubic-bezier(.2,.8,.2,1) .3s both', 'fadeOut .5s ease 2.5s forwards'),
-           anim('lockIn .8s cubic-bezier(.2,.8,.2,1) 3.0s both'),
-           '<svg class="mark" viewBox="0 0 120 120"><rect width="120" height="120" rx="34" fill="#0B4A8F"/>'
-           '<path d="M24 52 q9 -10 18 0 t18 0 t18 0 t18 0" stroke="#00AAD2" stroke-width="9" fill="none" stroke-linecap="round"/>'
-           '<path d="M24 76 q9 -10 18 0 t18 0 t18 0 t18 0" stroke="#BFE6F2" stroke-width="9" fill="none" stroke-linecap="round"/></svg>'))
-CUES.append((t + 3.0, 'sfx:chime', 0.28, ''))
-t = scene('s2', t, d2, body, 'dark')
+# ---- S2 떠나기 전: 휴대폰에 링크를 붙여 넣고 [우리 여행에 담기] → 차 일정에 바로 담김
+s2 = t
+c0 = p_tab - 0.9                       # 이 장면 0초의 차량 시각
+L = lambda c: c - c0
+d2 = 9.2
+PX, PY, PW = 380, 92, 404              # 휴대폰 카드
+pv, pw, ph = phone_card(PW, s2, d2, c0 - P_OFF)
+ox, oy = PX + 11, PY + 11
+CX, CY, CW = 920, 206, 900             # 차량 화면 카드
+cv, cw, ch = car_card(CW, s2, d2, c0)
+qx, qy = CX + 10, CY + 10
+t_paste, t_tap, t_add = L(p_paste), L(p_tap), L(c_add)
+row = (qx + 0.52 * cw - 6, qy + 0.58 * ch - 5, 0.45 * cw + 12, 0.08 * ch + 10)        # 차 일정에 새로 생긴 줄
+bx, by = ox + 0.5 * pw, oy + 0.565 * ph                                              # [우리 여행에 담기] 버튼
+kcss, kst = cam('cam_s2', d2, [(0, 960, 540, 1.0), (0.8, 960, 540, 1.0), (1.7, 700, 290, 1.30), (t_tap - 0.9, 700, 320, 1.30), (t_tap - 0.2, 660, 560, 1.30),
+                               (t_tap + 0.25, 660, 560, 1.30), (t_add + 0.6, 1040, 560, 1.0), (t_add + 1.6, 1040, 560, 1.0), (t_add + 2.8, 1590, 600, 1.36), (d2, 1590, 606, 1.40)])
+path = 'M %.0f %.0f C %.0f %.0f, %.0f %.0f, %.0f %.0f' % (bx + 150, by, bx + 330, by - 150, row[0] - 220, row[1] - 110, row[0] - 6, row[1] + row[3] / 2)
+body = '<div class="studio"></div>' + chapter('떠나기 전', ink=True) + kcss
+body += '<div class="stage" style="%s">' % kst
+body += ('<div class="card phone" style="left:%dpx;top:%dpx;width:%dpx;height:%.0fpx;%s"><div class="bezel">%s</div></div>'
+         % (PX, PY, pw, ph, anim('riseIn .8s cubic-bezier(.2,.8,.2,1) .1s both'), pv))
+body += ('<div class="card car" style="left:%dpx;top:%dpx;width:%dpx;height:%.0fpx;%s">%s<i class="sheen"></i></div>'
+         % (CX, CY, cw, ch, anim('slideIn .8s cubic-bezier(.2,.8,.2,1) %.2fs both' % (t_tap - 0.1)), cv))
+body += tap(ox + 0.82 * pw, oy + 0.153 * ph, t_paste) + tap(bx, by, t_tap)
+body += step('1', '링크 붙여 넣기', t_paste - 0.6, t_tap - 0.5, 'right:%dpx;top:%.0fpx' % (1920 - PX + 22, oy + 0.153 * ph - 20), 'r')
+body += step('2', '우리 여행에 담기', t_tap - 0.4, t_add + 1.8, 'right:%dpx;top:%.0fpx' % (1920 - PX + 22, by - 20), 'r')
+body += ('<svg class="link" viewBox="0 0 1920 1080"><path d="%s" pathLength="1" style="%s"/></svg>'
+         % (path, anim('draw .6s cubic-bezier(.5,0,.3,1) %.2fs forwards' % t_tap, 'fadeOut .5s ease %.2fs forwards' % (t_add + 2.0))))
+body += '<i class="dot" style="offset-path:path(\'%s\');%s"></i>' % (path, anim('ride .6s cubic-bezier(.5,0,.3,1) %.2fs both' % t_tap))
+body += '<i class="hl" style="left:%.0fpx;top:%.0fpx;width:%.0fpx;height:%.0fpx;%s"></i>' % (row[0], row[1], row[2], row[3], anim('hlIn .5s cubic-bezier(.2,.8,.2,1) %.2fs both' % (t_add + 0.1)))
+body += step('3', '차 일정에 바로 담김', t_add + 0.3, d2 + 1, 'left:%.0fpx;top:%.0fpx' % (row[0] + 6, row[1] + row[3] + 12), 'lt')
+body += '</div>'
+fx(s2 + t_paste, 'pop', 0.3)
+fx(s2 + t_tap, 'pop', 0.34)
+fx(s2 + t_tap + 0.05, 'whoosh_s', 0.3)
+fx(s2 + t_add + 0.05, 'ding', 0.3)
+t = scene('s2', s2, d2, body)
 
-# ---- S3 떠나기 전: 휴대폰에서 담으면 차 일정으로 → 버튼 하나로 출발
+# ---- S3 출발: 버튼 하나 → 순정 내비에 목적지와 경유지
 s3 = t
-c0 = 4.6                                 # 이 장면 0초의 차량 시각
-C = lambda c: s3 + (c - c0)
-d3 = 21.6 - c0
-pv, pw, ph = phone_card(300, s3, 9.4, c0 - P_OFF)
-cv, cw, ch = car_card(960, s3, d3, c0)
-INK[0] = True
-body = '<div class="studio"></div>'
-body += chapter('01', '떠나기 전')
-kcss, kst = cam('cam_s3', d3, [(0, 960, 540, 1.0), (8.6, 1000, 560, 1.04), (10.2, 960, 540, 1.0), (d3, 980, 560, 1.05)])
-body += kcss
-body += ('<div class="stage" style="%s"><div class="card phone" style="left:300px;top:168px;width:%dpx;height:%.0fpx;%s"><div class="bezel">%s</div></div>'
-         % (kst, pw, ph, anim('phoneIn .8s cubic-bezier(.2,.8,.2,1) .1s both', 'phoneOut .7s cubic-bezier(.6,0,.4,1) 8.9s forwards'), pv))
-body += ('<div class="card car" style="left:760px;top:150px;width:%dpx;height:%.0fpx;%s">%s<i class="sheen"></i></div></div>'
-         % (cw, ch, anim('carIn .9s cubic-bezier(.2,.8,.2,1) .25s both', 'carCenter .9s cubic-bezier(.6,0,.2,1) 9.0s forwards'), cv))
-fly = C(p_tap + P_OFF) - s3
-CUES.append((s3 + fly, 'sfx:pop', 0.22, ''))
-CUES.append((C(c_add), 'sfx:pop', 0.32, ''))
-Ls = say(C(c_start) + 0.3, '대릉원으로 안내를 시작할게요. 점심 식당을 경유지로 넣었어요.')
-body += glow(C(c_start) + 0.3, Ls + 0.2, s0=s3) + sub(C(c_start) + 0.3, Ls + 0.1, '대릉원으로 안내를 시작할게요. 점심 식당을 경유지로 넣었어요', s0=s3)
-nv0 = C(c_start) + 1.4 - s3
-body += ('<div class="navi" style="%s"><div class="card"><img src="assets/navi.jpg"></div><div class="lab">순정 내비게이션</div></div>'
-         % anim('naviIn .7s cubic-bezier(.2,.8,.2,1) %.2fs both' % nv0, 'naviOut .5s ease %.2fs forwards' % (nv0 + 4.6)))
-t = scene('s3', s3, d3, body, 'dark')
-INK[0] = False
+c0 = c_start - 2.1
+t_go = c_start - c0
+d3 = t_go + 2.35
+CX, CY, CW = 360, 96, 1180
+cv, cw, ch = car_card(CW, s3, d3, c0)
+qx, qy = CX + 10, CY + 10
+gx, gy = qx + 0.86 * cw, qy + 0.91 * ch
+kcss, kst = cam('cam_s3', d3, [(0, 960, 540, 1.0), (0.4, 960, 540, 1.0), (1.5, gx - 60, gy - 60, 1.4), (t_go + 0.5, gx - 60, gy - 60, 1.4), (d3, 1100, 620, 1.12)])
+body = '<div class="studio"></div>' + chapter('출발', ink=True) + kcss
+body += ('<div class="stage" style="%s"><div class="card car" style="left:%dpx;top:%dpx;width:%dpx;height:%.0fpx;%s">%s<i class="sheen"></i></div>'
+         % (kst, CX, CY, cw, ch, anim('riseIn .7s cubic-bezier(.2,.8,.2,1) 0s both'), cv))
+body += tap(gx, gy, t_go)
+body += step('', '버튼 하나로 출발', 0.9, t_go + 0.6, 'left:%.0fpx;top:%.0fpx' % (gx - 118, CY + ch + 20 + 44), 'dn')
+body += '</div>'
+A03 = '대릉원으로 안내를 시작할게요. 점심 식당을 경유지로 넣었어요'
+La = say(s3 + t_go + 0.3, 'a03')
+body += sub(t_go + 0.3, d3, A03, ink=True)            # 다음 장면으로 이어짐
+fx(s3 + t_go, 'pop', 0.34)
+t = scene('s3', s3, d3, body)
 
-# ---- S4 여행지에 들어서면: 조명이 낮아지고 전주, 요금소를 지나면 금빛과 가야금 → 화면도 경주 테마
+# ---- S3b 지도: 담아 둔 일정이 핀으로 꽂히고, 경로가 그려지고, 차가 출발
+s3b = t
+d3b = 6.0
+rest = (s3 + t_go + 0.3 + La) - s3b
+FARV = {'tx': 1300, 'tz': -1700, 'dist': 7400, 'pitch': 60, 'yaw': 0, 'fov': 30}
+PH = 480                               # 멀리서 본 핀 머리 높이(m)
+cfg = {'car': [[0, 120], [d3b, 1000]], 'gold': [[0, 0]], 'draw': [[0.5, 0], [2.9, WORLD['len']]],
+       'pins': [{'pos': xz('lunch'), 'color': MOM, 'at': 0.3, 'r': 17, 'h': 90}, {'pos': xz('daereungwon'), 'color': DAD, 'at': 0.6, 'r': 17, 'h': 90},
+                {'pos': xz('donggung'), 'color': KID1, 'at': 0.9, 'r': 17, 'h': 90}, {'pos': xz('hwangridan'), 'color': MOM, 'at': 1.3, 'r': 17, 'h': 90, 'saved': 1}],
+       'labels': [{'sel': '#p1', 'pos': [AN['lunch']['x'], PH, AN['lunch']['z']]}, {'sel': '#p2', 'pos': [AN['daereungwon']['x'], PH, AN['daereungwon']['z']]},
+                  {'sel': '#p3', 'pos': [AN['donggung']['x'], PH, AN['donggung']['z']]}, {'sel': '#p4', 'pos': [AN['hwangridan']['x'], PH, AN['hwangridan']['z']]},
+                  {'sel': '#p5', 'car': 1, 'y': 130}],
+       'cam': [dict(FARV, t=0, dist=7900), dict(FARV, t=d3b, dist=6900, tx=1400, tz=-1800)]}
+cv_, tail = gl(cfg)
+body = cv_
+body += l3('p1', '<span class="t"><small>11:40</small>점심</span>', 0.5, cls='sl', a_in='fadeIn')
+body += l3('p2', '<span class="t"><small>13:00</small>대릉원</span>', 0.8, cls='sr', a_in='fadeIn')
+body += l3('p3', '<span class="t"><small>17:40</small>동궁과 월지</span>', 1.1, cls='sr', a_in='fadeIn')
+body += l3('p4', '<span class="t"><i>방금 담음</i>황리단길 카페</span>', 1.5, cls='sr', a_in='fadeIn')
+body += l3('p5', '<span class="t">출발</span>', 3.0)
+body += ('<div class="navi dk" style="%s"><div class="card"><img src="@A@/navi.jpg"></div><div class="lab">순정 내비게이션 · 목적지와 경유지 전달</div></div>'
+         % anim('naviIn .7s cubic-bezier(.2,.8,.2,1) 2.4s both'))
+body += sub(0, rest + 0.1, A03, inst=True)
+fx(s3b, 'whoosh', 0.3)
+for i_, at_ in enumerate([0.3, 0.6, 0.9, 1.3]):
+    fx(s3b + at_ + 0.1, 'pop', 0.16)
+t = scene('s3b', s3b, d3b, body, tail=tail)
+
+# ---- S4 여행지에 들어서면: 조명이 낮아지고 전주 → 요금소를 지나는 순간 실내가 금빛으로, 가야금
 s4 = t
-fast_end = 8.8                           # 접근 구간 2배속
-cA = 21.6
-gate = s4 + (c_enter - cA) / 2.0
-if gate > s4 + fast_end:
-    fast_end = gate - s4 + 0.4
-cB = cA + fast_end * 2
-inside = ('<div class="scr" style="left:%.1fpx;top:%.1fpx;width:%.1fpx;height:%.1fpx">%s%s<i class="gl"></i></div>'
-          % (SCR[0], SCR[1], SCR[2], SCR[3], screen_video(s4, fast_end, cA, 2.0), screen_video(s4 + fast_end, 3.4, cB)))
-g = gate - s4
-inside += strips('cool', anim('dimDown 3.4s ease 0.6s both', 'goldOn 1.4s ease %.2fs forwards' % g))
-inside += '<div class="dimmer" style="%s"></div>' % anim('dimIn 3.6s ease .5s both', 'dimOut 1.6s ease %.2fs forwards' % g)
-inside += '<div class="warm" style="%s"></div>' % anim('warmIn 1.8s ease %.2fs both' % (g + 0.1))
-body = plate('a', inside, anim('push2 13.6s linear 0s both'))
-body += '<div class="sweep" style="%s"></div>' % anim('sweep 1.5s cubic-bezier(.4,0,.2,1) %.2fs both' % (g - 0.1))
-body += '<div class="flash" style="%s"></div>' % anim('flash 1.1s ease-out %.2fs both' % g)
-body += chapter('02', '여행지에 들어서면', at=0.4, hold=3.2)
-d4a = fast_end + 3.4
-CUES.append((s4 + (c_appr - cA) / 2.0, os.path.join(ROOT, 'companion/web/audio/prelude.ogg'), 0.8, ''))
-CUES.append((gate, os.path.join(ROOT, 'companion/web/audio/gyeongju_entry.ogg'), 0.95, ''))
-CUES.append((gate - 0.1, 'sfx:shimmer', 0.30, ''))
-t = scene('s4', s4, d4a, body)
-S4, GATE = s4, gate
+cA = 24.0                              # 접근 구간은 2배속으로
+HIT = (c_enter - cA) / 2.0
+d4 = HIT + 3.5
+SX, SY, SW, SH = 836, 456, 447, 241    # 실내 이미지 속 화면 자리
+ss = SW / 1920.0
+ss = SW / 1280.0                      # 화면에는 앱 영역(지도와 안내 패널)만
+sv = 'width:%.1fpx;height:%.1fpx;left:%.1fpx;top:%.1fpx' % (1920 * ss, 1080 * ss, -640 * ss, -68 * ss)
+G0 = 3.9                               # 요금소가 보이기 시작
+win = video(ROAD, s4, G0 + 0.7, 6.0, 1.0, 'wv', 'top:-394px;height:1080px')
+win += '<img src="@A@/gate.jpg" class="bl" style="top:-312px;height:1081px;opacity:0;%s">' % anim('fadeIn .6s ease %.2fs both' % G0)
+win += ('<img src="@A@/gate.jpg" style="top:-312px;height:1081px;transform-origin:50%% 64%%;opacity:0;%s">'
+        % anim('fadeIn .6s ease %.2fs both' % G0, 'gatePush %.2fs cubic-bezier(.6,0,.9,.55) %.2fs both' % (HIT - G0, G0)))
+win += ('<img src="@A@/road.jpg" style="top:-276px;height:1081px;transform-origin:46.5%% 57%%;opacity:0;%s">'
+        % anim('reveal .01s linear %.2fs forwards' % HIT, 'roadPush %.2fs linear %.2fs both' % (d4 - HIT + 0.1, HIT)))
+inside = '<div class="win">%s</div>' % win
+inside += '<img class="cab" src="@A@/cabin_day.png" style="%s">' % anim('cabDim %.2fs ease-in-out 1.6s both' % (HIT - 1.9))
+inside += '<img class="cab" src="@A@/cabin_gold.png" style="opacity:0;%s">' % anim('fadeIn .22s ease %.2fs forwards' % HIT)
+inside += ('<div class="scr" style="left:%dpx;top:%dpx;width:%dpx;height:%dpx">%s%s<i class="gl"></i></div>'
+           % (SX, SY, SW, SH, video('car.mp4', s4, HIT, cA, 2.0, 'sv', sv), video('car.mp4', s4 + HIT, d4 - HIT, c_enter, 1.0, 'sv', sv)))
+body = ('<div class="cam" style="transform-origin:960px 420px;%s">%s</div>'
+        % (anim('push4 %.2fs linear 0s both' % HIT, 'bump %.2fs cubic-bezier(.2,.7,.2,1) %.2fs forwards' % (d4 - HIT, HIT)), inside))
+body += ('<div class="ar" style="left:600px;top:84px;%s"><span class="t">경주 요금소<small>280m</small></span><span class="ln" style="height:56px"></span><span class="ring"></span></div>'
+         % anim('arIn .6s cubic-bezier(.2,.8,.2,1) %.2fs both' % (G0 + 0.5), 'fadeOut .3s ease %.2fs forwards' % (HIT - 1.6)))
+body += '<div class="boom" style="%s"></div>' % anim('boom 1.4s ease-out %.2fs both' % HIT)
+body += '<div class="warm" style="%s"></div>' % anim('warmIn2 1.6s ease %.2fs both' % (HIT + 0.1))
+body += ('<div class="enter" style="%s"><small>여기부터 신라예요</small><b>경주</b><i></i></div>'
+         % anim('enterIn 1s cubic-bezier(.2,.8,.2,1) %.2fs both' % (HIT + 0.45)))
+body += chapter('여행지에 들어서면', at=0.4, hold=3.0)
+CUES.append((s4, 'sfx:road', 0.5, 'atrim=0:%.2f,afade=t=out:st=%.2f:d=0.5,' % (d4, d4 - 0.5)))
+CUES.append((s4 + HIT - 2.95, os.path.join(ROOT, 'companion/web/audio/prelude.ogg'), 0.85, ''))
+fx(s4 + HIT - 1.5, 'riser', 0.32)
+fx(s4 + HIT - 0.02, 'boom', 0.9)
+fx(s4 + HIT - 0.1, 'shimmer', 0.3)
+CUES.append((s4 + HIT, os.path.join(ROOT, 'companion/web/audio/gyeongju_entry.ogg'), 0.95, ''))
+t = scene('s4', s4, d4, body)
+S4, GATE = s4, s4 + HIT
 
+# ---- S4b 같은 순간을 지도에서: 요금소부터 금빛이 번지고 길가 등이 켜짐
 s4b = t
-cC = cB + 3.4
-C2 = lambda c: s4b + (c - cC)
-Lw = say(C2(c_welcome) + 0.1, '경주에 들어왔어요. 지금부터 지나는 곳을 소개해 드릴게요.')
-d4b = C2(c_welcome) + 0.1 + Lw + 0.7 - s4b
-cv, cw, ch = car_card(920, s4b, d4b, cC)
-pv, pw, ph = phone_card(296, s4b, d4b, cC - P_OFF)
-INK[0] = True
-body = '<div class="studio sand"></div>'
-kcss, kst = cam('cam_s4b', d4b, [(0, 960, 540, 1.0), (1.6, 960, 540, 1.0), (d4b - 1.0, 900, 420, 1.12), (d4b, 900, 420, 1.12)])
-body += kcss
-body += ('<div class="stage" style="' + kst + '"><div class="card car goldrim" style="left:250px;top:140px;width:%dpx;height:%.0fpx;%s">%s<i class="sheen"></i></div>'
-         '<div class="card phone" style="left:1340px;top:150px;width:%dpx;height:%.0fpx;%s"><div class="bezel">%s</div></div></div>'
-         % (cw, ch, anim('carL .8s cubic-bezier(.2,.8,.2,1) 0s both'), cv, pw, ph, anim('phoneR .8s cubic-bezier(.2,.8,.2,1) .1s both'), pv))
-body += glow(C2(c_welcome) + 0.1, Lw + 0.2, s0=s4b) + sub(C2(c_welcome) + 0.1, Lw + 0.1, '경주에 들어왔어요. 지금부터 지나는 곳을 소개해 드릴게요', s0=s4b)
-CUES.append((s4b, 'sfx:whoosh', 0.35, ''))
-t = scene('s4b', s4b, d4b, body, 'dark')
+d4b = 7.2
+A04 = '경주에 들어왔어요. 지금부터 지나는 곳을 소개해 드릴게요'
+cfg = {'car': [[0, 1350], [0.6, 1500], [d4b, 2900]], 'gold': [[0.55, 0], [1.1, 1]], 'ring': {'t': 0.6, 'speed': 1300, 'max': 7000},
+       'labels': [{'sel': '#g1', 'pos': [0, 170, 0]}],
+       'cam': [{'t': 0, 'tx': 0, 'tz': 0, 'dist': 1400, 'pitch': 38, 'yaw': -18, 'fov': 30}, {'t': 2.2, 'tx': 150, 'tz': -150, 'dist': 2500, 'pitch': 46, 'yaw': -10, 'fov': 30},
+               dict(FARV, t=d4b)]}
+cv_, tail = gl(cfg)
+body = cv_ + l3('g1', '<span class="t">경주 요금소</span>', 0.15, 3.0)
+Lw = say(s4b + 1.4, 'a04')
+body += sub(1.4, Lw + 0.15, A04)
+body += chapter('여행 모드 · 경주', at=0.6, hold=4.2)
+t = scene('s4b', s4b, d4b, body, tail=tail)
 
-# ---- S5 달리는 동안: 담아 둔 곳 제안 → 지나는 명소, 차로 변경 멈춤 → "저 숲은 뭐야?"
+# ---- S5 달리는 동안 ① 담아 둔 곳이 가까워지면 먼저 물어봄 → "응" 한마디로 경유지
 s5 = t
-ca0 = c_offer - 0.9
-C3 = lambda c: s5 + (c - ca0)
-Lo = say(C3(c_offer), '엄마가 담은 황리단길 카페가 3분 거리예요. 들를까요?')
-yes_t = C3(c_reply) - 0.9
-Ly = say(yes_t, '응', 'dad')
-Lr = say(C3(c_reply) + 0.3, '황리단길 카페를 경유지로 넣었어요.')
-d5a = C3(c_reply) + 0.3 + Lr + 0.6 - s5
-cv, cw, ch = car_card(960, s5, d5a, ca0)
-pv, pw, ph = phone_card(296, s5, d5a, ca0 - P_OFF)
-body = '<div class="studio"></div>'
-body += chapter('03', '달리는 동안')
-o1 = C3(c_offer) - s5
-r1 = C3(c_reply) - s5
-kcss, kst = cam('cam_s5a', d5a, [(0, 960, 540, 1.0), (o1 + 0.2, 960, 540, 1.0), (o1 + 1.6, 980, 470, 1.16), (r1 + 0.2, 980, 470, 1.16), (r1 + 1.6, 520, 560, 1.08), (d5a, 520, 560, 1.08)])
-body += kcss
-body += ('<div class="stage" style="' + kst + '"><div class="card car" style="left:230px;top:132px;width:%dpx;height:%.0fpx;%s">%s<i class="sheen"></i></div>'
-         '<div class="card phone" style="left:1370px;top:150px;width:%dpx;height:%.0fpx;%s"><div class="bezel">%s</div></div></div>'
-         % (cw, ch, anim('carL .8s cubic-bezier(.2,.8,.2,1) 0s both'), cv, pw, ph, anim('phoneR .8s cubic-bezier(.2,.8,.2,1) .1s both'), pv))
-body += glow(C3(c_offer), Lo + 0.2, s0=s5) + sub(C3(c_offer), Lo + 0.1, '엄마가 담은 황리단길 카페가 3분 거리예요. 들를까요?', s0=s5)
-body += glow(C3(c_offer) + Lo + 0.3, yes_t + Ly - (C3(c_offer) + Lo + 0.3) + 0.2, 'listen', s0=s5)
-body += sub(yes_t, Ly + 0.9, '응', '아빠', s0=s5)
-body += glow(C3(c_reply) + 0.3, Lr + 0.2, s0=s5) + sub(C3(c_reply) + 0.3, Lr + 0.1, '황리단길 카페를 경유지로 넣었어요', s0=s5)
-CUES.append((s5, 'sfx:whoosh', 0.35, ''))
-t = scene('s5a', s5, d5a, body, 'dark')
+c0 = c_offer - 0.8
+L = lambda c: c - c0
+cafe = xz('hwangridan')
+Lo = say(s5 + L(c_offer) + 0.1, 'a05')
+t_yes = L(c_reply) - 2.05              # 대답이 끝난 뒤에 화면이 반응하게
+Ly = say(s5 + t_yes, 'b01', 1.6)
+Lr = say(s5 + L(c_reply) + 0.35, 'a06')
+d5a = L(c_reply) + 0.35 + Lr + 0.6
+cfg = {'car': [[0, 5250], [d5a, 6520]], 'gold': [[0, 1]], 'goldAll': 1,
+       'pins': [{'pos': cafe, 'color': MOM, 'at': 0.2, 'saved': 1, 'pulse': L(c_offer)}],
+       'labels': [{'sel': '#c1', 'pos': [cafe[0], 190, cafe[1]]}, {'sel': '#c2', 'pos': [cafe[0], 190, cafe[1]]}],
+       'cam': [{'t': 0, 'follow': 0.6, 'tx': cafe[0] * 0.4, 'tz': cafe[1] * 0.4, 'dist': 2000, 'pitch': 44, 'yaw': -10, 'fov': 30, 'sx': -290},
+               {'t': d5a, 'follow': 0.6, 'tx': cafe[0] * 0.4, 'tz': cafe[1] * 0.4, 'dist': 1250, 'pitch': 40, 'yaw': 6, 'fov': 30, 'sx': -290, 'sy': 70}]}
+cv_, tail = gl(cfg)
+body = cv_ + chapter('달리는 동안')
+body += l3('c1', '<span class="t"><i>엄마가 담음</i>황리단길 카페</span>', 0.5, L(c_reply) + 0.15, cls='g')
+body += l3('c2', '<span class="t"><i>경유지</i>황리단길 카페</span>', L(c_reply) + 0.4, cls='g')
+body += inset(s5, d5a, c0)
+body += sub(L(c_offer) + 0.1, Lo + 0.1, '엄마가 담은 황리단길 카페가 3분 거리예요. 들를까요?')
+body += listen(t_yes - 0.25, Ly + 0.3)
+body += sub(t_yes, Ly + 0.25, '응, 들르자', '아빠')
+body += sub(L(c_reply) + 0.35, Lr + 0.1, '황리단길 카페를 경유지로 넣었어요')
+fx(s5, 'whoosh', 0.3)
+fx(s5 + L(c_reply) + 0.1, 'ding', 0.26)
+t = scene('s5a', s5, d5a, body, tail=tail)
 
+# ---- S5 ② 지나는 명소는 보이는 쪽부터 알려 줌 (실내 시점)
+s5b0 = t
+c0 = c_sight - 0.6
+L = lambda c: c - c0
+tower = xz('cheomseongdae')
+L1 = say(s5b0 + L(c_sight) + 0.1, 'a01')
+d5b0 = max(L(c_pause), L(c_sight) + 0.1 + L1 + 0.15)
+win = video(ROAD, s5b0, d5b0, 21.0, 1.0, 'wv dusk', 'top:-394px;height:1080px')
+inside = '<div class="win">%s<i class="tint"></i></div><img class="cab" src="@A@/cabin_gold.png">' % win
+inside += ('<div class="scr" style="left:%dpx;top:%dpx;width:%dpx;height:%dpx">%s<i class="gl"></i></div>'
+           % (SX, SY, SW, SH, video('car.mp4', s5b0, d5b0, c0, 1.0, 'sv', sv)))
+body = '<div class="cam" style="transform-origin:1100px 420px;%s">%s</div>' % (anim('push %.2fs linear 0s both' % d5b0), inside)
+body += ('<div class="ar" style="left:1290px;top:150px;%s"><span class="t"><i>→</i>오른쪽 · 첨성대<small>240m</small></span><span class="ln" style="height:80px"></span><span class="ring"></span></div>'
+         % anim('arIn .6s cubic-bezier(.2,.8,.2,1) %.2fs both' % (L(c_sight) + 0.15)))
+body += sub(L(c_sight) + 0.1, L1 + 0.1, '곧 오른쪽에 첨성대가 보여요')
+CUES.append((s5b0, 'sfx:road', 0.5, 'atrim=0:%.2f,afade=t=out:st=%.2f:d=0.4,' % (d5b0, d5b0 - 0.4)))
+fx(s5b0 + L(c_sight) + 0.05, 'pop', 0.26)
+t = scene('s5b0', s5b0, d5b0, body)
+
+# ---- S5 ② 이어서 (지도): 방향지시등을 켜면 잠시 멈췄다가 이어서 들려 줌
 s5b = t
-cb0 = c_sight - 0.6
-C4 = lambda c: s5b + (c - cb0)
-Ls1 = say(C4(c_sight), '곧 오른쪽에 첨성대가 보여요. 신라 선덕여왕 때', cut=c_pause - c_sight)
-Ls2 = say(C4(c_resume) + 0.1, '신라 선덕여왕 때 세운 천문대예요.')
-d5b = C4(c_resume) + 0.1 + Ls2 + 0.6 - s5b
-cv, cw, ch = car_card(960, s5b, d5b, cb0)
-pv, pw, ph = phone_card(296, s5b, d5b, cb0 - P_OFF)
-body = '<div class="studio"></div>'
-q0, q1, q2 = C4(c_sight) - s5b, C4(c_pause) - s5b, C4(c_resume) - s5b
-kcss, kst = cam('cam_s5b', d5b, [(0, 960, 540, 1.0), (q0 + 0.2, 960, 540, 1.0), (q0 + 1.5, 980, 440, 1.12), (q1 - 0.1, 980, 440, 1.12), (q1 + 0.7, 990, 510, 1.22), (q2 + 0.2, 990, 510, 1.22), (q2 + 1.4, 960, 540, 1.04), (d5b, 960, 540, 1.04)])
-body += kcss
-body += ('<div class="stage" style="' + kst + '"><div class="card car" style="left:230px;top:132px;width:%dpx;height:%.0fpx;%s">%s<i class="sheen"></i></div>'
-         '<div class="card phone" style="left:1370px;top:150px;width:%dpx;height:%.0fpx;%s"><div class="bezel">%s</div></div></div>'
-         % (cw, ch, anim('carL2 .5s ease 0s both'), cv, pw, ph, anim('phoneR2 .5s ease 0s both'), pv))
-CUES.append((s5b, 'sfx:whoosh_s', 0.3, ''))
-sp = C4(c_pause) - s5b
-blink = C4(c_resume) - C4(c_pause)
-body += ('<div class="signal" style="%s"><svg viewBox="0 0 64 64"><path d="M14 22h22V10l22 22-22 22V42H14z" fill="#2FD27A"/></svg></div>'
-         % anim('blink .6s linear %.2fs %d forwards' % (sp, max(1, int(blink / 0.6))), 'fadeOut .2s ease %.2fs forwards' % (sp + blink)))
-body += glow(C4(c_sight), Ls1, s0=s5b) + sub(C4(c_sight), Ls1, '곧 오른쪽에 첨성대가 보여요', s0=s5b)
-body += glow(C4(c_resume) + 0.1, Ls2 + 0.2, s0=s5b) + sub(C4(c_resume) + 0.1, Ls2 + 0.1, '신라 선덕여왕 때 세운 천문대예요', s0=s5b)
-CUES.append((C4(c_sight) + 0.2, 'sfx:pop', 0.3, ''))
-CUES.append((C4(c_pause), 'sfx:tick', 0.5, 'atrim=0:%.2f,' % blink))
-t = scene('s5b', s5b, d5b, body, 'dark')
+c0 = c0 + d5b0
+L = lambda c: c - c0
+tp, tr = max(0.0, L(c_pause)), L(c_resume)
+L2 = say(s5b + tr + 0.2, 'a02')
+d5b = tr + 0.2 + L2 + 0.6
+cfg = {'car': [[0, 7930], [d5b, 8320]], 'gold': [[0, 1]], 'goldAll': 1, 'signal': [[tp, tr, 'L']], 'lat': [[tp + 0.3, 0], [tr - 0.2, -34]],
+       'beam': {'target': tower, 'k': [[0, 1], [d5b, 1]]},
+       'labels': [{'sel': '#t1', 'pos': [tower[0], 105, tower[1]]}, {'sel': '#t2', 'car': 1, 'y': 80}],
+       'cam': [{'t': 0, 'follow': 0.6, 'tx': tower[0] * 0.4, 'tz': tower[1] * 0.4, 'dist': 1300, 'pitch': 42, 'yaw': -14, 'fov': 30, 'sx': -290},
+               {'t': d5b, 'follow': 0.6, 'tx': tower[0] * 0.4, 'tz': tower[1] * 0.4, 'dist': 950, 'pitch': 37, 'yaw': -24, 'fov': 30, 'sx': -290}]}
+cv_, tail = gl(cfg)
+body = cv_
+body += l3('t1', '<img src="@A@/photos/cheomseongdae_1.jpg"><span class="t"><i>오른쪽</i>첨성대</span>', 0.15, cls='g')
+body += l3('t2', '<span class="t sm">방향지시등 · 안내 잠시 멈춤</span>', tp + 0.1, tr, cls='g')
+body += inset(s5b, d5b, c0, t_in=0.0)
+body += sub(tr + 0.2, L2 + 0.1, '신라 선덕여왕 때 세운 천문대예요')
+body += '<div class="credit3">%s</div>' % esc(credit(['cheomseongdae_1.jpg']))
+CUES.append((s5b + tp, 'sfx:tick', 0.4, 'atrim=0:%.2f,' % (tr - tp)))
+t = scene('s5b', s5b, d5b, body, tail=tail)
 
+# ---- S5 ③ 궁금하면 말로 물어봄: "저 숲은 뭐야?"
 s5c = t
-cc0 = c_ask - 1.7
-C5 = lambda c: s5c + (c - cc0)
-kid_t = C5(c_ask) - 1.1
-Lk = say(kid_t, '저 숲은 뭐야?', 'kid')
-parts = ['첨성대 뒤쪽 숲은 계림이에요.', '경주 김씨의 시조 김알지가 이 숲의 금궤에서 태어났다는 이야기가 전해져요.', '느티나무와 왕버들이 우거져 있어요.']
-tt = C5(c_ask) + 0.25
-body = ''
-seq = []
-for ptxt in parts:
-    dd = say(tt, ptxt)
-    seq.append((tt, dd, ptxt))
-    tt += dd + 0.25
-d5c = tt + 0.6 - s5c
-cv, cw, ch = car_card(960, s5c, d5c, cc0)
-ph0 = seq[0][0] - s5c - 0.2
-body += '<div class="studio"></div>'
-body += ('<div class="photo" style="%s"><img src="assets/photos/gyerim_1.jpg" style="%s"><div class="vign"></div><div class="credit">%s</div></div>'
-         % (anim('photoIn .6s cubic-bezier(.6,0,.2,1) %.2fs both' % ph0), anim('kb2 %.1fs linear %.2fs both' % (d5c - ph0, ph0)), esc(credit('gyerim_1.jpg'))))
-# 앞 장면과 같은 자리에서 이어 받고, 사진이 들어오면 왼쪽 아래로 줄어듦
-body += '<style>@keyframes pipShrink{from{opacity:1;transform:rotateY(6deg) rotateX(1.5deg)}to{opacity:1;transform:translate(-160px,520px) scale(.36)}}</style>'
-body += ('<div class="stage" style="z-index:30"><div class="card car" style="left:230px;top:132px;width:%dpx;height:%.0fpx;transform-origin:0 0;%s">%s<i class="sheen"></i></div></div>'
-         % (cw, ch, anim('carL2 .25s ease 0s both', 'pipShrink .8s cubic-bezier(.6,0,.2,1) %.2fs forwards' % ph0), cv))
-body += sub(kid_t, Lk + 0.9, '저 숲은 뭐야?', '둘째', s0=s5c, ink=True)
-for (a, dd, ptxt) in seq:
-    body += sub(a, dd + 0.1, ptxt.rstrip('.'), s0=s5c, ink=False)
-body += glow(seq[0][0], seq[-1][0] + seq[-1][1] - seq[0][0] + 0.2, s0=s5c)
-CUES.append((s5c + ph0, 'sfx:whoosh', 0.4, ''))
-t = scene('s5c', s5c, d5c, body, 'dark')
+c0 = c_ask - 2.3
+L = lambda c: c - c0
+gyr = xz('gyerim')
+Lk = say(s5c + 0.25, 'c01', 1.3)
+ta = L(c_ask) + 0.45
+L7 = say(s5c + ta, 'a07')
+L8 = say(s5c + ta + L7 + 0.3, 'a08')
+d5c = ta + L7 + 0.3 + L8 + 0.6
+cfg = {'car': [[0, 8320], [d5c, 8760]], 'gold': [[0, 1]], 'goldAll': 1,
+       'beam': {'target': gyr, 'k': [[L(c_ask) + 0.2, 0], [L(c_ask) + 0.8, 1], [d5c, 1]]},
+       'labels': [{'sel': '#k1', 'pos': [gyr[0], 75, gyr[1]]}, {'sel': '#k2', 'pos': [tower[0], 105, tower[1]]}],
+       'cam': [{'t': 0, 'tx': 3028, 'tz': -2990, 'dist': 1200, 'pitch': 40, 'yaw': -24, 'fov': 30, 'sx': -290},
+               {'t': d5c, 'tx': 3026, 'tz': -2930, 'dist': 860, 'pitch': 32, 'yaw': 6, 'fov': 30, 'sx': -290}]}
+cv_, tail = gl(cfg)
+body = cv_
+body += l3('k1', '<span class="t">계림</span>', L(c_ask) + 0.5, cls='g')
+body += l3('k2', '<span class="t sm">첨성대</span>', 0.0, cls='g', a_in='fadeIn')
+body += inset(s5c, d5c, c0, t_in=0.0)
+body += listen(0.1, Lk + 0.35)
+body += sub(0.25, Lk + 0.35, '저 숲은 뭐야?', '둘째')
+body += sub(ta, L7 + 0.1, '첨성대 뒤쪽 숲은 계림이에요')
+body += sub(ta + L7 + 0.3, L8 + 0.1, '경주 김씨의 시조 김알지가 이 숲의 금궤에서 태어났다는 이야기가 전해져요')
+t = scene('s5c', s5c, d5c, body, tail=tail)
 
-# ---- S6 도착하면: 해 진 뒤 동궁과 월지, P단 → 1분 여행 영상이 화면 가득 → 가족 휴대폰으로
+# ---- S6 도착하면: 하루 동안 지나온 길, 들른 곳, 들은 설명, 사진이 모여 1분 여행 영상으로
 s6 = t
-INK[0] = False
-cd0 = c_arrive - 0.6
-C6 = lambda c: s6 + (c - cd0)
-La = say(C6(c_arrive) + 0.1, '동궁과 월지에 도착했어요. 오늘 경주 여행은 여기까지예요.')
-Lr2 = say(C6(c_record), '오늘 여행을 1분 영상으로 만들었어요. 가족 휴대폰 4대에도 보냈어요.')
-pop = C6(c_record) + Lr2 + 0.3 - s6
-segs = [(4.0, 13.4), (15.0, 17.4), (24.6, 26.8), (39.4, 41.2), (42.3, 44.4), (51.9, 53.5), (57.0, 61.8)]
-reel_len = sum(b - a for a, b in segs)
-d6a = pop + reel_len
-PUSH6 = 1.035
-ox, oy = 1060, 560
-sx = ox + (SCR[0] - ox) * PUSH6
-sy = oy + (SCR[1] - oy) * PUSH6
-inside = ('<div class="scr" style="left:%.1fpx;top:%.1fpx;width:%.1fpx;height:%.1fpx">%s<i class="gl"></i></div>'
-          % (SCR[0], SCR[1], SCR[2], SCR[3], screen_video(s6, pop + 0.5, cd0))) + strips('goldw')
-body = plate('b', inside, anim('push6 %.2fs ease-out 0s both' % (pop - 0.2)))
-body += chapter('04', '도착하면', at=0.4, hold=3.0)
-body += glow(C6(c_arrive) + 0.1, La + 0.2, s0=s6) + sub(C6(c_arrive) + 0.1, La + 0.1, '동궁과 월지에 도착했어요. 오늘 경주 여행은 여기까지예요', s0=s6)
-body += glow(C6(c_record), Lr2 + 0.2, s0=s6) + sub(C6(c_record), Lr2 + 0.1, '오늘 여행을 1분 영상으로 만들었어요', s0=s6)
-vids = ''
-acc = s6 + pop
-for a, b in segs:
-    vids += video('reel.mp4', acc, b - a, a, 1.0, 'rv', '')
-    acc += b - a
-body += ('<div class="reelwrap" style="%s"><div class="reelpop" style="--x:%.1fpx;--y:%.1fpx;--w:%.1fpx;--h:%.1fpx;%s">%s</div></div>'
-         % (anim('reveal .01s linear %.2fs forwards' % pop), sx, sy, SCR[2] * PUSH6, SCR[3] * PUSH6, anim('reelpop .95s cubic-bezier(.65,0,.2,1) %.2fs both' % pop), vids))
-CUES.append((s6, 'sfx:whoosh', 0.35, ''))
-CUES.append((s6 + pop, 'sfx:whoosh', 0.45, ''))
-REEL_AT = s6 + pop
-REEL_LEN = reel_len
-t = scene('s6', s6, d6a, body)
+c0 = c_arrive - 0.5
+L = lambda c: c - c0
+dg = xz('donggung')
+La9 = say(s6 + L(c_arrive) + 0.1, 'a09')
+t10 = max(L(c_record), L(c_arrive) + 0.1 + La9 + 0.4)
+L10 = say(s6 + t10, 'a10')
+T_OUT, T_TH, T_FLY, T_CARD, T_FULL = 5.2, 7.7, 10.0, 10.35, 12.4
+d6a = T_FULL + 0.7
+FAR6 = {'tx': 1750, 'tz': -2100, 'dist': 7600, 'pitch': 62, 'yaw': 0, 'fov': 30}
+stops = [('hwangridan', 'hwangridan_1.jpg', MOM, (870, 262)), ('daereungwon', 'daereungwon_1.jpg', DAD, (1030, 104)), ('cheomseongdae', 'cheomseongdae_1.jpg', '#D9A866', (1260, 128)),
+         ('gyerim', 'gyerim_1.jpg', '#D9A866', (1440, 470)), ('donggung', 'donggung_night_1.jpg', KID1, (1640, 250))]
+cfg = {'car': [[0, 9560], [3.2, WORLD['len'] - 20]], 'gold': [[0, 1]], 'goldAll': 1, 'night': 1, 'dim': [[0, 0.82], [T_CARD, 0.82], [T_CARD + 0.6, 0.42]], 'head': [[0, 0]],
+       'pins': [{'pos': xz(k), 'color': col, 'at': T_TH + i * 0.4, 'r': 15, 'h': 70} for i, (k, f, col, xy) in enumerate(stops)],
+       'labels': [{'sel': '#a1', 'pos': [dg[0] + 40, 120, dg[1] - 30]}],
+       'cam': [{'t': 0, 'tx': dg[0], 'tz': dg[1] + 40, 'dist': 1150, 'pitch': 34, 'yaw': 20, 'fov': 30, 'sx': -290},
+               {'t': T_OUT - 0.2, 'tx': dg[0], 'tz': dg[1] + 40, 'dist': 900, 'pitch': 30, 'yaw': 8, 'fov': 30, 'sx': -290}, dict(FAR6, t=T_OUT + 2.2), dict(FAR6, t=99)]}
+cv_, tail = gl(cfg)
+body = cv_ + chapter('도착하면')
+body += l3('a1', '<span class="t"><i>도착</i>동궁과 월지</span>', 0.7, T_OUT - 0.3, cls='g')
+body += inset(s6, T_OUT + 1.6, c0, t_in=0.3, t_out=T_OUT + 0.9)
+lines = ''
+for i, (k, f, col, (tx_, ty_)) in enumerate(stops):
+    at = T_TH + i * 0.4
+    px_, py_ = project(FAR6, (AN[k]['x'], 250, AN[k]['z']))
+    lines += '<line x1="%.0f" y1="%.0f" x2="%.0f" y2="%.0f" style="%s"/>' % (px_, py_, tx_, ty_, anim('fadeIn .3s ease %.2fs both' % (at + 0.1), 'fadeOut .25s ease %.2fs forwards' % T_FLY))
+    body += ('<div class="th" style="left:%dpx;top:%dpx;--dx:%dpx;--dy:%dpx;%s"><img src="@A@/photos/%s"></div>'
+             % (tx_ - 60, ty_ - 40, 960 - tx_, 540 - ty_, anim('thIn .45s cubic-bezier(.2,.8,.2,1) %.2fs both' % at, 'thFly .55s cubic-bezier(.6,0,.4,1) %.2fs forwards' % (T_FLY + i * 0.05)), f))
+    fx(s6 + at, 'pop', 0.2)
+body += '<svg class="lead" viewBox="0 0 1920 1080">%s</svg>' % lines
+body += ('<div class="reelcard" style="%s"><img src="@A@/reel_poster.jpg"></div>'
+         % anim('rcIn .55s cubic-bezier(.2,.8,.2,1) %.2fs both' % T_CARD, 'rcFull .7s cubic-bezier(.6,0,.2,1) %.2fs forwards' % T_FULL))
+body += ('<div class="ing" style="top:744px;%s">지나온 길 · 들른 곳 · 들은 설명 · 사진을 모아 <b>1분 여행 영상</b>으로</div>'
+         % anim('subIn .4s ease %.2fs both' % (T_CARD + 0.4), 'fadeOut .25s ease %.2fs forwards' % (T_FULL - 0.1)))
+body += sub(L(c_arrive) + 0.1, La9 + 0.1, '동궁과 월지에 도착했어요. 오늘 경주 여행은 여기까지예요')
+body += sub(t10, L10 + 0.1, '오늘 여행을 1분 영상으로 만들었어요. 가족 휴대폰 네 대에도 보냈어요')
+body += '<div class="credit3">%s</div>' % esc(credit(PHOTOS))
+fx(s6, 'whoosh', 0.3)
+fx(s6 + T_FLY, 'whoosh_s', 0.3)
+fx(s6 + T_CARD + 0.1, 'chime', 0.22)
+fx(s6 + T_FULL, 'whoosh', 0.4)
+t = scene('s6a', s6, d6a, body, tail=tail)
 
+# ---- S6b 여행 영상 (앱이 만든 영상을 그대로)
 s6b = t
+vids = ''
+acc = s6b
+for a_, b_ in SEGS:
+    vids += video('reel.mp4', acc, b_ - a_, a_, 1.0, 'rv', '')
+    acc += b_ - a_
+d6b = acc - s6b
+body = '<div class="reelfull">%s</div>' % vids + chapter('여행 영상', at=0.5, hold=3.0)
+REEL_AT, REEL_LEN = s6b, d6b
+t = scene('s6b', s6b, d6b, body)
+
+# ---- S6c 가족 휴대폰으로: 영상 알림 → 여행 기록, 여행 티켓
+s6c = t
+d6c = 7.6
 p1 = c_recv - P_OFF - 0.6
-pv1, pw, ph = phone_card(400, s6b, 4.2, p1)
-pv2, _, _ = phone_card(400, s6b + 4.2, 3.4, p_ticket - 0.4)
-d6b = 7.6
-INK[0] = True
-body = '<div class="studio"></div>'
+pv1, pw, ph = phone_card(400, s6c, 4.2, p1)
+pv2, _, _ = phone_card(400, s6c + 4.2, d6c - 4.2, p_ticket - 0.4)
+body = '<div class="studio"></div>' + chapter('가족 휴대폰으로', ink=True)
 fam = [('아', '#0B4A8F', 470, 205, -9, 1.1), ('첫', '#1F7A5C', 1240, 190, 8, 1.35), ('둘', '#6B4FC8', 1430, 250, 15, 1.6)]
-for (ini, col, fx, fy, rot, at) in fam:
-    body += ('<div class="fam" style="left:%dpx;top:%dpx;--r:%ddeg;--c:%s;%s"><img src="assets/phone_record.jpg"><b>%s</b></div>'
-             % (fx, fy, rot, col, anim('famIn .7s cubic-bezier(.2,.8,.2,1) %.2fs both' % at), ini))
-    CUES.append((s6b + at + 0.1, 'sfx:ding', 0.16, ''))
-kcss, kst = cam('cam_s6b', d6b, [(0, 960, 540, 1.0), (d6b, 960, 520, 1.05)])
+for (ini, col, fx_, fy, rot, at) in fam:
+    body += ('<div class="fam" style="left:%dpx;top:%dpx;--r:%ddeg;--c:%s;%s"><img src="@A@/phone_record.jpg"><b>%s</b></div>'
+             % (fx_, fy, rot, col, anim('famIn .7s cubic-bezier(.2,.8,.2,1) %.2fs both' % at), ini))
+    fx(s6c + at + 0.1, 'ding', 0.16)
+kcss, kst = cam('cam_s6c', d6c, [(0, 960, 540, 1.0), (d6c, 960, 520, 1.05)])
 body += kcss
 body += ('<div class="stage" style="' + kst + '"><div class="card phone center" style="left:760px;top:120px;width:%dpx;height:%.0fpx;%s"><div class="bezel">%s%s</div></div></div>'
          % (pw, ph, anim('phoneUp .8s cubic-bezier(.2,.8,.2,1) 0s both'), pv1, pv2))
-CUES.append((s6b + 0.6, 'sfx:ding', 0.35, ''))
-t = scene('s6b', s6b, d6b, body, 'dark')
+fx(s6c + 0.6, 'ding', 0.32)
+t = scene('s6c', s6c, d6c, body)
 
 # ---- 끝
 s7 = t
-d7 = 6.0
-INK[0] = False
-body = ('<div class="title-bg"></div><div class="end" style="%s">'
-        '<svg class="mark" viewBox="0 0 120 120"><rect width="120" height="120" rx="34" fill="#0B4A8F"/>'
-        '<path d="M24 52 q9 -10 18 0 t18 0 t18 0 t18 0" stroke="#00AAD2" stroke-width="9" fill="none" stroke-linecap="round"/>'
-        '<path d="M24 76 q9 -10 18 0 t18 0 t18 0 t18 0" stroke="#BFE6F2" stroke-width="9" fill="none" stroke-linecap="round"/></svg>'
-        '<h1>구르는 가이드</h1><p>내 차의 여행 모드</p>'
+body = ('<div class="title-bg"></div><div class="end" style="%s">%s<h1>구르는 가이드</h1><p>내 차의 여행 모드</p>'
         '<div class="sdk">NaviHelper · FusedLocation · Vehicle · TextToSpeech · SpeechToText</div></div>'
-        '<div class="foot" style="%s">Pleos Connect 에뮬레이터 실제 실행 화면 · 차 실내 두 장면은 생성 이미지 · 목소리는 편집 때 합성</div>'
-        % (anim('endIn 1s cubic-bezier(.2,.8,.2,1) .3s both'), anim('fadeIn .8s ease 1.4s both')))
-t = scene('s7', s7, d7, body, 'dark')
+        '<div class="foot" style="%s">차량·휴대폰 화면은 Pleos Connect 에뮬레이터와 휴대폰 웹 실제 실행 화면 · 지도 장면은 앱 지도로 만든 3D 그래픽<br>'
+        '차 실내와 도로는 생성 이미지와 스톡 영상 · 목소리는 AI 합성 음성</div>'
+        % (anim('endIn 1s cubic-bezier(.2,.8,.2,1) .3s both'), MARK, anim('fadeIn .8s ease 1.4s both')))
+t = scene('s7', s7, 5.6, body, 'dark')
 TOTAL = t
 
 # ------------------------------------------------------------------ HTML: 장면마다 한 파일 (영상 시각은 장면 시작 기준)
-import re
 CSS = open(os.path.join(HERE, 'film.css'), encoding='utf-8').read()
 COMP = os.path.join(HERE, 'compositions')
 os.makedirs(COMP, exist_ok=True)
 PAGE = ('<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=1920, height=1080">\n'
         '<title>%s</title>\n<style>\n%s\n</style>\n</head>\n<body>\n'
-        '<div id="root" data-composition-id="%s" data-start="0" data-duration="%.3f" data-width="1920" data-height="1080" data-no-timeline>\n%s\n</div>\n</body>\n</html>\n')
+        '<div id="root" data-composition-id="%s" data-start="0" data-duration="%.3f" data-width="1920" data-height="1080" data-no-timeline>\n%s\n</div>\n%s\n</body>\n</html>\n')
+SNAP = '--snap' in sys.argv            # 장면별 스냅샷 확인용 폴더(_snap/<장면>/index.html)도 만듦
 plan = []
-for sid, start, d, body, cls in SCENES:
+for sid, start, d, body, cls, tail in SCENES:
     rel = re.sub(r'data-start="([0-9.]+)"', lambda m: 'data-start="%.3f"' % max(0.0, float(m.group(1)) - start), body)
-    rel = rel.replace('src="assets/', 'src="../assets/')
     inner = '<div class="scene %s">\n%s\n</div>' % (cls, rel)
-    css = CSS.replace('url(assets/', 'url(../assets/')
-    page_s = PAGE % ('구르는 가이드 ' + sid, css, sid, d, inner)
+    page_s = PAGE % ('구르는 가이드 ' + sid, CSS.replace('url(assets/', 'url(@A@/'), sid, d, inner, tail)
+    out_s = page_s.replace('@A@', '../assets')
     fp = os.path.join(COMP, sid + '.html')
-    if not os.path.exists(fp) or open(fp, encoding='utf-8').read() != page_s:     # 바뀐 장면만 다시 렌더되게
-        open(fp, 'w', encoding='utf-8').write(page_s)
+    if not os.path.exists(fp) or open(fp, encoding='utf-8').read() != out_s:     # 바뀐 장면만 다시 렌더되게
+        open(fp, 'w', encoding='utf-8').write(out_s)
+    if SNAP:
+        sd = os.path.join(HERE, '_snap', sid)
+        os.makedirs(sd, exist_ok=True)
+        if not os.path.exists(os.path.join(sd, 'assets')):
+            os.symlink(A, os.path.join(sd, 'assets'))
+        open(os.path.join(sd, 'index.html'), 'w', encoding='utf-8').write(page_s.replace('@A@', 'assets'))
     plan.append({'id': sid, 'start': round(start, 3), 'duration': round(d, 3)})
+for f in os.listdir(COMP):
+    if f.endswith('.html') and f[:-5] not in [p['id'] for p in plan]:
+        os.remove(os.path.join(COMP, f))
 mounts = '\n'.join('<div id="m_%s" class="clip" data-composition-id="%s" data-composition-src="compositions/%s.html" data-start="%.3f" data-duration="%.3f"></div>'
                    % (p['id'], p['id'], p['id'], p['start'], p['duration']) for p in plan)
-open(os.path.join(HERE, 'index.html'), 'w', encoding='utf-8').write(PAGE % ('구르는 가이드 시연 필름', '#root{position:relative;width:1920px;height:1080px;background:#05080B}', 'main', TOTAL, mounts))
+open(os.path.join(HERE, 'index.html'), 'w', encoding='utf-8').write(PAGE % ('구르는 가이드 시연 필름', '#root{position:relative;width:1920px;height:1080px;background:#05080B}', 'main', TOTAL, mounts, ''))
 json.dump({'total': TOTAL, 'scenes': plan}, open(os.path.join(HERE, 'scenes.json'), 'w'), ensure_ascii=False, indent=1)
 print('길이 %.1f초, 장면 %d, 영상 조각 %d' % (TOTAL, len(SCENES), VID[0]))
+for p in plan:
+    print('  %-4s %6.2f ~ %6.2f' % (p['id'], p['start'], p['start'] + p['duration']))
+if '--no-audio' in sys.argv:
+    raise SystemExit(0)
 
 
 # ------------------------------------------------------------------ 소리
@@ -506,20 +657,18 @@ def sfx(kind):
     p = os.path.join(A, 'sfx_%s.wav' % kind)
     if os.path.exists(p):
         return p
-    if kind == 'whoosh':
-        f = "anoisesrc=d=0.9:c=pink:a=0.6,highpass=f=300,lowpass=f=5000,afade=t=in:d=0.35,afade=t=out:st=0.4:d=0.5"
-    elif kind == 'whoosh_s':
-        f = "anoisesrc=d=0.6:c=pink:a=0.5,highpass=f=900,lowpass=f=7000,afade=t=in:d=0.2,afade=t=out:st=0.25:d=0.35"
-    elif kind == 'pop':
-        f = "sine=f=880:d=0.14,afade=t=out:st=0.02:d=0.12,volume=0.8"
-    elif kind == 'tick':
-        f = "aevalsrc='0.6*sin(2*PI*1600*t)*exp(-60*mod(t\\,0.5))':d=3"
-    elif kind == 'chime':
-        f = "aevalsrc='0.35*sin(2*PI*1046.5*t)*exp(-3*t)+0.25*sin(2*PI*1568*t)*exp(-4*t)':d=2"
-    elif kind == 'ding':
-        f = "aevalsrc='0.35*sin(2*PI*1318.5*t)*exp(-5*t)+0.2*sin(2*PI*1975.5*t)*exp(-6*t)':d=1.2"
-    elif kind == 'shimmer':
-        f = "aevalsrc='0.12*sin(2*PI*(2093+800*t)*t)*exp(-1.6*t)+0.1*sin(2*PI*2637*t)*exp(-2*t)':d=2.2"
+    f = {
+        'whoosh': "anoisesrc=d=0.9:c=pink:a=0.6,highpass=f=300,lowpass=f=5000,afade=t=in:d=0.35,afade=t=out:st=0.4:d=0.5",
+        'whoosh_s': "anoisesrc=d=0.6:c=pink:a=0.5,highpass=f=900,lowpass=f=7000,afade=t=in:d=0.2,afade=t=out:st=0.25:d=0.35",
+        'pop': "sine=f=880:d=0.14,afade=t=out:st=0.02:d=0.12,volume=0.8",
+        'tick': "aevalsrc='0.6*sin(2*PI*1600*t)*exp(-60*mod(t\\,0.5))':d=3",
+        'chime': "aevalsrc='0.35*sin(2*PI*1046.5*t)*exp(-3*t)+0.25*sin(2*PI*1568*t)*exp(-4*t)':d=2",
+        'ding': "aevalsrc='0.35*sin(2*PI*1318.5*t)*exp(-5*t)+0.2*sin(2*PI*1975.5*t)*exp(-6*t)':d=1.2",
+        'shimmer': "aevalsrc='0.12*sin(2*PI*(2093+800*t)*t)*exp(-1.6*t)+0.1*sin(2*PI*2637*t)*exp(-2*t)':d=2.2",
+        'road': "anoisesrc=d=14:c=brown:a=0.9,lowpass=f=170,highpass=f=28,afade=t=in:d=0.8,afade=t=out:st=12.8:d=1.2",        # 차 안에서 들리는 낮은 주행음
+        'riser': "anoisesrc=d=1.6:c=pink:a=0.6,highpass=f=500,lowpass=f=7000,afade=t=in:d=1.5:curve=exp,afade=t=out:st=1.5:d=0.1",
+        'boom': "aevalsrc='0.95*sin(2*PI*(44+34*exp(-8*t))*t)*exp(-2.2*t)':d=2.4",                                         # 요금소를 지나는 순간의 낮은 울림
+    }[kind]
     run([FF, '-y', '-f', 'lavfi', '-i', f, '-ar', '48000', '-ac', '2', p])
     return p
 
@@ -533,44 +682,39 @@ def envelope(points):
 
 
 def mix(out):
-    speech, fx = [], []
+    speech, fxs, tunes = [], [], []           # 말, 효과음, 앱이 트는 연주(전주, 가야금)
     for (tt, src, vol, pre) in CUES:
         if src.startswith('sfx:'):
             src = sfx(src[4:])
-        (speech if '/tts/' in src else fx).append((tt, src, vol, pre))
+        (speech if os.sep + 'voice' + os.sep in src else tunes if src.endswith('.ogg') else fxs).append((tt, src, vol, pre))
     music = MUSIC if MUSIC and os.path.exists(MUSIC) else os.path.join(ROOT, 'companion/web/audio/reel_music.ogg')
-    # 배경 음악은 처음부터 끝까지 한 곡. 요금소 가야금 때는 낮추고, 여행 영상에서는 키움. 말소리가 나오면 자동으로 눌림(사이드체인)
+    # 배경 음악은 처음부터 끝까지 한 곡. 요금소 앞에서 거의 꺼졌다가 가야금이 끝나면 돌아오고, 여행 영상에서는 키움. 말소리가 나오면 자동으로 눌림
     reel_end = REEL_AT + REEL_LEN
-    pts = [(0, 0.0), (1.2, 0.22), (7.4, 0.22), (8.4, 0.34), (S4 - 0.6, 0.34), (S4 + 0.6, 0.14), (GATE - 0.2, 0.14), (GATE + 0.4, 0.06),
-           (GATE + 9.6, 0.06), (GATE + 11.2, 0.32), (REEL_AT - 1.0, 0.32), (REEL_AT + 0.6, 0.55), (reel_end, 0.55), (reel_end + 1.2, 0.34),
-           (TOTAL - 3.2, 0.34), (TOTAL, 0.0)]
+    pts = [(0, 0.0), (0.8, 0.62), (14.4, 0.62), (15.6, 0.44), (S4 + 0.8, 0.44), (S4 + 3.2, 0.14), (GATE - 1.2, 0.10), (GATE - 0.2, 0.0), (GATE + 7.8, 0.0), (GATE + 10.4, 0.36),
+           (REEL_AT - 1.0, 0.36), (REEL_AT + 0.5, 0.52), (reel_end - 0.3, 0.52), (reel_end + 1.0, 0.42), (TOTAL - 3.4, 0.42), (TOTAL, 0.0)]
     args = [FF, '-y']
     filt = []
     k = 0
-    for group, tag in ((speech, 's'), (fx, 'f')):
+    for group, tag in ((speech, 's'), (fxs, 'f'), (tunes, 'u')):
         for (tt, src, vol, pre) in group:
             args += ['-i', src]
             ms = int(max(0, tt) * 1000)
             filt.append('[%d:a]%saresample=48000,aformat=channel_layouts=stereo,volume=%.3f,adelay=%d|%d[%s%d]' % (k, pre, vol, ms, ms, tag, k))
             k += 1
-    ns, nf = len(speech), len(fx)
+    ns, nf, nu = len(speech), len(fxs), len(tunes)
     filt.append(''.join('[s%d]' % i for i in range(ns)) + 'amix=inputs=%d:normalize=0:duration=longest,asplit=2[sp][key0]' % ns)
     filt.append('[key0]apad=whole_dur=%.3f[key]' % TOTAL)          # 마지막 말 뒤에도 음악이 끝까지 이어지게
     filt.append(''.join('[f%d]' % i for i in range(ns, ns + nf)) + 'amix=inputs=%d:normalize=0:duration=longest[fx]' % nf)
-    args += ['-stream_loop', '-1', '-i', music]
-    filt.append("[%d:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:%.3f,volume='%s':eval=frame[bedv]" % (k, TOTAL, envelope(pts)))
+    args += ['-i', music]
+    filt.append("[%d:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:%.3f,volume='%s':eval=frame[bed0]" % (k, TOTAL, envelope(pts)))
+    # 배경 음악과 앱 연주를 한데 묶어, 말이 나오면 함께 눌리게
+    filt.append('[bed0]' + ''.join('[u%d]' % i for i in range(ns + nf, ns + nf + nu)) + 'amix=inputs=%d:normalize=0:duration=first[bedv]' % (nu + 1))
     filt.append('[bedv][key]sidechaincompress=threshold=0.015:ratio=7:attack=20:release=380:makeup=1[bed]')
-    filt.append('[sp][fx][bed]amix=inputs=3:normalize=0:duration=longest,atrim=0:%.3f,alimiter=limit=0.89[m]' % TOTAL)
+    filt.append('[sp][fx][bed]amix=inputs=3:normalize=0:duration=longest,atrim=0:%.3f,volume=1.15,alimiter=limit=0.7:attack=2:release=80:level=0[m]' % TOTAL)
     run(args + ['-filter_complex', ';'.join(filt), '-map', '[m]', '-c:a', 'aac', '-b:a', '192k', out])
 
 
 audio = os.path.join(A, 'audio.m4a')
 mix(audio)
 print('소리', audio)
-if '--mux' in sys.argv:
-    i = sys.argv.index('--mux')
-    src, dst = sys.argv[i + 1], sys.argv[i + 2]
-    os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
-    run([FF, '-y', '-i', src, '-i', audio, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'copy', '-shortest', '-movflags', '+faststart', dst])
-    print('완성', dst)
 

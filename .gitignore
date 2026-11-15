@@ -30,5 +30,6 @@ tools/demo/out/
 tools/film/assets/
 tools/film/renders/
 tools/film/snapshots/
+tools/film/_snap/
 __pycache__/
 *.pyc

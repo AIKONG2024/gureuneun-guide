@@ -4,9 +4,9 @@
 
 [![시연 영상](docs/demo/poster.jpg)](https://aikong2024.github.io/gureuneun-guide/)
 
-**시연 영상(2분 16초)**: [apk/구르는가이드_시연영상.mp4](apk/구르는가이드_시연영상.mp4) · [웹에서 보기](https://aikong2024.github.io/gureuneun-guide/)
+**시연 영상(1분 58초)**: [apk/구르는가이드_시연영상.mp4](apk/구르는가이드_시연영상.mp4) · [웹에서 보기](https://aikong2024.github.io/gureuneun-guide/)
 
-서울에서 경주로 가는 가족 여행 하루를 따라갑니다. 차량 화면과 휴대폰 화면은 에뮬레이터와 휴대폰 웹을 실제로 돌려 녹화했습니다. 차 실내 두 장면은 생성 이미지 위에 그 녹화를 합성했고, 목소리는 편집할 때 합성했습니다.
+서울에서 경주로 가는 가족 여행 하루를 따라갑니다. 차량 화면과 휴대폰 화면은 에뮬레이터와 휴대폰 웹을 실제로 돌려 녹화했습니다. 지도 장면은 앱이 쓰는 경주 지도와 경로를 3D로 그린 것이고, 차 실내와 도로 장면은 생성 이미지와 스톡 영상입니다. 목소리는 AI 합성 음성입니다.
 
 ## 화면
 
@@ -98,15 +98,18 @@ SDK별 연결 코드는 [app/src/main/java/app/gureuneun/guide/sdk](app/src/main
 
 ## 시연 영상 만들기
 
-에뮬레이터와 휴대폰 웹을 같은 시각에 녹화하고([tools/demo](tools/demo)), HyperFrames로 장면을 짜서 렌더합니다([tools/film](tools/film)).
+에뮬레이터와 휴대폰 웹을 같은 시각에 녹화하고([tools/demo](tools/demo)), HyperFrames로 장면을 짜서 렌더합니다([tools/film](tools/film)). 차가 달리는 지도 장면은 앱 지도 타일과 경로를 three.js로 그립니다.
 
 ```bash
 EMU=1 EVERY=250 node tools/demo/record_all.mjs         # 차량 화면(초당 4장)과 휴대폰 화면 녹화 → /tmp/rec
 node tools/demo/reel_rec.mjs                           # 여행 영상 녹화
 python3 tools/film/media.py /tmp/rec tools/film/assets # 녹화를 30fps 재료로
-python3 tools/film/build.py /tmp/rec                   # 장면 HTML, 목소리, 소리 믹스
+python3 tools/film/world.py                            # 3D 지도 재료 (경로, 지도 텍스처)
+python3 tools/film/build.py /tmp/rec                   # 장면 HTML, 소리 믹스
 python3 tools/film/render.py apk/구르는가이드_시연영상.mp4
 ```
+
+음악(assets/music.mp3)과 주행 영상(assets/stock_road_1.mp4)은 저장소에 없으니 아래 출처에서 받아 넣어야 합니다.
 
 ## 출처
 
@@ -115,7 +118,9 @@ python3 tools/film/render.py apk/구르는가이드_시연영상.mp4
 - 글꼴: Asta Sans (42dot, SIL Open Font License 1.1)
 - 아이콘: Lucide (ISC License)
 - 앱 소리: 전주와 연주곡, 여행 영상 배경음은 직접 합성했습니다 ([tools/assets/make_audio.py](tools/assets/make_audio.py))
-- 시연 영상 배경 음악: Music_for_Creators, "Emotive Inspiring Background Acoustic Music" (Pixabay Content License). 음원 파일은 저장소에 넣지 않았습니다
-- 시연 영상 차 실내 이미지: ChatGPT 이미지 생성 ([tools/film/plates](tools/film/plates))
-- 오픈소스: Jetpack Compose, OkHttp, ZXing (Apache-2.0), HyperFrames (Apache-2.0, 시연 영상 편집)
+- 시연 영상 배경 음악: Kulakovka, "Chill Reel" (Pixabay Content License)
+- 시연 영상 주행 장면: Ambient_Nature_ Atmosphere, "Vehicle Traveling on Roadway" (Pexels License)
+- 시연 영상 목소리: OpenAI 음성 합성(openai.fm)으로 만든 AI 음성 ([tools/film/voice](tools/film/voice))
+- 시연 영상 차 실내, 요금소, 도로 이미지: ChatGPT 이미지 생성 ([tools/film/plates](tools/film/plates))
+- 오픈소스: Jetpack Compose, OkHttp, ZXing (Apache-2.0), HyperFrames (Apache-2.0, 시연 영상 편집), three.js (MIT, 시연 영상 3D 지도)
 

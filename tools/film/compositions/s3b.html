@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=1920, height=1080">
-<title>구르는 가이드 s6</title>
+<title>구르는 가이드 s3b</title>
 <style>
 /* 구르는 가이드 시연 필름
    레퍼런스(Pleos Connect 공식 필름, Google Gemini in Android Auto, 현대모비스, Tesla)처럼 글씨는 작게, 상자와 번짐 없이.
@@ -106,7 +106,7 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#000}
 .end h1{margin:22px 0 0;font-weight:600;font-size:50px;letter-spacing:-.015em;color:#F5F6F7}
 .end p{margin:8px 0 0;font-weight:500;font-size:22px;color:#8A939C}
 .end .sdk{margin-top:40px;font-weight:500;font-size:17px;letter-spacing:.01em;color:#5E666F}
-.foot{position:absolute;left:0;right:0;bottom:52px;text-align:center;font-weight:500;font-size:15px;color:#4C535A;opacity:0}
+.foot{position:absolute;left:0;right:0;bottom:52px;text-align:center;font-weight:500;font-size:17px;line-height:1.6;color:#6A727B;opacity:0}
 
 /* 움직임 */
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
@@ -147,14 +147,98 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#000}
 @keyframes lockIn{from{opacity:0;transform:translate(-50%,-46%)}to{opacity:1;transform:translate(-50%,-50%)}}
 @keyframes endIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
+/* ===== v5: 한 컷에 한 동작, 3D 지도, 실내 시점 ===== */
+.lock.ink h1{color:#1B2128}
+.lock.ink p{color:#6A727B}
+canvas#gl{position:absolute;left:0;top:0;width:1920px;height:1080px}
+.shade{position:absolute;left:0;right:0;bottom:0;height:250px;background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.55));z-index:19}
+/* 누르는 자리와 단계 글자 */
+.tap{position:absolute;width:84px;height:84px;margin:-42px 0 0 -42px;border-radius:50%;border:3px solid #00AAD2;opacity:0;z-index:35}
+.stp{position:absolute;display:flex;align-items:center;gap:12px;opacity:0;z-index:36;font-weight:600;font-size:27px;color:#1B2128;white-space:nowrap}
+.stp b{font-weight:600;font-size:18px;color:#00AAD2}
+.stp.r::after{content:'';width:52px;height:1.5px;background:rgba(27,33,40,.45)}
+.stp.up{font-size:24px}
+.stp.lt{font-size:23px;color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.6)}
+.stp.dn::before{content:'';position:absolute;left:50%;top:-36px;width:1.5px;height:28px;background:rgba(27,33,40,.45)}
+.hl{position:absolute;border:2.5px solid #00AAD2;border-radius:14px;opacity:0;z-index:34}
+.link{position:absolute;left:0;top:0;width:1920px;height:1080px;z-index:33;overflow:visible}
+.link path{fill:none;stroke:#00AAD2;stroke-width:3;stroke-dasharray:1;stroke-dashoffset:1;opacity:0}
+.dot{position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;background:#00AAD2;box-shadow:0 0 0 5px rgba(0,170,210,.22);opacity:0;z-index:34;offset-rotate:0deg}
+/* 3D 지도 위 글자: 글자와 가는 선만 */
+.l3{position:absolute;left:0;top:0;z-index:20;white-space:nowrap}
+.l3 .in{position:absolute;left:0;bottom:0;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;opacity:0}
+.l3 .t{font-weight:600;font-size:25px;color:#fff;text-shadow:0 1px 10px rgba(0,0,0,.65),0 0 2px rgba(0,0,0,.5)}
+.l3 .t.sm{font-weight:500;font-size:21px}
+.l3 .t small{font-weight:500;font-size:20px;opacity:.72;margin-left:8px}
+.l3 .t i{font-style:normal;color:#9FE6F5;margin-right:9px}
+.l3.g .t i{color:#F2CF98}
+.l3 .ln{width:1.5px;height:46px;margin-top:8px;background:linear-gradient(rgba(255,255,255,.9),rgba(255,255,255,.1))}
+.l3 img{width:216px;height:144px;object-fit:cover;border-radius:10px;margin-bottom:10px;box-shadow:0 10px 26px rgba(0,0,0,.45)}
+.l3.sr .in{left:26px;bottom:auto;top:-18px;transform:none;align-items:flex-start}
+.l3.sl .in{left:auto;right:26px;bottom:auto;top:-18px;transform:none;align-items:flex-end}
+.l3.sr .ln,.l3.sl .ln{display:none}
+.l3.sr .t small,.l3.sl .t small{margin:0 8px 0 0}
+.card.inset{z-index:26}
+.navi.dk .lab{color:#C9D1D9;text-shadow:0 1px 8px rgba(0,0,0,.5)}
+.credit3{position:absolute;left:40px;bottom:26px;font-weight:500;font-size:14px;color:rgba(255,255,255,.42);z-index:30}
+/* 실내 시점: 창밖(영상, 이미지) 위에 창을 뚫은 실내 이미지 */
+.win{position:absolute;left:0;top:0;width:1920px;height:1081px;overflow:hidden;background:#101418}
+.win video,.win img{position:absolute;left:0;width:1920px}
+.win video{filter:saturate(.8) sepia(.3) brightness(.95) contrast(1.03)}
+.win video.dusk{filter:sepia(.6) saturate(1.5) brightness(.8) contrast(1.06)}
+.win .tint{position:absolute;inset:0;mix-blend-mode:overlay;background:linear-gradient(rgba(255,176,96,.6),rgba(255,150,70,.3) 45%,rgba(120,70,30,.2))}
+.win img.bl{filter:blur(22px);transform:scale(1.3)}
+.cab{position:absolute;left:0;top:0;width:1920px;height:1081px}
+.boom{position:absolute;inset:0;opacity:0;mix-blend-mode:screen;z-index:8;background:radial-gradient(1300px 560px at 50% 30%,rgba(255,238,205,.95),rgba(255,214,150,.42) 42%,rgba(217,168,102,0) 74%)}
+.enter{position:absolute;left:0;right:0;top:226px;text-align:center;color:#fff;opacity:0;z-index:9;text-shadow:0 2px 22px rgba(0,0,0,.5)}
+.enter small{display:block;font-weight:500;font-size:25px;letter-spacing:.02em;opacity:.92}
+.enter b{display:block;font-weight:600;font-size:80px;letter-spacing:.1em;margin:2px 0 0 .1em;line-height:1.15}
+.enter i{display:block;width:110px;height:2px;margin:12px auto 0;background:#F2CF98}
+/* 기록: 사진이 모여 영상으로 */
+.th{position:absolute;width:120px;height:80px;border-radius:9px;overflow:hidden;opacity:0;z-index:22;box-shadow:0 10px 24px rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.92)}
+.th img{width:100%;height:100%;object-fit:cover;display:block}
+.lead{position:absolute;left:0;top:0;width:1920px;height:1080px;z-index:21}
+.lead line{stroke:rgba(255,255,255,.6);stroke-width:1.5;opacity:0}
+.reelcard{position:absolute;left:640px;top:360px;width:640px;height:360px;border-radius:14px;overflow:hidden;opacity:0;z-index:24;box-shadow:0 24px 60px rgba(0,0,0,.55)}
+.reelcard img{width:100%;height:100%;object-fit:cover;display:block}
+.ing{position:absolute;left:0;right:0;top:296px;text-align:center;font-weight:500;font-size:27px;color:#fff;opacity:0;z-index:25;text-shadow:0 1px 12px rgba(0,0,0,.6)}
+.ing b{font-weight:600;color:#F2CF98}
+.reelfull{position:absolute;inset:0;background:#000}
+.reelfull video{position:absolute;left:0;top:0;width:1920px;height:1080px;object-fit:cover}
+
+@keyframes tap{0%{opacity:0;transform:scale(.35)}25%{opacity:1}100%{opacity:0;transform:scale(1.5)}}
+@keyframes hlIn{0%{opacity:0;transform:scale(1.12)}100%{opacity:1;transform:scale(1)}}
+@keyframes draw{from{opacity:1;stroke-dashoffset:1}to{opacity:1;stroke-dashoffset:0}}
+@keyframes ride{0%{offset-distance:0%;opacity:0}10%{opacity:1}85%{opacity:1}100%{offset-distance:100%;opacity:0}}
+@keyframes riseIn{from{opacity:0;transform:translateY(46px)}to{opacity:1;transform:none}}
+@keyframes slideIn{from{opacity:0;transform:translateX(90px)}to{opacity:1;transform:none}}
+@keyframes l3In{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%)}}
+@keyframes insetIn{from{opacity:0;transform:translateX(70px)}to{opacity:1;transform:none}}
+@keyframes insetOut{from{opacity:1;transform:none}to{opacity:0;transform:translateX(70px)}}
+@keyframes gatePush{from{transform:scale(.8)}to{transform:scale(3.4)}}
+@keyframes roadPush{from{transform:scale(1)}to{transform:scale(1.14)}}
+@keyframes cabDim{from{filter:brightness(1)}to{filter:brightness(.55)}}
+@keyframes push4{from{transform:scale(1)}to{transform:scale(1.045)}}
+@keyframes bump{0%{transform:scale(1.045)}16%{transform:scale(1.066)}100%{transform:scale(1.075)}}
+@keyframes boom{0%{opacity:0}10%{opacity:1}100%{opacity:0}}
+@keyframes warmIn2{from{opacity:0}to{opacity:.3}}
+@keyframes enterIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes thIn{from{opacity:0;transform:translateY(14px) scale(.8)}to{opacity:1;transform:none}}
+@keyframes thFly{from{opacity:1;transform:none}to{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.3)}}
+@keyframes rcIn{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}
+@keyframes rcFull{from{opacity:1;transform:scale(1);border-radius:14px}to{opacity:1;transform:scale(3);border-radius:0}}
+
 
 </style>
 </head>
 <body>
-<div id="root" data-composition-id="s6" data-start="0" data-duration="35.167" data-width="1920" data-height="1080" data-no-timeline>
+<div id="root" data-composition-id="s3b" data-start="0" data-duration="6.000" data-width="1920" data-height="1080" data-no-timeline>
 <div class="scene ">
-<div class="cam" style="transform-origin:1060px 560px;animation:push6 10.67s ease-out 0s both;"><img class="plate" src="../assets/plate_b.jpg"><div class="scr" style="left:836.0px;top:455.9px;width:447.8px;height:211.3px"><video id="v13" class="clip sv" src="../assets/car.mp4" data-start="0.000" data-duration="11.371" data-media-start="238.883" muted playsinline style="width:447.8px;height:251.9px;left:0;top:-15.7px"></video><i class="gl"></i></div><div class="strip goldw" style="left:247px;top:584px;width:584px;transform:rotate(-0.8deg);"></div><div class="strip goldw" style="left:1288px;top:579px;width:412px;"></div></div><div class="chap" style="animation:chapIn .6s cubic-bezier(.2,.8,.2,1) 0.40s both, fadeOut .5s ease 3.40s forwards;">도착하면</div><div class="sub car" style="animation:subIn .3s ease 0.700s both, fadeOut .25s ease 4.931s forwards;"><span>동궁과 월지에 도착했어요. 오늘 경주 여행은 여기까지예요</span></div><div class="sub car" style="animation:subIn .3s ease 5.815s both, fadeOut .25s ease 10.671s forwards;"><span>오늘 여행을 1분 영상으로 만들었어요</span></div><div class="reelwrap" style="animation:reveal .01s linear 10.87s forwards;"><div class="reelpop" style="--x:828.1px;--y:452.2px;--w:463.5px;--h:218.7px;animation:reelpop .95s cubic-bezier(.65,0,.2,1) 10.87s both;"><video id="v14" class="clip rv" src="../assets/reel.mp4" data-start="10.871" data-duration="9.400" data-media-start="4.000" muted playsinline style=""></video><video id="v15" class="clip rv" src="../assets/reel.mp4" data-start="20.271" data-duration="2.400" data-media-start="15.000" muted playsinline style=""></video><video id="v16" class="clip rv" src="../assets/reel.mp4" data-start="22.671" data-duration="2.200" data-media-start="24.600" muted playsinline style=""></video><video id="v17" class="clip rv" src="../assets/reel.mp4" data-start="24.871" data-duration="1.800" data-media-start="39.400" muted playsinline style=""></video><video id="v18" class="clip rv" src="../assets/reel.mp4" data-start="26.671" data-duration="2.100" data-media-start="42.300" muted playsinline style=""></video><video id="v19" class="clip rv" src="../assets/reel.mp4" data-start="28.771" data-duration="1.600" data-media-start="51.900" muted playsinline style=""></video><video id="v20" class="clip rv" src="../assets/reel.mp4" data-start="30.371" data-duration="4.800" data-media-start="57.000" muted playsinline style=""></video></div></div>
+<canvas id="gl" width="1920" height="1080"></canvas><div class="shade"></div><div class="l3 sl" id="p1"><div class="in" style="animation:fadeIn .5s cubic-bezier(.2,.8,.2,1) 0.50s both;"><span class="t"><small>11:40</small>점심</span><span class="ln"></span></div></div><div class="l3 sr" id="p2"><div class="in" style="animation:fadeIn .5s cubic-bezier(.2,.8,.2,1) 0.80s both;"><span class="t"><small>13:00</small>대릉원</span><span class="ln"></span></div></div><div class="l3 sr" id="p3"><div class="in" style="animation:fadeIn .5s cubic-bezier(.2,.8,.2,1) 1.10s both;"><span class="t"><small>17:40</small>동궁과 월지</span><span class="ln"></span></div></div><div class="l3 sr" id="p4"><div class="in" style="animation:fadeIn .5s cubic-bezier(.2,.8,.2,1) 1.50s both;"><span class="t"><i>방금 담음</i>황리단길 카페</span><span class="ln"></span></div></div><div class="l3 " id="p5"><div class="in" style="animation:l3In .5s cubic-bezier(.2,.8,.2,1) 3.00s both;"><span class="t">출발</span><span class="ln"></span></div></div><div class="navi dk" style="animation:naviIn .7s cubic-bezier(.2,.8,.2,1) 2.4s both;"><div class="card"><img src="../assets/navi.jpg"></div><div class="lab">순정 내비게이션 · 목적지와 경유지 전달</div></div><div class="sub car" style="animation:reveal .01s linear 0.000s both, fadeOut .25s ease 3.779s forwards;"><span>대릉원으로 안내를 시작할게요. 점심 식당을 경유지로 넣었어요</span></div>
 </div>
 </div>
+<script src="../assets/world_data.js"></script>
+<script>window.WORLD.map.src="../assets/map.jpg";window.SCENE3D={"car": [[0, 120], [6.0, 1000]], "gold": [[0, 0]], "draw": [[0.5, 0], [2.9, 9815.0]], "pins": [{"pos": [2031.3, -3231.1], "color": "#C2416B", "at": 0.3, "r": 17, "h": 90}, {"pos": [2395.1, -3546.1], "color": "#2F6FD0", "at": 0.6, "r": 17, "h": 90}, {"pos": [3705.1, -3076.3], "color": "#2E9C78", "at": 0.9, "r": 17, "h": 90}, {"pos": [2184.8, -3352.7], "color": "#C2416B", "at": 1.3, "r": 17, "h": 90, "saved": 1}], "labels": [{"sel": "#p1", "pos": [2031.3, 480, -3231.1]}, {"sel": "#p2", "pos": [2395.1, 480, -3546.1]}, {"sel": "#p3", "pos": [3705.1, 480, -3076.3]}, {"sel": "#p4", "pos": [2184.8, 480, -3352.7]}, {"sel": "#p5", "car": 1, "y": 130}], "cam": [{"tx": 1300, "tz": -1700, "dist": 7900, "pitch": 60, "yaw": 0, "fov": 30, "t": 0}, {"tx": 1400, "tz": -1800, "dist": 6900, "pitch": 60, "yaw": 0, "fov": 30, "t": 6.0}]};</script>
+<script src="../assets/film3d.js"></script>
 </body>
 </html>

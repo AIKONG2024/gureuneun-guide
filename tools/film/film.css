@@ -99,7 +99,7 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#000}
 .end h1{margin:22px 0 0;font-weight:600;font-size:50px;letter-spacing:-.015em;color:#F5F6F7}
 .end p{margin:8px 0 0;font-weight:500;font-size:22px;color:#8A939C}
 .end .sdk{margin-top:40px;font-weight:500;font-size:17px;letter-spacing:.01em;color:#5E666F}
-.foot{position:absolute;left:0;right:0;bottom:52px;text-align:center;font-weight:500;font-size:15px;color:#4C535A;opacity:0}
+.foot{position:absolute;left:0;right:0;bottom:52px;text-align:center;font-weight:500;font-size:17px;line-height:1.6;color:#6A727B;opacity:0}
 
 /* 움직임 */
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
@@ -139,4 +139,85 @@ html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#000}
 @keyframes askIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @keyframes lockIn{from{opacity:0;transform:translate(-50%,-46%)}to{opacity:1;transform:translate(-50%,-50%)}}
 @keyframes endIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* ===== v5: 한 컷에 한 동작, 3D 지도, 실내 시점 ===== */
+.lock.ink h1{color:#1B2128}
+.lock.ink p{color:#6A727B}
+canvas#gl{position:absolute;left:0;top:0;width:1920px;height:1080px}
+.shade{position:absolute;left:0;right:0;bottom:0;height:250px;background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.55));z-index:19}
+/* 누르는 자리와 단계 글자 */
+.tap{position:absolute;width:84px;height:84px;margin:-42px 0 0 -42px;border-radius:50%;border:3px solid #00AAD2;opacity:0;z-index:35}
+.stp{position:absolute;display:flex;align-items:center;gap:12px;opacity:0;z-index:36;font-weight:600;font-size:27px;color:#1B2128;white-space:nowrap}
+.stp b{font-weight:600;font-size:18px;color:#00AAD2}
+.stp.r::after{content:'';width:52px;height:1.5px;background:rgba(27,33,40,.45)}
+.stp.up{font-size:24px}
+.stp.lt{font-size:23px;color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.6)}
+.stp.dn::before{content:'';position:absolute;left:50%;top:-36px;width:1.5px;height:28px;background:rgba(27,33,40,.45)}
+.hl{position:absolute;border:2.5px solid #00AAD2;border-radius:14px;opacity:0;z-index:34}
+.link{position:absolute;left:0;top:0;width:1920px;height:1080px;z-index:33;overflow:visible}
+.link path{fill:none;stroke:#00AAD2;stroke-width:3;stroke-dasharray:1;stroke-dashoffset:1;opacity:0}
+.dot{position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;background:#00AAD2;box-shadow:0 0 0 5px rgba(0,170,210,.22);opacity:0;z-index:34;offset-rotate:0deg}
+/* 3D 지도 위 글자: 글자와 가는 선만 */
+.l3{position:absolute;left:0;top:0;z-index:20;white-space:nowrap}
+.l3 .in{position:absolute;left:0;bottom:0;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;opacity:0}
+.l3 .t{font-weight:600;font-size:25px;color:#fff;text-shadow:0 1px 10px rgba(0,0,0,.65),0 0 2px rgba(0,0,0,.5)}
+.l3 .t.sm{font-weight:500;font-size:21px}
+.l3 .t small{font-weight:500;font-size:20px;opacity:.72;margin-left:8px}
+.l3 .t i{font-style:normal;color:#9FE6F5;margin-right:9px}
+.l3.g .t i{color:#F2CF98}
+.l3 .ln{width:1.5px;height:46px;margin-top:8px;background:linear-gradient(rgba(255,255,255,.9),rgba(255,255,255,.1))}
+.l3 img{width:216px;height:144px;object-fit:cover;border-radius:10px;margin-bottom:10px;box-shadow:0 10px 26px rgba(0,0,0,.45)}
+.l3.sr .in{left:26px;bottom:auto;top:-18px;transform:none;align-items:flex-start}
+.l3.sl .in{left:auto;right:26px;bottom:auto;top:-18px;transform:none;align-items:flex-end}
+.l3.sr .ln,.l3.sl .ln{display:none}
+.l3.sr .t small,.l3.sl .t small{margin:0 8px 0 0}
+.card.inset{z-index:26}
+.navi.dk .lab{color:#C9D1D9;text-shadow:0 1px 8px rgba(0,0,0,.5)}
+.credit3{position:absolute;left:40px;bottom:26px;font-weight:500;font-size:14px;color:rgba(255,255,255,.42);z-index:30}
+/* 실내 시점: 창밖(영상, 이미지) 위에 창을 뚫은 실내 이미지 */
+.win{position:absolute;left:0;top:0;width:1920px;height:1081px;overflow:hidden;background:#101418}
+.win video,.win img{position:absolute;left:0;width:1920px}
+.win video{filter:saturate(.8) sepia(.3) brightness(.95) contrast(1.03)}
+.win video.dusk{filter:sepia(.6) saturate(1.5) brightness(.8) contrast(1.06)}
+.win .tint{position:absolute;inset:0;mix-blend-mode:overlay;background:linear-gradient(rgba(255,176,96,.6),rgba(255,150,70,.3) 45%,rgba(120,70,30,.2))}
+.win img.bl{filter:blur(22px);transform:scale(1.3)}
+.cab{position:absolute;left:0;top:0;width:1920px;height:1081px}
+.boom{position:absolute;inset:0;opacity:0;mix-blend-mode:screen;z-index:8;background:radial-gradient(1300px 560px at 50% 30%,rgba(255,238,205,.95),rgba(255,214,150,.42) 42%,rgba(217,168,102,0) 74%)}
+.enter{position:absolute;left:0;right:0;top:226px;text-align:center;color:#fff;opacity:0;z-index:9;text-shadow:0 2px 22px rgba(0,0,0,.5)}
+.enter small{display:block;font-weight:500;font-size:25px;letter-spacing:.02em;opacity:.92}
+.enter b{display:block;font-weight:600;font-size:80px;letter-spacing:.1em;margin:2px 0 0 .1em;line-height:1.15}
+.enter i{display:block;width:110px;height:2px;margin:12px auto 0;background:#F2CF98}
+/* 기록: 사진이 모여 영상으로 */
+.th{position:absolute;width:120px;height:80px;border-radius:9px;overflow:hidden;opacity:0;z-index:22;box-shadow:0 10px 24px rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.92)}
+.th img{width:100%;height:100%;object-fit:cover;display:block}
+.lead{position:absolute;left:0;top:0;width:1920px;height:1080px;z-index:21}
+.lead line{stroke:rgba(255,255,255,.6);stroke-width:1.5;opacity:0}
+.reelcard{position:absolute;left:640px;top:360px;width:640px;height:360px;border-radius:14px;overflow:hidden;opacity:0;z-index:24;box-shadow:0 24px 60px rgba(0,0,0,.55)}
+.reelcard img{width:100%;height:100%;object-fit:cover;display:block}
+.ing{position:absolute;left:0;right:0;top:296px;text-align:center;font-weight:500;font-size:27px;color:#fff;opacity:0;z-index:25;text-shadow:0 1px 12px rgba(0,0,0,.6)}
+.ing b{font-weight:600;color:#F2CF98}
+.reelfull{position:absolute;inset:0;background:#000}
+.reelfull video{position:absolute;left:0;top:0;width:1920px;height:1080px;object-fit:cover}
+
+@keyframes tap{0%{opacity:0;transform:scale(.35)}25%{opacity:1}100%{opacity:0;transform:scale(1.5)}}
+@keyframes hlIn{0%{opacity:0;transform:scale(1.12)}100%{opacity:1;transform:scale(1)}}
+@keyframes draw{from{opacity:1;stroke-dashoffset:1}to{opacity:1;stroke-dashoffset:0}}
+@keyframes ride{0%{offset-distance:0%;opacity:0}10%{opacity:1}85%{opacity:1}100%{offset-distance:100%;opacity:0}}
+@keyframes riseIn{from{opacity:0;transform:translateY(46px)}to{opacity:1;transform:none}}
+@keyframes slideIn{from{opacity:0;transform:translateX(90px)}to{opacity:1;transform:none}}
+@keyframes l3In{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%)}}
+@keyframes insetIn{from{opacity:0;transform:translateX(70px)}to{opacity:1;transform:none}}
+@keyframes insetOut{from{opacity:1;transform:none}to{opacity:0;transform:translateX(70px)}}
+@keyframes gatePush{from{transform:scale(.8)}to{transform:scale(3.4)}}
+@keyframes roadPush{from{transform:scale(1)}to{transform:scale(1.14)}}
+@keyframes cabDim{from{filter:brightness(1)}to{filter:brightness(.55)}}
+@keyframes push4{from{transform:scale(1)}to{transform:scale(1.045)}}
+@keyframes bump{0%{transform:scale(1.045)}16%{transform:scale(1.066)}100%{transform:scale(1.075)}}
+@keyframes boom{0%{opacity:0}10%{opacity:1}100%{opacity:0}}
+@keyframes warmIn2{from{opacity:0}to{opacity:.3}}
+@keyframes enterIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes thIn{from{opacity:0;transform:translateY(14px) scale(.8)}to{opacity:1;transform:none}}
+@keyframes thFly{from{opacity:1;transform:none}to{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.3)}}
+@keyframes rcIn{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}
+@keyframes rcFull{from{opacity:1;transform:scale(1);border-radius:14px}to{opacity:1;transform:scale(3);border-radius:0}}
 

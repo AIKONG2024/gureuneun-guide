@@ -1,60 +1,75 @@
 {
- "total": 135.83333333333334,
+ "total": 118.03333333333333,
  "scenes": [
   {
    "id": "s1",
    "start": 0.0,
-   "duration": 7.6
+   "duration": 3.4
   },
   {
    "id": "s2",
-   "start": 7.6,
-   "duration": 5.2
+   "start": 3.4,
+   "duration": 9.2
   },
   {
    "id": "s3",
-   "start": 12.8,
-   "duration": 17.0
+   "start": 12.6,
+   "duration": 4.433
+  },
+  {
+   "id": "s3b",
+   "start": 17.033,
+   "duration": 6.0
   },
   {
    "id": "s4",
-   "start": 29.8,
-   "duration": 12.733
+   "start": 23.033,
+   "duration": 11.233
   },
   {
    "id": "s4b",
-   "start": 42.533,
-   "duration": 10.733
+   "start": 34.267,
+   "duration": 7.2
   },
   {
    "id": "s5a",
-   "start": 53.267,
-   "duration": 11.467
+   "start": 41.467,
+   "duration": 12.467
+  },
+  {
+   "id": "s5b0",
+   "start": 53.933,
+   "duration": 3.967
   },
   {
    "id": "s5b",
-   "start": 64.733,
-   "duration": 9.7
+   "start": 57.9,
+   "duration": 6.733
   },
   {
    "id": "s5c",
-   "start": 74.433,
-   "duration": 12.633
+   "start": 64.633,
+   "duration": 13.1
   },
   {
-   "id": "s6",
-   "start": 87.067,
-   "duration": 35.167
+   "id": "s6a",
+   "start": 77.733,
+   "duration": 13.1
   },
   {
    "id": "s6b",
-   "start": 122.233,
+   "start": 90.833,
+   "duration": 14.0
+  },
+  {
+   "id": "s6c",
+   "start": 104.833,
    "duration": 7.6
   },
   {
    "id": "s7",
-   "start": 129.833,
-   "duration": 6.0
+   "start": 112.433,
+   "duration": 5.6
   }
  ]
 }
