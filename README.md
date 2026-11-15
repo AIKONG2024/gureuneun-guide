@@ -109,7 +109,7 @@ python3 tools/film/build.py /tmp/rec                   # 장면 HTML, 소리 믹
 python3 tools/film/render.py apk/구르는가이드_시연영상.mp4
 ```
 
-음악(assets/music.mp3)과 주행 영상(assets/stock_road_1.mp4)은 저장소에 없으니 아래 출처에서 받아 넣어야 합니다.
+음악(tools/film/assets/music.mp3)과 주행 영상(tools/film/assets/stock_road_1.mp4)은 저장소에 없으니 아래 출처에서 받아 넣어야 합니다.
 
 ## 출처
 

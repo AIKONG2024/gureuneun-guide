@@ -166,16 +166,19 @@ function start() {
   // ---------------------------------------------------------------- 차
   function makeCar() {
     const g = new THREE.Group();
-    const body = new THREE.Shape();
-    body.moveTo(-2.30, 0.42); body.lineTo(-2.34, 0.80); body.lineTo(-2.24, 1.04); body.lineTo(1.10, 1.04); body.lineTo(2.16, 0.90); body.lineTo(2.32, 0.72); body.lineTo(2.30, 0.42);
-    body.lineTo(1.96, 0.42); body.absarc(1.5, 0.42, 0.46, 0, Math.PI, false); body.lineTo(-1.04, 0.42); body.absarc(-1.5, 0.42, 0.46, 0, Math.PI, false); body.lineTo(-2.30, 0.42);
-    const ext = (shape, w, bevel) => { const geo = new THREE.ExtrudeGeometry(shape, { depth: w, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 18 }); geo.translate(0, 0, -w / 2); geo.rotateY(-Math.PI / 2); return geo; };
-    g.add(new THREE.Mesh(ext(body, 1.78, 0.06), M.paint));
-    const top = new THREE.Shape();
-    top.moveTo(-2.06, 1.02); top.lineTo(-1.70, 1.50); top.quadraticCurveTo(-1.2, 1.63, -0.6, 1.64); top.lineTo(0.30, 1.62); top.lineTo(1.16, 1.03); top.lineTo(-2.06, 1.02);
+    // 위에서 봤을 때 모서리가 둥근 판을 쌓아 만든 차 (차체, 유리, 지붕)
+    const slab = (w, l, rad_, h, y0, z0, mat, bevel) => {
+      const s = new THREE.Shape(), x = -w / 2, y = -l / 2;
+      s.moveTo(x + rad_, y); s.lineTo(x + w - rad_, y); s.quadraticCurveTo(x + w, y, x + w, y + rad_); s.lineTo(x + w, y + l - rad_); s.quadraticCurveTo(x + w, y + l, x + w - rad_, y + l);
+      s.lineTo(x + rad_, y + l); s.quadraticCurveTo(x, y + l, x, y + l - rad_); s.lineTo(x, y + rad_); s.quadraticCurveTo(x, y, x + rad_, y);
+      const geo = new THREE.ExtrudeGeometry(s, { depth: h, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 4, curveSegments: 10 });
+      geo.rotateX(-Math.PI / 2); geo.translate(0, y0, z0);
+      return new THREE.Mesh(geo, mat);
+    };
+    g.add(slab(1.66, 4.42, 0.62, 0.50, 0.42, 0, M.paint, 0.11));
     const glassMat = M.glass.clone();
-    g.add(new THREE.Mesh(ext(top, 1.50, 0.07), glassMat));
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.07, 1.74), M.paint); roof.position.set(0, 1.665, -0.66); g.add(roof);
+    g.add(slab(1.34, 2.52, 0.5, 0.40, 1.08, -0.28, glassMat, 0.1));
+    g.add(slab(1.18, 1.62, 0.42, 0.04, 1.56, -0.36, M.paint, 0.03));
     for (const [x, z] of [[0.9, 1.5], [-0.9, 1.5], [0.9, -1.5], [-0.9, -1.5]]) {
       const t = new THREE.Mesh(new THREE.CylinderGeometry(0.37, 0.37, 0.26, 28), M.tire); t.rotation.z = Math.PI / 2; t.position.set(x, 0.37, z); g.add(t);
       const r = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.28, 20), M.rim); r.rotation.z = Math.PI / 2; r.position.set(x, 0.37, z); g.add(r);
