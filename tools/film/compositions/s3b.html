@@ -205,6 +205,26 @@ canvas#gl{position:absolute;left:0;top:0;width:1920px;height:1080px}
 .ing b{font-weight:600;color:#F2CF98}
 .reelfull{position:absolute;inset:0;background:#000}
 .reelfull video{position:absolute;left:0;top:0;width:1920px;height:1080px;object-fit:cover}
+/* 지금까지는: 휴대폰에서 찾고 내비게이션에 다시 입력하던 방식 (설명용 그림) */
+.mk-ph{position:absolute;inset:0;background:#F4F5F7;padding:62px 22px 0;color:#1B2128}
+.mk-h{font-weight:700;font-size:25px;margin:0 6px 18px}
+.mk-it{display:flex;align-items:center;gap:16px;height:112px;margin-bottom:14px;padding:0 16px;border-radius:20px;background:#fff;opacity:.45}
+.mk-it img,.mk-it .ic{width:76px;height:76px;border-radius:14px;object-fit:cover;flex:none}
+.mk-it .ic{display:grid;place-items:center;background:#F1E7DC}
+.mk-it b{display:block;font-weight:600;font-size:23px}
+.mk-it small{display:block;margin-top:5px;font-weight:500;font-size:17px;color:#6A727B}
+.mk-nv{position:absolute;inset:0;background:#14181D;padding:40px 46px;color:#E9EDF1}
+.mk-nh{font-weight:600;font-size:24px;color:#AEB7C0;margin-bottom:22px}
+.mk-f{display:flex;align-items:center;gap:16px;height:78px;margin-bottom:14px;padding:0 24px;border-radius:14px;background:#1E242B;border:2px solid transparent;opacity:0;font-weight:500;font-size:29px}
+.mk-f svg{width:28px;height:28px;flex:none}
+.mk-f .ty{display:inline-block;white-space:nowrap}
+.mk-kb{position:absolute;left:46px;right:46px;bottom:36px;display:grid;grid-template-columns:repeat(10,1fr);gap:9px}
+.mk-kb i{height:50px;border-radius:9px;background:#232A32}
+.who{position:absolute;display:flex;align-items:center;gap:10px;opacity:0;z-index:36;font-weight:600;font-size:19px;color:#fff;white-space:nowrap;padding:5px 0 5px 12px;border-radius:8px 0 0 8px;background:rgba(13,16,20,.78)}
+.who small{font-weight:500;font-size:17px;opacity:.78}
+.who::after{content:'';width:26px;height:1.5px;background:rgba(255,255,255,.7)}
+.credit3.ink{color:rgba(27,33,40,.38)}
+.note3{position:absolute;left:40px;bottom:28px;font-weight:500;font-size:16px;color:rgba(255,255,255,.62);z-index:30}
 
 @keyframes tap{0%{opacity:0;transform:scale(.35)}25%{opacity:1}100%{opacity:0;transform:scale(1.5)}}
 @keyframes hlIn{0%{opacity:0;transform:scale(1.12)}100%{opacity:1;transform:scale(1)}}
@@ -227,18 +247,23 @@ canvas#gl{position:absolute;left:0;top:0;width:1920px;height:1080px}
 @keyframes thFly{from{opacity:1;transform:none}to{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.3)}}
 @keyframes rcIn{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}
 @keyframes rcFull{from{opacity:1;transform:scale(1);border-radius:14px}to{opacity:1;transform:scale(3);border-radius:0}}
+@keyframes mkOn{from{opacity:.45}to{opacity:1}}
+@keyframes mkOff{from{opacity:1}to{opacity:.45}}
+@keyframes fIn{from{opacity:0;border-color:transparent}to{opacity:1;border-color:#00AAD2}}
+@keyframes fDone{from{border-color:#00AAD2}to{border-color:transparent}}
+@keyframes typeIn{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
 
 
 </style>
 </head>
 <body>
-<div id="root" data-composition-id="s3b" data-start="0" data-duration="6.000" data-width="1920" data-height="1080" data-no-timeline>
+<div id="root" data-composition-id="s3b" data-start="0" data-duration="5.200" data-width="1920" data-height="1080" data-no-timeline>
 <div class="scene ">
-<canvas id="gl" width="1920" height="1080"></canvas><div class="shade"></div><div class="l3 sl" id="p1"><div class="in" style="animation:fadeIn .5s cubic-bezier(.2,.8,.2,1) 0.50s both;"><span class="t"><small>11:40</small>점심</span><span class="ln"></span></div></div><div class="l3 sr" id="p2"><div class="in" style="animation:fadeIn .5s cubic-bezier(.2,.8,.2,1) 0.80s both;"><span class="t"><small>13:00</small>대릉원</span><span class="ln"></span></div></div><div class="l3 sr" id="p3"><div class="in" style="animation:fadeIn .5s cubic-bezier(.2,.8,.2,1) 1.10s both;"><span class="t"><small>17:40</small>동궁과 월지</span><span class="ln"></span></div></div><div class="l3 sr" id="p4"><div class="in" style="animation:fadeIn .5s cubic-bezier(.2,.8,.2,1) 1.50s both;"><span class="t"><i>방금 담음</i>황리단길 카페</span><span class="ln"></span></div></div><div class="l3 " id="p5"><div class="in" style="animation:l3In .5s cubic-bezier(.2,.8,.2,1) 3.00s both;"><span class="t">출발</span><span class="ln"></span></div></div><div class="navi dk" style="animation:naviIn .7s cubic-bezier(.2,.8,.2,1) 2.4s both;"><div class="card"><img src="../assets/navi.jpg"></div><div class="lab">순정 내비게이션 · 목적지와 경유지 전달</div></div><div class="sub car" style="animation:reveal .01s linear 0.000s both, fadeOut .25s ease 3.779s forwards;"><span>대릉원으로 안내를 시작할게요. 점심 식당을 경유지로 넣었어요</span></div>
+<canvas id="gl" width="1920" height="1080"></canvas><div class="shade"></div><div class="l3 sl" id="p1"><div class="in" style="animation:fadeIn .5s cubic-bezier(.2,.8,.2,1) 0.50s both;"><span class="t"><small>11:40</small>점심</span><span class="ln"></span></div></div><div class="l3 sr" id="p2"><div class="in" style="animation:fadeIn .5s cubic-bezier(.2,.8,.2,1) 0.80s both;"><span class="t"><small>13:00</small>대릉원</span><span class="ln"></span></div></div><div class="l3 sr" id="p3"><div class="in" style="animation:fadeIn .5s cubic-bezier(.2,.8,.2,1) 1.10s both;"><span class="t"><small>17:40</small>동궁과 월지</span><span class="ln"></span></div></div><div class="l3 sr" id="p4"><div class="in" style="animation:fadeIn .5s cubic-bezier(.2,.8,.2,1) 1.50s both;"><span class="t"><i>방금 담음</i>황리단길 카페</span><span class="ln"></span></div></div><div class="l3 " id="p5"><div class="in" style="animation:l3In .5s cubic-bezier(.2,.8,.2,1) 3.00s both;"><span class="t">출발</span><span class="ln"></span></div></div><div class="sub car" style="animation:reveal .01s linear 0.000s both, fadeOut .25s ease 1.579s forwards;"><span>대릉원으로 안내를 시작할게요. 점심 식당을 경유지로 넣었어요</span></div>
 </div>
 </div>
 <script src="../assets/world_data.js"></script>
-<script>window.WORLD.map.src="../assets/map.jpg";window.SCENE3D={"car": [[0, 120], [6.0, 1000]], "gold": [[0, 0]], "draw": [[0.5, 0], [2.9, 9815.0]], "pins": [{"pos": [2031.3, -3231.1], "color": "#C2416B", "at": 0.3, "r": 17, "h": 90}, {"pos": [2395.1, -3546.1], "color": "#2F6FD0", "at": 0.6, "r": 17, "h": 90}, {"pos": [3705.1, -3076.3], "color": "#2E9C78", "at": 0.9, "r": 17, "h": 90}, {"pos": [2184.8, -3352.7], "color": "#C2416B", "at": 1.3, "r": 17, "h": 90, "saved": 1}], "labels": [{"sel": "#p1", "pos": [2031.3, 480, -3231.1]}, {"sel": "#p2", "pos": [2395.1, 480, -3546.1]}, {"sel": "#p3", "pos": [3705.1, 480, -3076.3]}, {"sel": "#p4", "pos": [2184.8, 480, -3352.7]}, {"sel": "#p5", "car": 1, "y": 130}], "cam": [{"tx": 1300, "tz": -1700, "dist": 7900, "pitch": 60, "yaw": 0, "fov": 30, "t": 0}, {"tx": 1400, "tz": -1800, "dist": 6900, "pitch": 60, "yaw": 0, "fov": 30, "t": 6.0}]};</script>
+<script>window.WORLD.map.src="../assets/map.jpg";window.SCENE3D={"car": [[0, 120], [5.2, 1000]], "gold": [[0, 0]], "draw": [[0.5, 0], [2.9, 9815.0]], "pins": [{"pos": [2031.3, -3231.1], "color": "#C2416B", "at": 0.3, "r": 17, "h": 90}, {"pos": [2395.1, -3546.1], "color": "#2F6FD0", "at": 0.6, "r": 17, "h": 90}, {"pos": [3705.1, -3076.3], "color": "#2E9C78", "at": 0.9, "r": 17, "h": 90}, {"pos": [2184.8, -3352.7], "color": "#C2416B", "at": 1.3, "r": 17, "h": 90, "saved": 1}], "labels": [{"sel": "#p1", "pos": [2031.3, 480, -3231.1]}, {"sel": "#p2", "pos": [2395.1, 480, -3546.1]}, {"sel": "#p3", "pos": [3705.1, 480, -3076.3]}, {"sel": "#p4", "pos": [2184.8, 480, -3352.7]}, {"sel": "#p5", "car": 1, "y": 130}], "cam": [{"tx": 1300, "tz": -1700, "dist": 7900, "pitch": 60, "yaw": 0, "fov": 30, "t": 0}, {"tx": 1400, "tz": -1800, "dist": 6900, "pitch": 60, "yaw": 0, "fov": 30, "t": 5.2}]};</script>
 <script src="../assets/film3d.js"></script>
 </body>
 </html>

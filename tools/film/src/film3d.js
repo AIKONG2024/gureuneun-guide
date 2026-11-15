@@ -164,7 +164,8 @@ function start() {
   const shadowed = (o) => { o.traverse((m) => { if (m.isMesh) { m.castShadow = true; } }); return o; };
 
   // ---------------------------------------------------------------- 차
-  function makeCar() {
+  function makeCar(paint) {
+    paint = paint || M.paint;
     const g = new THREE.Group();
     // 위에서 봤을 때 모서리가 둥근 판을 쌓아 만든 차 (차체, 유리, 지붕)
     const slab = (w, l, rad_, h, y0, z0, mat, bevel) => {
@@ -175,10 +176,10 @@ function start() {
       geo.rotateX(-Math.PI / 2); geo.translate(0, y0, z0);
       return new THREE.Mesh(geo, mat);
     };
-    g.add(slab(1.66, 4.42, 0.62, 0.50, 0.42, 0, M.paint, 0.11));
+    g.add(slab(1.66, 4.42, 0.62, 0.50, 0.42, 0, paint, 0.11));
     const glassMat = M.glass.clone();
     g.add(slab(1.34, 2.52, 0.5, 0.40, 1.08, -0.28, glassMat, 0.1));
-    g.add(slab(1.18, 1.62, 0.42, 0.04, 1.56, -0.36, M.paint, 0.03));
+    g.add(slab(1.18, 1.62, 0.42, 0.04, 1.56, -0.36, paint, 0.03));
     for (const [x, z] of [[0.9, 1.5], [-0.9, 1.5], [0.9, -1.5], [-0.9, -1.5]]) {
       const t = new THREE.Mesh(new THREE.CylinderGeometry(0.37, 0.37, 0.26, 28), M.tire); t.rotation.z = Math.PI / 2; t.position.set(x, 0.37, z); g.add(t);
       const r = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.28, 20), M.rim); r.rotation.z = Math.PI / 2; r.position.set(x, 0.37, z); g.add(r);
@@ -208,6 +209,10 @@ function start() {
   }
   const car = makeCar(); car.scale.setScalar(K); scene.add(car);
   car.visible = S.carOn !== false;
+  // 일행 차량 (같은 경로를 뒤따라옴)
+  const car2 = S.car2 ? makeCar(new THREE.MeshPhysicalMaterial({ color: 0x4a5560, metalness: 0.3, roughness: 0.45, clearcoat: 0.5, clearcoatRoughness: 0.3 })) : null;
+  if (car2) { car2.scale.setScalar(K); scene.add(car2); }
+  const car2Pos = new THREE.Vector3();
 
   // ---------------------------------------------------------------- 한옥 지붕
   function hanokRoof(len, k, pitch) {
@@ -373,7 +378,16 @@ function start() {
     // 경로 선
     routeU.uHead.value = S.head ? track(S.head, t) : s;
     routeU.uDraw.value = S.draw ? track(S.draw, t, true) : 1e6;
-    routeU.uFrom.value = S.from != null ? S.from : -1e6;
+    routeU.uFrom.value = S.fromT ? track(S.fromT, t) : (S.from != null ? S.from : -1e6);
+    if (car2) {
+      const s2 = track(S.car2, t), h2 = headingAt(s2);
+      posAt(s2, car2Pos); car2.position.copy(car2Pos); car2.rotation.y = h2;
+      const u2 = car2.userData, on2 = clamp01(track(S.car2Link, t, true));
+      u2.glassMat.emissive.copy(BLUE).multiplyScalar(0.12 + on2 * 0.2);
+      u2.under.material.color.copy(BLUE); u2.under.material.opacity = 0.08 + on2 * 0.3;
+      u2.beam.visible = false;
+      for (const sd of ['L', 'R']) u2.sigMat[sd].color.setScalar(0);
+    }
     routeU.uGold.value = gold;
     routeU.uAlpha.value = S.routeAlpha ? track(S.routeAlpha, t, true) : 1;
     routeU.uW.value = Math.max(S.routeWidth || 22, c.dist / 190);
@@ -420,7 +434,7 @@ function start() {
     composer.render();
     // 3D 위치에 붙는 글자
     for (const { l, el } of labels) {
-      if (l.car) v1.copy(carPos).setY(l.y || 0); else v1.set(l.pos[0], l.pos[1], l.pos[2]);
+      if (l.car) v1.copy(carPos).setY(l.y || 0); else if (l.car2) v1.copy(car2Pos).setY(l.y || 0); else v1.set(l.pos[0], l.pos[1], l.pos[2]);
       v1.project(cam);
       const x = (v1.x * 0.5 + 0.5) * 1920, y = (-v1.y * 0.5 + 0.5) * 1080;
       el.style.transform = 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px)';

@@ -118,6 +118,8 @@ for n in ['gate', 'road']:
         Image.open(os.path.join(PLATES, n + '.png')).convert('RGB').resize((W, 1081), Image.LANCZOS).save(os.path.join(A, n + '.jpg'), quality=92)
 if not os.path.exists(os.path.join(A, 'navi.jpg')):
     Image.open(os.path.join(REC, 'navi_route.png')).convert('RGB').crop((853, 90, 2535, 1300)).resize((840, 604), Image.LANCZOS).save(os.path.join(A, 'navi.jpg'), quality=92)
+if not os.path.exists(os.path.join(A, 'navi_big.jpg')):      # 에뮬레이터 순정 내비게이션 창 (목적지 대릉원, 경유지 1개 포함)
+    Image.open(os.path.join(REC, 'navi_route.png')).convert('RGB').crop((853, 90, 2535, 1300)).resize((1400, 1007), Image.LANCZOS).save(os.path.join(A, 'navi_big.jpg'), quality=92)
 rec_shot = os.path.join(A, 'phone_record.jpg')          # 가족 휴대폰 화면: 휴대폰 '여행 기록' 한 장
 if not os.path.exists(rec_shot):
     run([FF, '-y', '-ss', '%.2f' % (p_ticket + 0.5), '-i', os.path.join(REC, 'phone.webm'), '-frames:v', '1', '-vf', 'scale=600:-2', rec_shot])
@@ -292,11 +294,40 @@ body = ('<div class="studio"></div><div class="lock ink" style="%s">%s<div><h1>�
 fx(0.3, 'chime', 0.2)
 t = scene('s1', t, 3.4, body)
 
+# ---- S1b 지금까지는: 휴대폰에서 찾은 곳을 내비게이션에 하나씩 다시 입력 (설명용 그림)
+s1b = t
+d1b = 5.8
+UT = ('<svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#8A5A3C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+      '<path d="M7 3v7a2 2 0 0 0 4 0V3M9 12v9M16 3c-1.5 2-2 4-2 7h3v11"/></svg>')
+MAG = '<svg viewBox="0 0 24 24" fill="none" stroke="#8A939C" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>'
+found = [('<span class="ic">%s</span>' % UT, '황남동 쌈밥집', '인스타그램에서 저장', 0.9, 2.2, 0.9), ('<img src="@A@/photos/daereungwon_1.jpg">', '대릉원', '지도 앱에서 저장', 2.2, 3.4, 0.5),
+         ('<img src="@A@/photos/hwangridan_1.jpg">', '황리단길 카페', '블로그 글 캡처', 3.4, 9.9, 0.9)]
+items, fields = '', ''
+for (pic, name, src_, on, off, ty) in found:
+    items += ('<div class="mk-it" style="%s">%s<div><b>%s</b><small>%s</small></div></div>'
+              % (anim('mkOn .3s ease %.2fs both' % on, 'mkOff .3s ease %.2fs forwards' % off), pic, name, src_))
+    fields += ('<div class="mk-f" style="%s">%s<span class="ty" style="%s">%s</span></div>'
+               % (anim('fIn .25s ease %.2fs both' % on, 'fDone .3s ease %.2fs forwards' % off), MAG,
+                  anim('typeIn %.2fs steps(%d) %.2fs both' % (ty, len(name), on + 0.1)), name))
+    CUES.append((s1b + on + 0.1, 'sfx:keys', 0.26, 'atrim=0:%.2f,' % ty))
+kcss, kst = cam('cam_s1b', d1b, [(0, 960, 540, 1.0), (d1b, 1000, 540, 1.05)])
+body = '<div class="studio"></div>' + chapter('지금까지는', ink=True, hold=4.6) + kcss
+body += '<div class="stage" style="%s">' % kst
+body += ('<div class="card phone" style="left:380px;top:92px;width:404px;height:874px;%s"><div class="bezel"><div class="mk-ph"><div class="mk-h">찾아 둔 곳</div>%s</div></div></div>'
+         % (anim('riseIn .7s cubic-bezier(.2,.8,.2,1) .1s both'), items))
+body += ('<div class="card car" style="left:920px;top:206px;width:900px;height:647px;%s"><div class="mk-nv"><div class="mk-nh">내비게이션 목적지 검색</div>%s<div class="mk-kb">%s</div></div></div>'
+         % (anim('slideIn .7s cubic-bezier(.2,.8,.2,1) .3s both'), fields, '<i></i>' * 30))
+body += step('', '휴대폰에서 찾고', 0.6, d1b + 1, 'right:%dpx;top:230px' % (1920 - 380 + 22), 'r')
+body += step('', '내비게이션에 하나씩 다시 입력', 1.1, d1b + 1, 'left:1180px;top:928px', 'dn')
+body += '</div>'
+body += '<div class="credit3 ink">%s</div>' % esc(credit(['daereungwon_1.jpg', 'hwangridan_1.jpg']))
+t = scene('s1b', s1b, d1b, body)
+
 # ---- S2 떠나기 전: 휴대폰에 링크를 붙여 넣고 [우리 여행에 담기] → 차 일정에 바로 담김
 s2 = t
 c0 = p_tab - 0.9                       # 이 장면 0초의 차량 시각
 L = lambda c: c - c0
-d2 = 9.2
+d2 = 10.6
 PX, PY, PW = 380, 92, 404              # 휴대폰 카드
 pv, pw, ph = phone_card(PW, s2, d2, c0 - P_OFF)
 ox, oy = PX + 11, PY + 11
@@ -309,20 +340,25 @@ bx, by = ox + 0.5 * pw, oy + 0.565 * ph                                         
 kcss, kst = cam('cam_s2', d2, [(0, 960, 540, 1.0), (0.8, 960, 540, 1.0), (1.7, 700, 290, 1.30), (t_tap - 0.9, 700, 320, 1.30), (t_tap - 0.2, 660, 560, 1.30),
                                (t_tap + 0.25, 660, 560, 1.30), (t_add + 0.6, 1040, 560, 1.0), (t_add + 1.6, 1040, 560, 1.0), (t_add + 2.8, 1590, 600, 1.36), (d2, 1590, 606, 1.40)])
 path = 'M %.0f %.0f C %.0f %.0f, %.0f %.0f, %.0f %.0f' % (bx + 150, by, bx + 330, by - 150, row[0] - 220, row[1] - 110, row[0] - 6, row[1] + row[3] / 2)
-body = '<div class="studio"></div>' + chapter('떠나기 전', ink=True) + kcss
+body = '<div class="studio"></div>' + chapter('구르는 가이드는', ink=True) + kcss
 body += '<div class="stage" style="%s">' % kst
 body += ('<div class="card phone" style="left:%dpx;top:%dpx;width:%dpx;height:%.0fpx;%s"><div class="bezel">%s</div></div>'
          % (PX, PY, pw, ph, anim('riseIn .8s cubic-bezier(.2,.8,.2,1) .1s both'), pv))
 body += ('<div class="card car" style="left:%dpx;top:%dpx;width:%dpx;height:%.0fpx;%s">%s<i class="sheen"></i></div>'
          % (CX, CY, cw, ch, anim('slideIn .8s cubic-bezier(.2,.8,.2,1) %.2fs both' % (t_tap - 0.1)), cv))
 body += tap(ox + 0.82 * pw, oy + 0.153 * ph, t_paste) + tap(bx, by, t_tap)
-body += step('1', '링크 붙여 넣기', t_paste - 0.6, t_tap - 0.5, 'right:%dpx;top:%.0fpx' % (1920 - PX + 22, oy + 0.153 * ph - 20), 'r')
+body += step('1', '찾은 곳 링크 붙여 넣기', t_paste - 0.6, t_tap - 0.5, 'right:%dpx;top:%.0fpx' % (1920 - PX + 22, oy + 0.153 * ph - 20), 'r')
 body += step('2', '우리 여행에 담기', t_tap - 0.4, t_add + 1.8, 'right:%dpx;top:%.0fpx' % (1920 - PX + 22, by - 20), 'r')
 body += ('<svg class="link" viewBox="0 0 1920 1080"><path d="%s" pathLength="1" style="%s"/></svg>'
          % (path, anim('draw .6s cubic-bezier(.5,0,.3,1) %.2fs forwards' % t_tap, 'fadeOut .5s ease %.2fs forwards' % (t_add + 2.0))))
 body += '<i class="dot" style="offset-path:path(\'%s\');%s"></i>' % (path, anim('ride .6s cubic-bezier(.5,0,.3,1) %.2fs both' % t_tap))
 body += '<i class="hl" style="left:%.0fpx;top:%.0fpx;width:%.0fpx;height:%.0fpx;%s"></i>' % (row[0], row[1], row[2], row[3], anim('hlIn .5s cubic-bezier(.2,.8,.2,1) %.2fs both' % (t_add + 0.1)))
-body += step('3', '차 일정에 바로 담김', t_add + 0.3, d2 + 1, 'left:%.0fpx;top:%.0fpx' % (row[0] + 6, row[1] + row[3] + 12), 'lt')
+body += step('3', '차 일정에 바로 담김', t_add + 0.3, t_add + 3.5, 'left:%.0fpx;top:%.0fpx' % (row[0] + 6, row[1] + row[3] + 12), 'lt')
+body += step('', '가족이 각자 담은 곳이 한 일정으로', t_add + 3.7, d2 + 1, 'left:%.0fpx;top:%.0fpx' % (row[0] + 6, row[1] + row[3] + 12), 'lt')
+for i_, (who_, src_, yy) in enumerate([('엄마', '인스타그램에서', 0.245), ('아빠', '지도 앱에서', 0.34), ('첫째', '블로그에서', 0.44)]):      # 일정 줄마다 누가 어디서 찾아 담았는지
+    body += ('<div class="who" style="right:%.0fpx;top:%.0fpx;%s">%s<small>%s</small></div>'
+             % (1920 - (qx + 0.5 * cw - 8), qy + yy * ch - 13, anim('subIn .4s ease %.2fs both' % (t_add + 3.0 + i_ * 0.45)), who_, src_))
+    fx(s2 + t_add + 3.0 + i_ * 0.45, 'pop', 0.16)
 body += '</div>'
 fx(s2 + t_paste, 'pop', 0.3)
 fx(s2 + t_tap, 'pop', 0.34)
@@ -334,12 +370,12 @@ t = scene('s2', s2, d2, body)
 s3 = t
 c0 = c_start - 2.1
 t_go = c_start - c0
-d3 = t_go + 2.35
+d3 = t_go + 0.75
 CX, CY, CW = 360, 96, 1180
 cv, cw, ch = car_card(CW, s3, d3, c0)
 qx, qy = CX + 10, CY + 10
 gx, gy = qx + 0.86 * cw, qy + 0.91 * ch
-kcss, kst = cam('cam_s3', d3, [(0, 960, 540, 1.0), (0.4, 960, 540, 1.0), (1.5, gx - 60, gy - 60, 1.4), (t_go + 0.5, gx - 60, gy - 60, 1.4), (d3, 1100, 620, 1.12)])
+kcss, kst = cam('cam_s3', d3, [(0, 960, 540, 1.0), (0.4, 960, 540, 1.0), (1.5, gx - 60, gy - 60, 1.4), (d3, gx - 60, gy - 60, 1.4)])
 body = '<div class="studio"></div>' + chapter('출발', ink=True) + kcss
 body += ('<div class="stage" style="%s"><div class="card car" style="left:%dpx;top:%dpx;width:%dpx;height:%.0fpx;%s">%s<i class="sheen"></i></div>'
          % (kst, CX, CY, cw, ch, anim('riseIn .7s cubic-bezier(.2,.8,.2,1) 0s both'), cv))
@@ -352,9 +388,29 @@ body += sub(t_go + 0.3, d3, A03, ink=True)            # 다음 장면으로 이�
 fx(s3 + t_go, 'pop', 0.34)
 t = scene('s3', s3, d3, body)
 
+# ---- S3n 누르면 순정 내비게이션에 목적지와 경유지가 입력 없이 들어감 (에뮬레이터 내비게이션 실제 화면)
+s3n = t
+d3n = 3.8
+NX, NY, NW = 440, 118, 1120
+ns = NW / 1682.0
+ix, iy = NX + 10, NY + 10
+kcss, kst = cam('cam_s3n', d3n, [(0, 960, 540, 1.0), (0.5, 960, 540, 1.0), (d3n, 760, 330, 1.16)])
+body = '<div class="studio"></div>' + chapter('순정 내비게이션으로', ink=True) + kcss
+body += ('<div class="stage" style="%s"><div class="card" style="left:%dpx;top:%dpx;width:%dpx;height:%.0fpx;%s"><img src="@A@/navi_big.jpg" style="position:absolute;left:0;top:0;width:100%%;height:100%%"></div>'
+         % (kst, NX, NY, NW, 1210 * ns, anim('riseIn .6s cubic-bezier(.2,.8,.2,1) 0s both')))
+body += ('<i class="hl" style="left:%.0fpx;top:%.0fpx;width:%.0fpx;height:%.0fpx;%s"></i>'
+         % (ix + 25 * ns - 5, iy + 25 * ns - 4, 577 * ns + 10, 178 * ns + 8, anim('hlIn .5s cubic-bezier(.2,.8,.2,1) .7s both')))
+body += step('', '목적지 대릉원', 0.8, d3n + 1, 'right:%dpx;top:%.0fpx' % (1920 - NX + 14, iy + 74 * ns - 20), 'r')
+body += step('', '경유지 점심 식당', 1.2, d3n + 1, 'right:%dpx;top:%.0fpx' % (1920 - NX + 14, iy + 163 * ns - 20), 'r')
+body += '</div>'
+body += sub(0, (s3 + t_go + 0.3 + La) - s3n + 0.1, A03, ink=True, inst=True)
+fx(s3n, 'whoosh_s', 0.3)
+fx(s3n + 0.7, 'ding', 0.26)
+t = scene('s3n', s3n, d3n, body)
+
 # ---- S3b 지도: 담아 둔 일정이 핀으로 꽂히고, 경로가 그려지고, 차가 출발
 s3b = t
-d3b = 6.0
+d3b = 5.2
 rest = (s3 + t_go + 0.3 + La) - s3b
 FARV = {'tx': 1300, 'tz': -1700, 'dist': 7400, 'pitch': 60, 'yaw': 0, 'fov': 30}
 PH = 480                               # 멀리서 본 핀 머리 높이(m)
@@ -372,8 +428,6 @@ body += l3('p2', '<span class="t"><small>13:00</small>대릉원</span>', 0.8, cl
 body += l3('p3', '<span class="t"><small>17:40</small>동궁과 월지</span>', 1.1, cls='sr', a_in='fadeIn')
 body += l3('p4', '<span class="t"><i>방금 담음</i>황리단길 카페</span>', 1.5, cls='sr', a_in='fadeIn')
 body += l3('p5', '<span class="t">출발</span>', 3.0)
-body += ('<div class="navi dk" style="%s"><div class="card"><img src="@A@/navi.jpg"></div><div class="lab">순정 내비게이션 · 목적지와 경유지 전달</div></div>'
-         % anim('naviIn .7s cubic-bezier(.2,.8,.2,1) 2.4s both'))
 body += sub(0, rest + 0.1, A03, inst=True)
 fx(s3b, 'whoosh', 0.3)
 for i_, at_ in enumerate([0.3, 0.6, 0.9, 1.3]):
@@ -604,12 +658,52 @@ body += ('<div class="stage" style="' + kst + '"><div class="card phone center" 
 fx(s6c + 0.6, 'ding', 0.32)
 t = scene('s6c', s6c, d6c, body)
 
+# ---- S6d 친구와 차 두 대로 갈 때: 앞 차가 정한 목적지를 뒤 차가 "응" 한 번으로 받음
+#      기획서의 친구 여행 시나리오를 그린 구상 장면. 시제품 앱에는 아직 없어 화면에 그렇게 적음
+s6d = t
+lead0, vel, gap = 5000.0, 105.0, 330.0
+t_ask = 1.3
+Ld1 = say(s6d + t_ask, 'd01')
+t_yes = t_ask + Ld1 + 0.35
+Ld2 = say(s6d + t_yes, 'd02', 1.3)
+t_set = t_yes + Ld2 + 0.35
+Ld3 = say(s6d + t_set, 'd03')
+d6d = t_set + Ld3 + 0.9
+lead = lambda tt: lead0 + vel * tt
+foll = lambda tt: lead0 - gap + vel * tt
+dst = xz('daereungwon')
+cfg = {'car': [[0, lead(0)], [d6d, lead(d6d)]], 'car2': [[0, foll(0)], [d6d, foll(d6d)]], 'car2Link': [[t_set - 0.2, 0], [t_set + 0.4, 1]],
+       'gold': [[0, 0]], 'draw': [[0, AN['daereungwon']['s']]], 'head': [[0, 0]],
+       'fromT': [[0, lead(0)], [t_set - 0.2, lead(t_set - 0.2)], [t_set + 0.5, foll(t_set + 0.5)], [d6d, foll(d6d)]],
+       'pins': [{'pos': dst, 'color': DAD, 'at': 0.5}],
+       'labels': [{'sel': '#f1', 'car': 1, 'y': 85}, {'sel': '#f2', 'car2': 1, 'y': 85}, {'sel': '#f3', 'car2': 1, 'y': 85}, {'sel': '#f4', 'car2': 1, 'y': 85},
+                  {'sel': '#f5', 'pos': [dst[0], 190, dst[1]]}],
+       'cam': [{'t': 0, 'follow': 1, 'tx': 0, 'tz': 60, 'dist': 1500, 'pitch': 44, 'yaw': -10, 'fov': 30},
+               {'t': t_set - 0.2, 'follow': 1, 'tx': 0, 'tz': 60, 'dist': 1350, 'pitch': 42, 'yaw': -4, 'fov': 30},
+               {'t': t_set + 1.8, 'follow': 0.62, 'tx': dst[0] * 0.38, 'tz': dst[1] * 0.38, 'dist': 2700, 'pitch': 50, 'yaw': 4, 'fov': 30},
+               {'t': d6d, 'follow': 0.62, 'tx': dst[0] * 0.38, 'tz': dst[1] * 0.38, 'dist': 2600, 'pitch': 50, 'yaw': 6, 'fov': 30}]}
+cv_, tail = gl(cfg)
+body = cv_ + chapter('친구와 차 두 대로 · 구상 장면', at=0.4, hold=d6d)
+body += l3('f1', '<span class="t sm"><i>앞 차</i></span>', 0.3)
+body += l3('f2', '<span class="t sm">뒤 차</span>', 0.3, t_ask)
+body += l3('f3', '<span class="t"><i>같이 갈까요?</i></span>', t_ask + 0.1, t_set)
+body += l3('f4', '<span class="t"><i>같은 목적지</i>대릉원</span>', t_set + 0.3)
+body += l3('f5', '<span class="t"><i>앞 차 목적지</i>대릉원</span>', 0.8)
+body += sub(t_ask, Ld1 + 0.1, '앞 차가 대릉원으로 가요. 같이 갈까요?')
+body += listen(t_yes - 0.2, Ld2 + 0.3)
+body += sub(t_yes, Ld2 + 0.2, '응, 같이 가자', '친구')
+body += sub(t_set, Ld3 + 0.1, '대릉원을 목적지로 설정했어요')
+body += '<div class="note3">기획서의 친구 여행 시나리오를 그린 구상 장면 · 시제품에는 아직 넣지 않았습니다</div>'
+fx(s6d, 'whoosh', 0.3)
+fx(s6d + t_set + 0.3, 'ding', 0.26)
+t = scene('s6d', s6d, d6d, body, tail=tail)
+
 # ---- 끝
 s7 = t
 body = ('<div class="title-bg"></div><div class="end" style="%s">%s<h1>구르는 가이드</h1><p>내 차의 여행 모드</p>'
         '<div class="sdk">NaviHelper · FusedLocation · Vehicle · TextToSpeech · SpeechToText</div></div>'
         '<div class="foot" style="%s">차량·휴대폰 화면은 Pleos Connect 에뮬레이터와 휴대폰 웹 실제 실행 화면 · 지도 장면은 앱 지도로 만든 3D 그래픽<br>'
-        '차 실내와 도로는 생성 이미지와 스톡 영상 · 목소리는 AI 합성 음성</div>'
+        '차 실내와 도로는 생성 이미지와 스톡 영상 · 목소리는 AI 합성 음성 · 친구 여행은 구상 장면</div>'
         % (anim('endIn 1s cubic-bezier(.2,.8,.2,1) .3s both'), MARK, anim('fadeIn .8s ease 1.4s both')))
 t = scene('s7', s7, 5.6, body, 'dark')
 TOTAL = t
@@ -662,6 +756,7 @@ def sfx(kind):
         'whoosh_s': "anoisesrc=d=0.6:c=pink:a=0.5,highpass=f=900,lowpass=f=7000,afade=t=in:d=0.2,afade=t=out:st=0.25:d=0.35",
         'pop': "sine=f=880:d=0.14,afade=t=out:st=0.02:d=0.12,volume=0.8",
         'tick': "aevalsrc='0.6*sin(2*PI*1600*t)*exp(-60*mod(t\\,0.5))':d=3",
+        'keys': "aevalsrc='0.45*sin(2*PI*2300*t)*exp(-110*mod(t\\,0.11))':d=1",      # 화면 자판 두드리는 소리
         'chime': "aevalsrc='0.35*sin(2*PI*1046.5*t)*exp(-3*t)+0.25*sin(2*PI*1568*t)*exp(-4*t)':d=2",
         'ding': "aevalsrc='0.35*sin(2*PI*1318.5*t)*exp(-5*t)+0.2*sin(2*PI*1975.5*t)*exp(-6*t)':d=1.2",
         'shimmer': "aevalsrc='0.12*sin(2*PI*(2093+800*t)*t)*exp(-1.6*t)+0.1*sin(2*PI*2637*t)*exp(-2*t)':d=2.2",
