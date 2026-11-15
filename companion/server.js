@@ -1,796 +1,812 @@
-// 구르는 가이드 여행 그룹 서버
-// 차 앱과 동승자 휴대폰(웹)을 네 자리 그룹 번호로 묶는다.
-//  - 차 → 휴대폰: 이야기(시작, 읽는 문장, 끝), 아이 이야기, 지난 명소, 퀴즈와 별, 차에 말로 물어본 것의 답
-//  - 휴대폰 → 차: 고른 장소(운전자가 확인), 퀴즈 답(채점은 서버가 함)
-//  - 여행 뒤: 차가 올린 기록(지나온 길, 지난 명소)
-// 차의 실시간 위치는 받지 않는다.
-import http from 'node:http';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
-import crypto from 'node:crypto';
-import zlib from 'node:zlib';
-import { pipeline } from 'node:stream';
-import { fileURLToPath } from 'node:url';
-import { WebSocketServer } from 'ws';
+'use strict';
+/*
+ * 구르는 가이드 동반 서버
+ * 차량 앱과 휴대폰 웹이 같은 여행(trip)을 주고받는 API. Node 내장 모듈만 쓴다(npm 설치 없음).
+ *   실행: node companion/server.js   또는   cd companion && npm start
+ *   포트 8787(환경 변수 PORT 로 바꿈), 0.0.0.0 에 붙는다. 같은 와이파이 휴대폰은 /api/info 의 lanUrl 로 접속
+ * 저장: 메모리 + companion/state/<여행코드>.json(다시 켜도 이어짐). 휴대폰이 올린 사진은 companion/uploads/
+ *
+ * 화면 주소
+ *   /t/:code        휴대폰 웹 '우리 여행'(web/index.html). ?me=mom 이면 그 일행으로 바로 시작
+ *   /reel/:code     여행 영상(web/reel/index.html). 영상은 ../photos ../data ../audio ../map 상대 주소를 쓰므로
+ *                   /photos /data /audio /map /vendor 도 web/ 아래로 연결한다(차량은 file:///android_asset/reel/ 로 같은 구조)
+ *   /web/...        companion/web 정적 파일,  /uploads/...  휴대폰이 올린 사진
+ */
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const zlib = require('zlib');
+const crypto = require('crypto');
 
-const PORT = Number(process.env.PORT || 8787);
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const WEB = path.join(HERE, 'web');
-const PHOTOS = path.join(WEB, 'photos');
-const SCENARIOS = path.join(HERE, '..', 'app', 'src', 'main', 'assets', 'scenarios');
-// 시험할 때는 DATA_DIR 로 임시 폴더를 줘서 실제 data 폴더를 건드리지 않음
-const DATA = path.resolve(process.env.DATA_DIR || path.join(HERE, 'data'));
+const PORT = Number(process.env.PORT) || 8787;
+const HOST = process.env.HOST || '0.0.0.0';
+const ROOT = __dirname;
+const WEB = path.join(ROOT, 'web');
+// 시험용으로 서버를 하나 더 띄울 때는 STATE_DIR, UPLOAD_DIR 을 따로 줘서 시연 서버의 상태를 건드리지 않게 함
+const STATE_DIR = path.resolve(process.env.STATE_DIR || path.join(ROOT, 'state'));
+const UPLOAD_DIR = path.resolve(process.env.UPLOAD_DIR || path.join(ROOT, 'uploads'));
+const SEED_FILE = path.join(WEB, 'data', 'trip_seed.json');
+const PLACES_FILE = path.join(WEB, 'data', 'places.json');
+const DEFAULT_CODE = 'GJ1016';
+const MAX_JSON = 5 * 1024 * 1024;
+const MAX_PHOTO = 25 * 1024 * 1024;
+const INBOX_KEEP = 1000;
+const CAR_ONLINE_MS = 15000;
+// 차량이 'add' 를 가져간 뒤 이 시간 동안 차량 상태에 그 장소가 없으면 차량이 넣지 않기로 한 것으로 본다
+const PENDING_GRACE_MS = 15000;
 
-function lanIp() {
-  for (const list of Object.values(os.networkInterfaces())) {
-    for (const a of list || []) if (a.family === 'IPv4' && !a.internal) return a.address;
-  }
-  return '127.0.0.1';
-}
-const PUBLIC_BASE = process.env.PUBLIC_BASE || ('http://' + lanIp() + ':' + PORT);
-const CODE_RE = /^\d{4}$/;
-// 끝난 그룹은 KEEP_DAYS(기본 3일) 뒤 폴더째 지움. 0 이나 off 면 지우지 않음
-const KEEP_DAYS = process.env.KEEP_DAYS === undefined || process.env.KEEP_DAYS === '' ? 3 : (Number(process.env.KEEP_DAYS) > 0 ? Number(process.env.KEEP_DAYS) : 0);
+fs.mkdirSync(STATE_DIR, { recursive: true });
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-/** root 안쪽 경로만 돌려줌. 폴더 밖(.. 이나 절대 경로)으로 나가면 null */
-function inside(root, ...parts) {
-  const full = path.resolve(root, ...parts);
-  const rel = path.relative(root, full);
-  if (!rel || rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel)) return null;
-  return full;
-}
-const groupDir = code => (CODE_RE.test(String(code)) ? inside(DATA, String(code)) : null);
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.heic': 'image/heic',
+  '.ico': 'image/x-icon',
+  '.ogg': 'audio/ogg',
+  '.oga': 'audio/ogg',
+  '.wav': 'audio/wav',
+  '.mp3': 'audio/mpeg',
+  '.m4a': 'audio/mp4',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
+  '.ttf': 'font/ttf',
+};
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, HEAD, POST, PUT, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Accept, If-None-Match, X-Requested-With',
+  'Access-Control-Allow-Private-Network': 'true',
+  'Access-Control-Max-Age': '600',
+};
 
-/** 이 컴퓨터에서 바로 온 요청 (터널이나 프록시를 거친 것은 아님) */
-function directLocal(req) {
-  const a = req.socket.remoteAddress || '', h = req.headers;
-  return (a === '127.0.0.1' || a === '::1' || a === '::ffff:127.0.0.1') && !h['x-forwarded-for'] && !h['forwarded'] && !h['x-real-ip'] && !h['cf-connecting-ip'];
-}
+// ---------------------------------------------------------------- 작은 도구
+const now = () => Date.now();
+const clone = (o) => (o == null ? o : JSON.parse(JSON.stringify(o)));
+const str = (v, max) => (v == null ? '' : String(v).trim().slice(0, max || 200));
+const num = (v) => (v === null || v === undefined || v === '' || !isFinite(Number(v)) ? null : Number(v));
+const md5 = (s) => crypto.createHash('md5').update(s).digest('hex');
+const normName = (s) => String(s || '').replace(/[\s·\-_.,]+/g, '').toLowerCase();
 
-function clientIp(req) {
-  return String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
-}
-
-// 간단한 속도 제한: windowMs 동안 max 번까지. 넘으면 기다릴 초를 돌려줌
-class Limiter {
-  constructor(max, windowMs) { this.max = max; this.windowMs = windowMs; this.hits = new Map(); }
-  take(key) {
-    const now = Date.now();
-    const arr = (this.hits.get(key) || []).filter(t => now - t < this.windowMs);
-    if (arr.length >= this.max) { this.hits.set(key, arr); return Math.max(1, Math.ceil((this.windowMs - (now - arr[0])) / 1000)); }
-    arr.push(now);
-    this.hits.set(key, arr);
-    return 0;
-  }
-  sweep() {
-    const now = Date.now();
-    for (const [k, arr] of this.hits) { const a = arr.filter(t => now - t < this.windowMs); if (a.length) this.hits.set(k, a); else this.hits.delete(k); }
-  }
-}
-const pidLimit = new Limiter(10, 10 * 60 * 1000);   // 새 휴대폰 구분 값은 IP·그룹마다 10분에 10개까지
-const lookupLimit = new Limiter(5, 60 * 1000);       // 키 없이 네 자리 번호로 찾는 것은 IP마다 1분에 5번
-const joinLimit = new Limiter(5, 60 * 1000);         // 두 번째 차부터 그룹에 들어오기
-const createLimit = new Limiter(20, 10 * 60 * 1000); // 그룹 만들기
-const okPairs = new Map();                           // 'ip|번호' → 이미 맞힌 번호 (같은 휴대폰이 다시 붙을 때는 세지 않음)
-function lookupWait(ip, code) {
-  const exp = okPairs.get(ip + '|' + code);
-  return exp && exp > Date.now() ? 0 : lookupLimit.take(ip);
-}
-const lookupOk = (ip, code) => okPairs.set(ip + '|' + code, Date.now() + 6 * 3600 * 1000);
-// 속도 제한 기록은 10분마다 정리 (오래 켜 둬도 메모리가 늘지 않게)
-setInterval(() => {
-  for (const l of [pidLimit, lookupLimit, joinLimit, createLimit]) l.sweep();
-  const now = Date.now();
-  for (const [k, exp] of okPairs) if (exp < now) okPairs.delete(k);
-}, 10 * 60 * 1000).unref();
-
-// 시연 녹화 도구(tools/demo)용 예외: DEMO_LOCAL_TRUST=1 이면 이 컴퓨터에서 바로 온 접속은 키가 없어도 차·full 로 받음
-const DEMO_LOCAL_TRUST = process.env.DEMO_LOCAL_TRUST === '1';
-const localTrusted = req => DEMO_LOCAL_TRUST && directLocal(req);
-
-// 그룹마다 휴대폰 키(QR 주소의 k) 하나, 차마다 차 키 하나. 128비트 난수
-const newKey = () => crypto.randomBytes(16).toString('base64url');
-function sameKey(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string' || !a || a.length !== b.length) return false;
-  const x = Buffer.from(a), y = Buffer.from(b);
-  return x.length === y.length && crypto.timingSafeEqual(x, y);
+function readJsonFile(file, fallback) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return fallback; }
 }
 
-// 코스 파일은 차 앱의 것을 그대로 읽어 휴대폰에도 줌 (파일이 바뀌면 다시 읽음)
-const scenarioCache = new Map();
-function scenarioEntry(id) {
-  const file = path.join(SCENARIOS, id + '.json');
+// 파일이 바뀌면 다시 읽는 JSON(data/ 를 고쳐도 서버를 다시 켤 필요 없게)
+const jsonCache = new Map();
+function cachedJson(file) {
   let st;
-  try { st = fs.statSync(file); } catch { return null; }
-  const hit = scenarioCache.get(id);
-  if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return hit;
-  try {
-    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-    const entry = { mtimeMs: st.mtimeMs, size: st.size, data, body: JSON.stringify(data) };
-    scenarioCache.set(id, entry);
-    return entry;
-  } catch (e) { console.warn('[scenario]', id, e.message); return null; }
+  try { st = fs.statSync(file); } catch (e) { return null; }
+  const c = jsonCache.get(file);
+  if (c && c.mtime === st.mtimeMs && c.size === st.size) return c.data;
+  const data = readJsonFile(file, null);
+  jsonCache.set(file, { mtime: st.mtimeMs, size: st.size, data });
+  return data;
 }
 
-// 명소 사진 목록: web/photos 의 '<명소id>_<번호>.jpg', 밤 사진은 '<명소id>_night_<번호>.jpg'.
-// 찍은 사람과 라이선스(credits.json)를 함께 줌. 폴더가 바뀌면 다시 읽음
-let photoCache = null;
-function photoIndex() {
-  const creditFile = path.join(PHOTOS, 'credits.json');
-  let stamp = '';
-  try { stamp = fs.statSync(PHOTOS).mtimeMs + ':' + (fs.existsSync(creditFile) ? fs.statSync(creditFile).mtimeMs : 0); } catch { return '{"places":{},"credits":{}}'; }
-  if (photoCache && photoCache.stamp === stamp) return photoCache.body;
-  const places = {}, credits = {};
-  const found = [];
-  for (const name of fs.readdirSync(PHOTOS)) {
-    const m = /^([a-z0-9_]+?)(_night)?_(\d+)\.jpg$/.exec(name);
-    if (m) found.push({ id: m[1], night: !!m[2], n: Number(m[3]), name });
-  }
-  found.sort((a, b) => a.n - b.n);
-  for (const f of found) {
-    const p = places[f.id] || (places[f.id] = { day: [], night: [] });
-    (f.night ? p.night : p.day).push(f.name);
-  }
-  try {
-    for (const c of JSON.parse(fs.readFileSync(creditFile, 'utf8'))) {
-      if (c && typeof c.file === 'string') credits[c.file] = { title: txt(c.title, 200), author: txt(c.author, 120), license: txt(c.license, 60), license_url: txt(c.license_url, 300), source: txt(c.source, 300) };
+function lanAddress() {
+  if (process.env.LAN_IP) return process.env.LAN_IP;
+  const nets = os.networkInterfaces();
+  const cands = [];
+  for (const [name, list] of Object.entries(nets)) {
+    for (const a of list || []) {
+      const fam = typeof a.family === 'string' ? a.family : (a.family === 4 ? 'IPv4' : 'IPv6');
+      if (fam !== 'IPv4' || a.internal) continue;
+      const ip = a.address;
+      if (ip.startsWith('169.254.')) continue;
+      let score = 0;
+      if (/^(en|eth|wlan|wl|wi-?fi)/i.test(name)) score += 10;
+      if (/^(en0|wlan0|eth0)$/i.test(name)) score += 5;
+      if (/^(bridge|utun|vmnet|vboxnet|docker|veth|br-|llw|awdl|tun|tap|zt|tailscale|anpi)/i.test(name)) score -= 20;
+      if (/^192\.168\./.test(ip)) score += 4;
+      else if (/^10\./.test(ip)) score += 3;
+      else if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) score += 2;
+      cands.push({ ip, name, score });
     }
-  } catch {}
-  photoCache = { stamp, body: JSON.stringify({ places, credits }) };
-  return photoCache.body;
-}
-
-/** code -> group */
-const groups = new Map();
-
-function newCode() {
-  for (let i = 0; i < 1000; i++) {
-    const c = String(1000 + crypto.randomInt(9000));
-    if (!groups.has(c)) return c;
   }
-  throw new Error('no code');
+  cands.sort((a, b) => b.score - a.score);
+  return cands.length ? cands[0].ip : '127.0.0.1';
 }
 
-function makeGroup(code, scenarioId, lang) {
-  const dir = groupDir(code);
-  if (!dir) throw new Error('bad code');
-  const g = {
-    code, scenarioId, lang, createdAt: Date.now(),
-    phoneKey: newKey(), carSlots: [],
-    cars: new Map(), phones: new Set(),
-    story: null, line: null, passes: [], picks: [], acks: [], said: [],
-    record: null, ended: false,
-    qa: [], hunt: null, found: [], photos: [], kid: false,
-    pids: [], pidSet: new Set(),
+function normCode(c) {
+  c = String(c || '').trim().toUpperCase();
+  return /^[A-Z0-9_-]{2,32}$/.test(c) ? c : null;
+}
+
+// ---------------------------------------------------------------- 여행 저장소
+// st = { code, trip(차량이 보낸 마지막 상태, 없으면 null → trip_seed.json), inbox[], seq, carSeq(차량이 가져간 마지막 seq),
+//        carAt(차량이 마지막으로 연락한 때), stateAt(마지막 PUT state), shares{일행id:true|false}, uploads[{url,by,at}] }
+const store = new Map();
+const dirty = new Set();
+let saveTimer = null;
+
+function seedTrip(code) {
+  const seed = cachedJson(SEED_FILE) || {
+    title: '우리 여행', region: 'gyeongju', members: [], places: [], now: null, heard: [],
+    mode: { active: false }, car: null, record: null, rev: 0,
   };
-  groups.set(code, g);
-  fs.mkdirSync(dir, { recursive: true });
-  return g;
+  const t = clone(seed);
+  t.code = code;
+  return t;
 }
 
-// 차 자리: 번호, 서버가 붙인 이름('2호차'), 차 키. 그룹마다 8대까지
-function addCar(g) {
-  if (g.carSlots.length >= 8) return null;
-  const no = g.carSlots.reduce((m, s) => Math.max(m, s.no), 0) + 1;
-  const slot = { no, name: no + '호차', key: newKey(), joinedAt: Date.now() };
-  g.carSlots.push(slot);
-  return slot;
-}
-const carSlotByKey = (g, key) => (key && g.carSlots.find(s => sameKey(s.key, String(key)))) || null;
-// k 를 car 보다 앞에 둠: 차 앱이 주소 끝에 /record 를 붙여도(car=1/record) 휴대폰이 알아봄
-const joinUrlFor = (g, no) => PUBLIC_BASE + '/g/' + g.code + '?k=' + g.phoneKey + '&car=' + no;
-const recordUrlFor = (g, no) => PUBLIC_BASE + '/g/' + g.code + '/record?k=' + g.phoneKey + '&car=' + no;
-function carCredentials(g, slot) {
-  return {
-    code: g.code, carKey: slot.key, carNo: slot.no, carName: slot.name,
-    joinUrl: joinUrlFor(g, slot.no), recordUrl: recordUrlFor(g, slot.no), publicBase: PUBLIC_BASE,
-    scenarioId: g.scenarioId, lang: g.lang,
-  };
+function getStore(code) {
+  let st = store.get(code);
+  if (st) return st;
+  const saved = readJsonFile(path.join(STATE_DIR, code + '.json'), null);
+  st = Object.assign({ code, trip: null, inbox: [], seq: 0, carSeq: 0, carAt: 0, stateAt: 0, shares: {}, uploads: [] }, saved || {});
+  st.code = code;
+  if (!Array.isArray(st.inbox)) st.inbox = [];
+  if (!Array.isArray(st.uploads)) st.uploads = [];
+  if (!st.shares || typeof st.shares !== 'object') st.shares = {};
+  store.set(code, st);
+  return st;
 }
 
-// who: { role: 'car' | 'phone', level: 'full' | 'basic', pid }
-// 번호만 넣고 들어온 휴대폰(basic)에는 지나온 길과 차에 물어본 것을 주지 않음
-function summary(g, who = {}) {
-  const full = who.role === 'car' || who.level === 'full';
-  const s = {
-    code: g.code, scenarioId: g.scenarioId, lang: g.lang, publicBase: PUBLIC_BASE, access: full ? 'full' : 'basic',
-    cars: [...g.cars.values()].map(c => c.name), phones: g.phones.size,
-    story: g.story, line: g.line, passes: g.passes, ended: g.ended,
-    // 차가 둘이면 휴대폰은 QR 의 car=N 으로 자기 차 이야기만 따름. 다시 붙을 때 차마다 마지막 이야기를 그리게 함께 줌
-    stories: Object.values(g.storyBy || {}), lines: Object.values(g.lineBy || {}).filter(Boolean),
-    hunt: g.hunt, found: g.found, kid: !!g.kid,
-    keepDays: KEEP_DAYS,   // 휴대폰의 'N일 뒤 지워져요' 안내에 씀 (0 이면 지우지 않음)
-  };
-  if (full) Object.assign(s, { record: g.record, qa: g.qa.slice(-20), photos: g.photos });
-  return s;
+function persist(st) {
+  dirty.add(st.code);
+  if (!saveTimer) saveTimer = setTimeout(flush, 120);
 }
 
-// 서버를 다시 켜도 여행 그룹이 이어지도록 디스크에 저장해 둔다
-const saveTimers = new Map();
-function writeGroup(g) {
-  // group.json 에는 퀴즈 정답과 키가 들어 있음. 자료 폴더는 웹으로 열리지 않음
-  if (groups.get(g.code) !== g) return;   // 그사이 지운 그룹은 다시 쓰지 않음
-  const keep = { code: g.code, scenarioId: g.scenarioId, lang: g.lang, createdAt: g.createdAt, phoneKey: g.phoneKey, carSlots: g.carSlots, story: g.story, storyBy: g.storyBy, passes: g.passes, picks: g.picks, acks: g.acks, record: g.record, ended: g.ended, endedAt: g.endedAt, qa: g.qa, found: g.found, photos: g.photos, kid: !!g.kid, pids: g.pids };
-  try {
-    const f = path.join(DATA, g.code, 'group.json');
-    fs.writeFileSync(f + '.tmp', JSON.stringify(keep));
-    fs.renameSync(f + '.tmp', f);
-  } catch (e) { console.warn('[persist]', e.message); }
-}
-function persist(g) {
-  clearTimeout(saveTimers.get(g.code));
-  saveTimers.set(g.code, setTimeout(() => { saveTimers.delete(g.code); writeGroup(g); }, 300));
-}
-
-function restoreGroups() {
-  if (!fs.existsSync(DATA)) return;
-  for (const code of fs.readdirSync(DATA)) {
-    const f = path.join(DATA, code, 'group.json');
-    if (!/^\d{4}$/.test(code) || !fs.existsSync(f)) continue;
+function flush() {
+  saveTimer = null;
+  for (const code of dirty) {
+    const st = store.get(code);
+    if (!st) continue;
+    const file = path.join(STATE_DIR, code + '.json');
+    const tmp = file + '.tmp';
     try {
-      const s = JSON.parse(fs.readFileSync(f, 'utf8'));
-      const g = makeGroup(code, s.scenarioId, s.lang);
-      Object.assign(g, s, { cars: new Map(), phones: new Set() });
-      // 예전 그룹 파일에 남아 있을 수 있는 값(지금은 없는 기능)은 버림
-      for (const old of ['reports', 'highlight', 'handoff', 'treasure', 'quizzes', 'answers', 'stars']) delete g[old];
-      g.found = Array.isArray(g.found) ? g.found : [];
-      g.photos = Array.isArray(g.photos) ? g.photos.filter(p => p && typeof p.url === 'string') : [];
-      g.hunt = null;
-      g.pids = Array.isArray(g.pids) ? g.pids : [];
-      g.pidSet = new Set(g.pids);
-      if (!Array.isArray(g.carSlots)) g.carSlots = [];
-      if (!s.phoneKey) persist(g);   // 예전 그룹에는 키가 없어 새로 만든 키를 저장
-      // 예전 그룹은 끝난 시각이 없음: 기록의 끝난 시각, 없으면 파일 시각으로
-      if (g.ended && !g.endedAt) g.endedAt = Number(g.record && g.record.endedAt) || fs.statSync(f).mtimeMs;
-    } catch (e) { console.warn('[restore]', code, e.message); }
-  }
-  if (groups.size) console.log('[group] 이전 그룹 ' + groups.size + '개를 불러왔어요');
-}
-restoreGroups();
-
-const markEnded = g => { g.ended = true; g.endedAt = Date.now(); };
-
-// 올린 사진에서 찍은 위치와 기기 정보(EXIF, 주석)를 떼어 냄
-function stripJpegMeta(buf) {
-  if (buf[0] !== 0xff || buf[1] !== 0xd8) return buf;
-  const parts = [buf.subarray(0, 2)];
-  let i = 2;
-  while (i + 4 <= buf.length && buf[i] === 0xff) {
-    const marker = buf[i + 1];
-    if (marker === 0xff) { i += 1; continue; }
-    if (marker === 0xda) break;   // 여기부터 그림 데이터
-    const len = buf.readUInt16BE(i + 2);
-    if (len < 2 || i + 2 + len > buf.length) return buf;
-    const drop = marker === 0xe1 || (marker >= 0xe3 && marker <= 0xed) || marker === 0xef || marker === 0xfe;
-    if (!drop) parts.push(buf.subarray(i, i + 2 + len));
-    i += 2 + len;
-  }
-  parts.push(buf.subarray(i));
-  return Buffer.concat(parts);
-}
-
-// 끝난 지 KEEP_DAYS 가 지난 그룹은 폴더째 지움. 차가 붙어 있으면 미룸
-function sweepOld() {
-  if (!(KEEP_DAYS > 0)) return;
-  const limit = KEEP_DAYS * 24 * 3600 * 1000, now = Date.now();
-  for (const g of [...groups.values()]) {
-    if (!g.ended || !g.endedAt || now - g.endedAt < limit || g.cars.size) continue;
-    for (const p of g.phones) { send(p, { type: 'error', error: 'no such group' }); try { p.close(4404, 'no such group'); } catch {} }
-    groups.delete(g.code);
-    clearTimeout(saveTimers.get(g.code));
-    saveTimers.delete(g.code);
-    const dir = groupDir(g.code);
-    if (dir) { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { console.warn('[keep]', g.code, e.message); } }
-    console.log('[keep] 끝난 지 ' + KEEP_DAYS + '일이 지나 그룹을 지웠어요', g.code);
-  }
-}
-sweepOld();
-setInterval(sweepOld, 3600 * 1000).unref();
-
-function send(ws, obj) {
-  try { if (ws.readyState === 1) ws.send(JSON.stringify(obj)); } catch {}
-}
-
-// full: QR(휴대폰 키)로 들어온 휴대폰에만 보냄 (지나온 길, 물어본 것)
-function broadcast(g, obj, { cars = true, phones = true, except = null, full = false } = {}) {
-  persist(g);
-  if (cars) for (const c of g.cars.values()) if (c.ws !== except) send(c.ws, obj);
-  if (phones) for (const p of g.phones) if (p !== except && (!full || p.level === 'full')) send(p, obj);
-}
-
-function members(g) {
-  broadcast(g, { type: 'members', cars: [...g.cars.values()].map(c => c.name), phones: g.phones.size });
-}
-
-// ---------------------------------------------------------------- HTTP
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.txt': 'text/plain; charset=utf-8', '.webp': 'image/webp', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.woff': 'font/woff' };
-
-function json(res, code, obj) {
-  // CORS 머리글은 두지 않음 (휴대폰 페이지는 같은 주소, 차는 OkHttp 라 필요 없음)
-  res.writeHead(code, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-store' });
-  res.end(JSON.stringify(obj));
-}
-
-const gzCache = new Map();   // 웹 폴더 글자 파일의 gzip 결과 (파일이 바뀌면 다시 만듦)
-function serveFile(res, file, req) {
-  fs.stat(file, (err, st) => {
-    try {
-      if (err || !st.isFile()) { res.writeHead(404); return res.end('not found'); }
-      const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
-      // 한 번 받은 파일은 다시 받지 않게(304). 글꼴·지도 라이브러리와 명소 사진은 1시간 동안 그대로 씀
-      const lastMod = st.mtime.toUTCString();
-      const cache = /[\\/](vendor|photos)[\\/]/.test(file) && !file.endsWith('.json') ? 'public, max-age=3600' : 'no-cache';
-      if (req && req.headers['if-modified-since'] === lastMod) { res.writeHead(304, { 'Last-Modified': lastMod, 'Cache-Control': cache }); return res.end(); }
-      // 글자 파일은 gzip 으로 보냄
-      if (req && st.size > 1024 && /^(text\/|application\/json|image\/svg)/.test(type) && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
-        let hit = gzCache.get(file);
-        if (!hit || hit.mtimeMs !== st.mtimeMs) { hit = { mtimeMs: st.mtimeMs, body: zlib.gzipSync(fs.readFileSync(file)) }; gzCache.set(file, hit); }
-        res.writeHead(200, { 'Content-Type': type, 'Content-Encoding': 'gzip', 'Content-Length': hit.body.length, 'Cache-Control': cache, 'Last-Modified': lastMod, 'Vary': 'Accept-Encoding' });
-        return res.end(req.method === 'HEAD' ? undefined : hit.body);
-      }
-      res.writeHead(200, { 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': cache, 'Last-Modified': lastMod });
-      if (req && req.method === 'HEAD') return res.end();
-      pipeline(fs.createReadStream(file), res, () => {});
+      fs.writeFileSync(tmp, JSON.stringify(st, null, 1));
+      fs.renameSync(tmp, file);
     } catch (e) {
-      console.warn('[file]', e.message);
-      if (!res.headersSent) { res.writeHead(500); res.end(); } else res.destroy();
+      console.error('[저장 실패]', code, e.message);
     }
-  });
+  }
+  dirty.clear();
 }
 
-const httpError = (status, message) => Object.assign(new Error(message), { status });
+const samePlace = (a, b) => !!(a && b) && ((a.id && b.id && a.id === b.id) || (normName(a.name) && normName(a.name) === normName(b.name)));
+const uploadKey = (u) => { const m = /uploads\/([^?#]+)/.exec(String(u || '')); return m ? m[1] : String(u || ''); };
 
-/** 본문을 메모리로 읽음. 한도를 넘으면 413 (연결은 응답을 보낸 뒤 failRequest 가 끊음) */
+// 휴대폰에 보여 줄 여행: 차량 상태 + 아직 차량에 반영되지 않은 휴대폰 입력(담기, 위치 공유, 올린 사진)
+function buildView(st) {
+  const trip = st.trip ? clone(st.trip) : seedTrip(st.code);
+  trip.code = st.code;
+  if (!Array.isArray(trip.places)) trip.places = [];
+  if (Array.isArray(trip.members)) {
+    for (const m of trip.members) {
+      if (m && Object.prototype.hasOwnProperty.call(st.shares, m.id)) m.sharing = !!st.shares[m.id];
+    }
+  }
+  for (const it of st.inbox) {
+    if (it.type !== 'add' || !it.place) continue;
+    if (trip.places.some((p) => samePlace(p, it.place))) continue;
+    if (it.takenAt && st.stateAt > it.takenAt + PENDING_GRACE_MS) continue;
+    const p = Object.assign({}, it.place, { by: it.by || it.place.by || null, status: 'pending', time: it.place.time || null });
+    delete p.link;
+    trip.places.push(p);
+  }
+  if (trip.record && typeof trip.record === 'object' && st.uploads.length) {
+    const photos = Array.isArray(trip.record.photos) ? trip.record.photos.slice() : [];
+    const have = new Set(photos.map(uploadKey));
+    for (const u of st.uploads) if (!have.has(uploadKey(u.url))) photos.push(u.url);
+    trip.record.photos = photos;
+  }
+  return trip;
+}
+
+// 차량에 주는 inbox 항목은 계약서 모양 그대로: {seq, type, by, place | id | url | on}
+const publicItem = (it) => {
+  const o = { seq: it.seq, type: it.type, by: it.by || null };
+  if (it.type === 'add' && it.place) {
+    o.place = Object.assign({}, it.place);
+    delete o.place.link;
+  } else if (it.type === 'visit') o.id = it.id;
+  else if (it.type === 'photo') o.url = it.url;
+  else if (it.type === 'share') o.on = !!it.on;
+  return o;
+};
+
+function pushInbox(st, item) {
+  item.seq = ++st.seq;
+  item.at = item.at || now();
+  st.inbox.push(item);
+  if (st.inbox.length > INBOX_KEEP) st.inbox.splice(0, st.inbox.length - INBOX_KEEP);
+  persist(st);
+  return item;
+}
+
+// ---------------------------------------------------------------- 휴대폰 접속 수(차량 상단 '휴대폰 N대 연결')
+// /t/:code 페이지는 폴링할 때 cid(접속별 임의 id)와 me(일행 id)를 붙여 보낸다. 최근 15초 안에 폴링한 휴대폰을
+// me 가 있으면 me 로, 없으면 cid 로 묶어 센다. 저장하지 않고 메모리에만 둔다
+const PRESENCE_MS = 15000;
+const presence = new Map(); // code -> Map(cid -> { me, at })
+
+function touchPresence(code, cid, me) {
+  let m = presence.get(code);
+  if (!m) {
+    m = new Map();
+    presence.set(code, m);
+  }
+  m.set(cid, { me: me || null, at: now() });
+}
+
+function presenceOf(code, memberIds) {
+  const m = presence.get(code);
+  const t = now();
+  const keys = new Set();
+  const who = new Set();
+  if (m) {
+    for (const [cid, p] of m) {
+      if (t - p.at > 60000) { m.delete(cid); continue; }
+      if (t - p.at > PRESENCE_MS) continue;
+      keys.add(p.me ? 'me:' + p.me : 'cid:' + cid);
+      if (p.me) who.add(p.me);
+    }
+  }
+  const order = memberIds || [];
+  const rank = (id) => (order.indexOf(id) < 0 ? 99 : order.indexOf(id));
+  return { phones: keys.size, who: Array.from(who).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b)) };
+}
+
+// ---------------------------------------------------------------- 링크 속 장소 찾기
+function safeDecode(s) {
+  let out = String(s || '');
+  for (let i = 0; i < 2; i++) {
+    if (!/%[0-9a-f]{2}/i.test(out)) break;
+    try {
+      out = decodeURIComponent(out.replace(/\+/g, ' '));
+    } catch (e) {
+      out = out.replace(/(%[0-9a-f]{2})+/gi, (m) => { try { return decodeURIComponent(m); } catch (e2) { return m; } });
+    }
+  }
+  return out;
+}
+
+const looksLikeUrl = (s) => /^[a-z][a-z0-9+.-]*:\/\//i.test(s) || /^www\./i.test(s) || /^[a-z0-9-]+(\.[a-z0-9-]+)+(\/|$)/i.test(s);
+
+function sourceOf(link) {
+  const s = String(link || '').trim();
+  if (!looksLikeUrl(s)) return '직접 입력';
+  let host = '';
+  let p = '';
+  try {
+    const u = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(s) ? s : 'https://' + s);
+    host = u.hostname.toLowerCase();
+    p = u.pathname.toLowerCase();
+  } catch (e) {
+    host = s.toLowerCase();
+  }
+  const hp = host + p;
+  if (/(^|\.)map\.naver\.com|(^|\.)naver\.me$|place\.naver\.com|map\.kakao\.com|place\.map\.kakao|(^|\.)kko\.to$|maps\.google\.|google\.[a-z.]+\/maps|goo\.gl\/maps|maps\.app\.goo\.gl|tmap|(^|\.)map\.|kakaomap/.test(hp)) return '지도 앱';
+  if (/instagram\.com|instagr\.am/.test(host)) return '인스타그램';
+  if (/chatgpt\.com|chat\.openai\.com|gemini\.google|g\.co\/gemini|perplexity\.ai|claude\.ai|copilot\.microsoft|wrtn\.ai|clova-x|(^|\.)grok\.com/.test(hp)) return 'AI 답변';
+  if (/blog\.naver\.com|(^|\.)blog\.|tistory\.com|brunch\.co\.kr|velog\.io|post\.naver\.com|blog\.daum|medium\.com|wordpress|blogspot/.test(host)) return '블로그';
+  if (/kakao|kakaotalk/.test(host)) return '카카오톡';
+  return '링크';
+}
+
+function photoIfExists(name) {
+  if (!name) return null;
+  const f = path.join(WEB, 'photos', path.basename(String(name)));
+  return fs.existsSync(f) ? path.basename(String(name)) : null;
+}
+
+function matchPlace(text, typed) {
+  const places = cachedJson(PLACES_FILE) || [];
+  const hay = normName(safeDecode(text).replace(/[\/?#&=:%]+/g, ' '));
+  const want = typed ? normName(typed) : '';
+  let best = null;
+  for (const p of places) {
+    let score = 0;
+    let hit = null;
+    const name = normName(p.name);
+    if (name && hay.includes(name)) { score += 100 + name.length; hit = p.name; }
+    for (const k of p.keywords || []) {
+      const kk = normName(k);
+      if (kk && hay.includes(kk)) { score += 10 + kk.length * 2; hit = hit || k; }
+      // 직접 입력한 이름이 장소 이름이나 열쇠말의 일부일 때(예: '첨성' → 첨성대)
+      if (want && want.length >= 2 && kk && kk.includes(want)) { score += 20 + want.length; hit = hit || k; }
+    }
+    if (want && want.length >= 2 && name && name.includes(want)) { score += 30 + want.length; hit = hit || p.name; }
+    if (score > 0 && (!best || score > best.score)) best = { p, score, hit };
+  }
+  return best;
+}
+
+function resolveLink(body) {
+  const link = str(body.link || body.url || body.text, 2000);
+  const typed = str(body.name || body.query, 60);
+  const source = str(body.source, 20) || sourceOf(link || typed);
+  const text = [typed, link].filter(Boolean).join(' ');
+  if (!text) return { ok: false, reason: 'empty', source };
+  const m = matchPlace(text, typed);
+  if (!m) return { ok: false, reason: 'not_found', source, query: safeDecode(text).slice(0, 200) };
+  const p = m.p;
+  return {
+    ok: true,
+    candidate: {
+      id: p.id, name: p.name, kind: p.kind || 'sight', area: p.area || '', lat: num(p.lat), lon: num(p.lon),
+      photo: photoIfExists(p.photo), source, note: p.note || '',
+    },
+    matched: m.hit,
+  };
+}
+
+function cleanPlace(p, by) {
+  if (!p || typeof p !== 'object') return null;
+  const name = str(p.name, 60);
+  if (!name) return null;
+  const id = str(p.id, 64).replace(/[^A-Za-z0-9_-]/g, '') || 'p_' + md5(name).slice(0, 8);
+  const out = {
+    id, name,
+    kind: str(p.kind, 20) || 'sight',
+    area: str(p.area, 60),
+    lat: num(p.lat), lon: num(p.lon),
+    by: by || str(p.by, 20) || null,
+    source: str(p.source, 20) || '링크',
+    photo: str(p.photo, 200) || null,
+    time: str(p.time, 5) || null,
+    note: str(p.note, 120),
+  };
+  if (p.link) out.link = str(p.link, 1000);
+  return out;
+}
+
+// ---------------------------------------------------------------- 요청 처리 도구
+function send(res, status, body, headers) {
+  const data = Buffer.isBuffer(body) || typeof body === 'string' ? body : JSON.stringify(body);
+  res.writeHead(status, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }, headers || {}));
+  res.end(data);
+}
+
+function httpError(status, message) {
+  const e = new Error(message);
+  e.status = status;
+  return e;
+}
+
 function readBody(req, limit) {
   return new Promise((resolve, reject) => {
-    const chunks = []; let size = 0, over = false;
-    req.on('data', c => {
-      if (over) return;
+    const chunks = [];
+    let size = 0;
+    let done = false;
+    req.on('data', (c) => {
+      if (done) return;
       size += c.length;
-      if (size > limit) { over = true; chunks.length = 0; req.pause(); reject(httpError(413, 'too large')); } else chunks.push(c);
+      if (size > limit) {
+        done = true;
+        reject(httpError(413, 'too_large'));
+        return;
+      }
+      chunks.push(c);
     });
-    req.on('end', () => { if (!over) resolve(Buffer.concat(chunks)); });
-    req.on('close', () => { if (!over && !req.complete) reject(httpError(400, 'aborted')); });
-    req.on('error', reject);
+    req.on('end', () => { if (!done) { done = true; resolve(Buffer.concat(chunks)); } });
+    req.on('error', (e) => { if (!done) { done = true; reject(e); } });
   });
 }
 
-/** JSON 객체만 받음. 깨진 JSON, 배열, 숫자는 400 */
-async function readJson(req, limit = 2 * 1024 * 1024) {
-  const b = await readBody(req, limit);
-  if (!b.length) return {};
-  let v;
-  try { v = JSON.parse(b.toString('utf8')); } catch { throw httpError(400, 'bad json'); }
-  if (!v || typeof v !== 'object' || Array.isArray(v)) throw httpError(400, 'bad json');
-  return v;
-}
-
-/** 오류 응답을 보내고, 본문을 다 받지 않은 요청이면 남은 본문을 버리다가 5초 뒤 끊음 (큰 본문을 끝까지 받지 않게).
- *  바로 끊으면 브라우저가 오류 응답을 읽기 전에 '연결 끊김'만 보게 됨 */
-function failRequest(req, res, e) {
-  const status = (e && e.status) || 400;
-  if (!res.headersSent) {
-    res.writeHead(status, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-store' });
-    res.end(JSON.stringify({ error: status >= 500 ? 'server error' : String((e && e.message) || 'bad request') }));
-  }
-  if (req.complete || req.destroyed) return;
-  req.removeAllListeners('data');
-  req.on('data', () => {});
-  req.resume();
-  const t = setTimeout(() => req.destroy(), 5000);
-  req.once('end', () => clearTimeout(t));
-  req.once('close', () => clearTimeout(t));
-}
-
-const server = http.createServer(async (req, res) => {
+async function readJson(req) {
+  const buf = await readBody(req, MAX_JSON);
+  if (!buf.length) return {};
   try {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    // 주소가 깨져 있으면(%, // 등) 400. 예전에는 try 밖이라 서버가 통째로 꺼졌음
-    let url, p;
-    try { url = new URL(req.url || '/', 'http://x'); p = decodeURIComponent(url.pathname); } catch { return json(res, 400, { error: 'bad url' }); }
-    if (p.includes('\0')) return json(res, 400, { error: 'bad url' });
-    if (req.method === 'OPTIONS') { res.writeHead(204, { Allow: 'GET, HEAD, POST' }); return res.end(); }
-
-    if (p === '/api/info') return json(res, 200, { ok: true, version: 3, publicBase: PUBLIC_BASE });
-
-    if (p === '/api/photos' && (req.method === 'GET' || req.method === 'HEAD')) {
-      res.writeHead(200, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-cache' });
-      return res.end(req.method === 'HEAD' ? undefined : photoIndex());
-    }
-
-    if (p === '/api/groups' && req.method === 'POST') {
-      const wait = createLimit.take(clientIp(req));
-      if (wait) return json(res, 429, { error: 'too many', retryIn: wait });
-      const body = await readJson(req);
-      const sid = typeof body.scenarioId === 'string' && /^[a-z0-9_-]{1,40}$/.test(body.scenarioId) && scenarioEntry(body.scenarioId) ? body.scenarioId : 'gyeongju';
-      const g = makeGroup(newCode(), sid, body.lang === 'en' ? 'en' : 'ko');
-      const slot = addCar(g);
-      persist(g);
-      console.log('[group] new', g.code, g.scenarioId, g.lang);
-      return json(res, 200, carCredentials(g, slot));
-    }
-
-    let m = p.match(/^\/api\/groups\/(\d{4})(\/[a-z]+)?$/);
-    if (m) {
-      const ip = clientIp(req);
-      const g = groups.get(m[1]);
-      const sub = m[2] || '';
-      // 두 번째 차부터: 네 자리 번호로 들어오면 서버가 차 번호와 이름('2호차'), 차 키를 줌
-      if (sub === '/join' && req.method === 'POST') {
-        const wait = joinLimit.take(ip);
-        if (wait) return json(res, 429, { error: 'too many', retryIn: wait });
-        if (!g) return json(res, 404, { error: 'no such group' });
-        const slot = addCar(g);
-        if (!slot) return json(res, 409, { error: 'too many cars' });
-        persist(g);
-        console.log('[group] car joined', g.code, slot.no);
-        return json(res, 200, Object.assign(carCredentials(g, slot), { cars: [...g.cars.values()].map(c => c.name), phones: g.phones.size }));
-      }
-      // 누가 묻는지: 차 키(X-Car-Key) → 차, 휴대폰 키(X-Group-Key 나 ?k=) → full, 키 없음 → basic
-      const carKey = req.headers['x-car-key'];
-      const phoneKey = req.headers['x-group-key'] || url.searchParams.get('k');
-      const slot = g ? carSlotByKey(g, carKey) : null;
-      const keyOk = !!slot || !!(g && !carKey && phoneKey && sameKey(g.phoneKey, String(phoneKey)));
-      if (!g || ((carKey || phoneKey) && !keyOk)) {
-        // 없는 번호와 틀린 키는 모두 번호 조회로 셈 (무차별 대입 막기)
-        const wait = carKey || phoneKey ? lookupLimit.take(ip) : lookupWait(ip, m[1]);
-        if (wait) return json(res, 429, { error: 'too many', retryIn: wait });
-        return json(res, g ? 401 : 404, { error: g ? 'bad key' : 'no such group' });
-      }
-      const trusted = localTrusted(req);
-      if (!keyOk && !trusted) {
-        const wait = lookupWait(ip, m[1]);
-        if (wait) return json(res, 429, { error: 'too many', retryIn: wait });
-        lookupOk(ip, m[1]);
-      }
-      const who = slot ? { role: 'car' } : { role: 'phone', level: keyOk || trusted ? 'full' : 'basic' };
-      if (!sub && (req.method === 'GET' || req.method === 'HEAD')) {
-        return json(res, 200, Object.assign(summary(g, who), slot ? { carNo: slot.no, carName: slot.name, joinUrl: joinUrlFor(g, slot.no), recordUrl: recordUrlFor(g, slot.no) } : {}));
-      }
-      if (sub === '/record' && req.method === 'POST') {
-        if (!slot && !trusted) return json(res, 401, { error: 'car key required' });
-        g.record = cleanRecord(await readJson(req, 4 * 1024 * 1024));
-        markEnded(g);
-        broadcast(g, { type: 'record', record: g.record }, { full: true });
-        return json(res, 200, { ok: true });
-      }
-      // 함께 탄 사람이 올린 사진. 여행 영상에 들어감. QR 로 들어온 휴대폰만 올릴 수 있음
-      if (sub === '/photos' && req.method === 'POST') {
-        if (slot || !(keyOk || trusted)) return failRequest(req, res, httpError(403, 'qr needed'));
-        if (g.photos.length >= MAX.photos) return failRequest(req, res, httpError(409, 'too many photos'));
-        const body = await readJson(req, 8 * 1024 * 1024);
-        const mm = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(typeof body.dataUrl === 'string' ? body.dataUrl : '');
-        if (!mm) return json(res, 400, { error: 'bad image' });
-        const ext = mm[1] === 'jpeg' ? 'jpg' : mm[1];
-        let bytes = Buffer.from(mm[2], 'base64');
-        // 이름표(data:image/png)만 보지 않고 파일 앞부분으로 진짜 그림인지 확인
-        const real = ext === 'png' ? bytes.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]))
-          : ext === 'webp' ? bytes.toString('latin1', 0, 4) === 'RIFF' && bytes.toString('latin1', 8, 12) === 'WEBP'
-          : bytes[0] === 0xff && bytes[1] === 0xd8;
-        if (!real || bytes.length > 5 * 1024 * 1024) return json(res, 400, { error: 'bad image' });
-        if (ext === 'jpg') bytes = stripJpegMeta(bytes);
-        const id = crypto.randomBytes(4).toString('hex');
-        fs.mkdirSync(path.join(DATA, g.code, 'photos'), { recursive: true });
-        fs.writeFileSync(path.join(DATA, g.code, 'photos', id + '.' + ext), bytes);
-        const photo = { id, url: '/media/' + g.code + '/photos/' + id + '.' + ext, takenAt: num(body.takenAt, Date.now()), by: txt(body.by, 20) };
-        g.photos.push(photo);
-        g.photos.sort((a, b) => a.takenAt - b.takenAt);
-        persist(g);
-        broadcast(g, { type: 'photo', photo, count: g.photos.length }, { full: true });
-        return json(res, 200, photo);
-      }
-      // 차가 실제로 읽은 문장과 시각 (시연 영상에 음성을 다시 입힐 때 씀). 차 키가 있어야 함
-      if (sub === '/said' && req.method === 'GET') return slot || trusted ? json(res, 200, g.said || []) : json(res, 401, { error: 'car key required' });
-      // 모르는 주소는 본문을 끝까지 받지 않고 404
-      return failRequest(req, res, httpError(404, 'unknown'));
-    }
-
-    // /media 는 올린 사진만 연다 (group.json 같은 다른 파일은 열지 않음)
-    m = p.match(/^\/media\/(\d{4})\/(photos\/[0-9a-f]{8}\.(?:jpg|png|webp))$/);
-    if (m) {
-      const g = groups.get(m[1]);
-      const dir = groupDir(m[1]);
-      const file = g && dir && inside(dir, m[2]);
-      if (!file) { res.writeHead(404); return res.end('not found'); }
-      // 사진은 QR(휴대폰 키)로 들어온 휴대폰과 차만 봄. <img> 는 머리글을 못 붙여 ?k= 로도 받음
-      const k = req.headers['x-group-key'] || url.searchParams.get('k');
-      if (!(k && sameKey(g.phoneKey, String(k))) && !carSlotByKey(g, req.headers['x-car-key'] || url.searchParams.get('ck')) && !localTrusted(req)) {
-        if (k) lookupLimit.take(clientIp(req));
-        res.writeHead(401); return res.end('key required');
-      }
-      return serveFile(res, file, req);
-    }
-    if (p.startsWith('/media/')) { res.writeHead(404); return res.end('not found'); }
-
-    m = p.match(/^\/api\/scenarios\/([a-z0-9_-]{1,40})$/);
-    if (m) {
-      const sc = scenarioEntry(m[1]);
-      if (!sc) return json(res, 404, { error: 'not found' });
-      res.writeHead(200, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-cache' });
-      return res.end(sc.body);
-    }
-
-    if (p === '/favicon.ico') { res.writeHead(204, { 'Cache-Control': 'public, max-age=86400' }); return res.end(); }
-    if (p === '/' || p === '/index.html') return serveFile(res, path.join(WEB, 'index.html'), req);
-    if (/^\/g\/\d{4}(\/record)?\/?$/.test(p)) return serveFile(res, path.join(WEB, 'group.html'), req);
-
-    // 웹 폴더 밖과 점(.)으로 시작하는 파일은 열지 않음
-    const rel = p.replace(/^\/+/, '');
-    const file = rel && !rel.split('/').some(s => s.startsWith('.')) && inside(WEB, rel);
-    if (!file) { res.writeHead(404); return res.end('not found'); }
-    return serveFile(res, file, req);
+    return JSON.parse(buf.toString('utf8'));
   } catch (e) {
-    if (e && e.status) return failRequest(req, res, e);
-    console.warn('[http]', req.method, e.message);
-    if (!res.headersSent) json(res, 500, { error: 'server error' }); else res.destroy();
+    throw httpError(400, 'bad_json');
   }
-});
-server.on('error', e => { console.error('서버를 열지 못했어요:', e.message); process.exit(1); });
+}
 
-// ---------------------------------------------------------------- WebSocket
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 });
-wss.on('error', e => console.warn('[ws]', e.message));
-// 30초마다 ping. 답이 없는 연결(터널에서 끊긴 휴대폰 등)은 정리해 인원 수가 맞게
-setInterval(() => {
-  for (const ws of wss.clients) {
-    if (ws.isAlive === false) { ws.terminate(); continue; }
-    ws.isAlive = false;
-    try { ws.ping(); } catch {}
+function sniffImage(buf) {
+  if (buf.length < 12) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpg';
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'png';
+  if (buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'webp';
+  if (buf.toString('ascii', 0, 4) === 'GIF8') return 'gif';
+  if (buf.toString('ascii', 4, 8) === 'ftyp' && /^(heic|heix|mif1|msf1|hevc)/.test(buf.toString('ascii', 8, 12))) return 'heic';
+  return null;
+}
+
+// multipart/form-data 로 올린 경우 첫 파일만 꺼냄(기본은 사진 바이너리를 그대로 보냄)
+function firstMultipartFile(buf, contentType) {
+  const m = /boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType || '');
+  if (!m) return null;
+  const boundary = Buffer.from('--' + (m[1] || m[2]).trim());
+  let pos = buf.indexOf(boundary);
+  while (pos !== -1) {
+    const headStart = pos + boundary.length + 2;
+    const headEnd = buf.indexOf('\r\n\r\n', headStart);
+    if (headEnd === -1) return null;
+    const head = buf.toString('utf8', headStart, headEnd);
+    const next = buf.indexOf(boundary, headEnd + 4);
+    if (next === -1) return null;
+    if (/filename=/i.test(head)) return buf.subarray(headEnd + 4, next - 2);
+    pos = next;
   }
-}, 30 * 1000).unref();
-wss.on('connection', (ws, req) => {
-  // 소켓마다 error 를 받아 둠. 없으면 깨진 프레임 하나에 서버가 꺼짐
-  ws.on('error', e => console.warn('[ws] 연결 오류', e.code || e.message));
-  ws.isAlive = true;
-  ws.on('pong', () => { ws.isAlive = true; });
-  let url;
-  try { url = new URL(req.url || '/', 'http://x'); } catch { return ws.close(4400, 'bad request'); }
-  const code = url.searchParams.get('code') || '';
-  if (!/^\d{4}$/.test(code)) { send(ws, { type: 'error', error: 'bad code' }); return ws.close(4400, 'bad code'); }
-  const role = url.searchParams.get('role') === 'car' ? 'car' : 'phone';
-  const ip = clientIp(req);
-  const g = groups.get(code);
-  const refuse = (closeCode, error, extra) => { send(ws, Object.assign({ type: 'error', error }, extra || {})); ws.close(closeCode, error); };
-  let slot = null;
-  if (role === 'car') {
-    // 차는 그룹을 만들 때(POST /api/groups, /join) 받은 차 키로만 붙음. 예전처럼 WebSocket 으로 그룹을 만들지 않음
-    if (!g) { lookupLimit.take(ip); return refuse(4404, 'no such group'); }
-    const key = url.searchParams.get('key') || '';
-    slot = carSlotByKey(g, key);
-    if (!slot && !key && localTrusted(req)) {
-      // 시연 녹화 도구가 키 없이 붙이는 차 (DEMO_LOCAL_TRUST=1 일 때만). 이름이 같으면 같은 차로 봄
-      const asked = String(url.searchParams.get('name') || '').slice(0, 20);
-      slot = g.carSlots.find(s => s.name === asked) || addCar(g);
-      if (slot) persist(g);
+  return null;
+}
+
+function stamp(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+}
+
+// ---------------------------------------------------------------- 정적 파일
+const gzCache = new Map();
+const GZIP_TYPE = /^(text\/|application\/(javascript|json)|image\/svg)/;
+
+function safeJoin(base, rel) {
+  let decoded;
+  try { decoded = decodeURIComponent(rel); } catch (e) { return null; }
+  if (decoded.includes('\0')) return null;
+  const p = path.normalize(path.join(base, decoded));
+  if (p !== base && !p.startsWith(base + path.sep)) return null;
+  return p;
+}
+
+function notFound(req, res) {
+  send(res, 404, { ok: false, error: 'not_found', path: req.url.split('?')[0] });
+}
+
+function serveFile(req, res, file, cacheControl) {
+  fs.stat(file, (err, st) => {
+    if (err || !st.isFile()) return notFound(req, res);
+    const ext = path.extname(file).toLowerCase();
+    const type = MIME[ext] || 'application/octet-stream';
+    const etag = '"' + st.size.toString(16) + '-' + Math.round(st.mtimeMs).toString(16) + '"';
+    const h = {
+      'Content-Type': type,
+      ETag: etag,
+      'Last-Modified': st.mtime.toUTCString(),
+      'Cache-Control': cacheControl || 'no-cache',
+      'Accept-Ranges': 'bytes',
+    };
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, h);
+      return res.end();
     }
-    if (!slot) { lookupLimit.take(ip); return refuse(4401, 'bad key'); }
-  } else {
-    // 휴대폰: QR 주소의 k 가 맞으면 full, 네 자리만 넣고 들어오면 basic (번호 조회 속도 제한)
-    const k = url.searchParams.get('k') || '';
-    if (k) {
-      if (!g || !sameKey(g.phoneKey, k)) { lookupLimit.take(ip); return g ? refuse(4401, 'bad key') : refuse(4404, 'no such group'); }
-      ws.level = 'full';
-    } else {
-      const wait = lookupWait(ip, code);
-      if (wait) return refuse(4429, 'too many', { retryIn: wait });
-      if (!g) return refuse(4404, 'no such group');
-      lookupOk(ip, code);
-      ws.level = localTrusted(req) ? 'full' : 'basic';
+    const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || '').trim());
+    if (range && (range[1] !== '' || range[2] !== '')) {
+      let start;
+      let end;
+      if (range[1] === '') {
+        start = Math.max(0, st.size - Number(range[2]));
+        end = st.size - 1;
+      } else {
+        start = Number(range[1]);
+        end = range[2] === '' ? st.size - 1 : Math.min(Number(range[2]), st.size - 1);
+      }
+      if (start > end || start >= st.size) {
+        res.writeHead(416, { 'Content-Range': 'bytes */' + st.size });
+        return res.end();
+      }
+      h['Content-Range'] = 'bytes ' + start + '-' + end + '/' + st.size;
+      h['Content-Length'] = end - start + 1;
+      res.writeHead(206, h);
+      if (req.method === 'HEAD') return res.end();
+      return fs.createReadStream(file, { start, end }).pipe(res);
     }
-  }
-  const id = crypto.randomUUID();
-  if (role === 'car') {
-    // 같은 차가 다시 붙으면 예전 연결은 닫음 (같은 메시지가 두 번 가지 않게)
-    for (const [oid, c] of g.cars) if (c.no === slot.no) { g.cars.delete(oid); try { c.ws.close(4000, 'replaced'); } catch {} }
-    g.cars.set(id, { id, name: slot.name, no: slot.no, ws });
-    if (!slot.seen) { slot.seen = true; persist(g); broadcast(g, { type: 'car_joined', name: slot.name, carNo: slot.no }, { except: ws }); }
-  } else {
-    // 휴대폰 구분 값(pid)은 서버가 정한다. 서버가 준 값으로 다시 붙으면 이어 쓰고(내 답 표시), 모르는 값이면 새로 줌
-    let pid = url.searchParams.get('pid') || '';
-    const fresh = !g.pidSet.has(pid);
-    if (fresh) {
-      const wait = pidLimit.take(ip + '|' + code);
-      if (wait) return refuse(4429, 'too many', { retryIn: wait });
-      pid = 'p' + crypto.randomBytes(9).toString('base64url');
-      g.pidSet.add(pid);
-      g.pids.push(pid);
-      if (g.pids.length > 500) g.pidSet.delete(g.pids.shift());
-      persist(g);
+    if (GZIP_TYPE.test(type) && st.size > 1400 && /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''))) {
+      let c = gzCache.get(file);
+      if (!c || c.etag !== etag) {
+        c = { etag, gz: zlib.gzipSync(fs.readFileSync(file)) };
+        gzCache.set(file, c);
+      }
+      h['Content-Encoding'] = 'gzip';
+      h['Content-Length'] = c.gz.length;
+      h.Vary = 'Accept-Encoding';
+      res.writeHead(200, h);
+      return res.end(req.method === 'HEAD' ? undefined : c.gz);
     }
-    ws.pid = pid;
-    g.phones.add(ws);
-    if (fresh) broadcast(g, { type: 'phone_joined' }, { phones: false });
-  }
-  console.log('[ws]', code, role, role === 'car' ? slot.no : ws.level, 'cars', g.cars.size, 'phones', g.phones.size);
-  const who = role === 'car' ? { role } : { role, level: ws.level, pid: ws.pid };
-  const you = role === 'car' ? { carNo: slot.no, carName: slot.name } : { pid: ws.pid, level: ws.level };
-  const hello = Object.assign({ type: 'hello', role, you }, summary(g, who));
-  if (role === 'car') Object.assign(hello, { joinUrl: joinUrlFor(g, slot.no), recordUrl: recordUrlFor(g, slot.no) });
-  send(ws, hello);
-  members(g);
-
-  ws.on('message', data => {
-    let msg; try { msg = JSON.parse(String(data)); } catch { return; }
-    // null, 숫자, 문자열, 배열은 버림 (예전에는 msg.type 에서 서버가 꺼졌음)
-    if (!msg || typeof msg !== 'object' || Array.isArray(msg) || typeof msg.type !== 'string') return;
-    try {
-      if (role === 'car') { const car = g.cars.get(id); if (car) onCarMessage(g, car, msg); }
-      else onPhoneMessage(g, ws, msg);
-    } catch (e) { console.warn('[ws] 메시지 처리 실패', msg.type, e.message); }
+    h['Content-Length'] = st.size;
+    res.writeHead(200, h);
+    if (req.method === 'HEAD') return res.end();
+    fs.createReadStream(file).pipe(res);
   });
-  ws.on('close', () => {
-    if (role === 'car') g.cars.delete(id); else g.phones.delete(ws);
-    members(g);
+}
+
+function serveUnder(req, res, base, rel, cacheControl) {
+  const file = safeJoin(base, rel);
+  if (!file) return send(res, 400, { ok: false, error: 'bad_path' });
+  serveFile(req, res, file, cacheControl);
+}
+
+function redirect(res, to) {
+  res.writeHead(302, { Location: to, 'Cache-Control': 'no-store' });
+  res.end();
+}
+
+function urls(code) {
+  const lanUrl = 'http://' + lanAddress() + ':' + PORT;
+  return {
+    lanUrl,
+    emuUrl: 'http://10.0.2.2:' + PORT,
+    localUrl: 'http://localhost:' + PORT,
+    code,
+    tripUrl: lanUrl + '/t/' + code,
+    reelUrl: lanUrl + '/reel/' + code,
+  };
+}
+
+function landingPage() {
+  const u = urls(DEFAULT_CODE);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const who = [['dad', '아빠'], ['mom', '엄마'], ['kid1', '첫째'], ['kid2', '둘째']]
+    .map(([id, name]) => '<a href="/t/' + DEFAULT_CODE + '?me=' + id + '">' + name + '</a>').join(' · ');
+  return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>구르는 가이드 동반 서버</title><link rel="stylesheet" href="/web/vendor/asta-sans/asta-sans.css">' +
+    '<style>body{font-family:"Asta Sans",-apple-system,sans-serif;max-width:620px;margin:40px auto;padding:0 20px;color:#111827;background:#F2F4F7;line-height:1.6}' +
+    'h1{font-size:24px}a{color:#0B2A57;font-weight:700}.c{background:#fff;border-radius:16px;padding:16px 20px;margin:14px 0;box-shadow:0 6px 18px rgba(16,24,40,.05)}code{background:#F2F4F7;padding:2px 6px;border-radius:6px;font-size:13px}</style></head><body>' +
+    '<h1>구르는 가이드 동반 서버</h1>' +
+    '<div class="c"><b>휴대폰 웹 우리 여행</b><br><a href="/t/' + DEFAULT_CODE + '">/t/' + DEFAULT_CODE + '</a><br>일행으로 바로 열기: ' + who + '</div>' +
+    '<div class="c"><b>여행 영상</b><br><a href="/reel/' + DEFAULT_CODE + '">/reel/' + DEFAULT_CODE + '</a></div>' +
+    '<div class="c"><b>같은 와이파이 휴대폰</b><br><code>' + esc(u.tripUrl) + '</code><br><b>에뮬레이터</b><br><code>' + esc(u.emuUrl + '/t/' + DEFAULT_CODE) + '</code></div>' +
+    '<div class="c"><b>API</b><br><a href="/api/info">/api/info</a> · <a href="/api/trip/' + DEFAULT_CODE + '">/api/trip/' + DEFAULT_CODE + '</a></div>' +
+    '</body></html>';
+}
+
+// ---------------------------------------------------------------- API
+async function handleApi(req, res, parts, q) {
+  const method = req.method;
+  // parts: ['api', ...]
+  if (parts[1] === 'info' && method === 'GET') {
+    const u = urls(DEFAULT_CODE);
+    return send(res, 200, { lanUrl: u.lanUrl, emuUrl: u.emuUrl });
+  }
+  if (parts[1] === 'health') return send(res, 200, { ok: true, time: now() });
+
+  if (parts[1] === 'resolve' && (method === 'POST' || method === 'GET')) {
+    const body = method === 'POST' ? await readJson(req) : { link: q.get('link'), name: q.get('name') };
+    const r = resolveLink(body || {});
+    log('resolve', (r.ok ? r.candidate.name : '찾지 못함') + ' · ' + (r.source || ''), str(body.link || body.name, 80));
+    return send(res, 200, r);
+  }
+
+  if (parts[1] === 'trip' && parts[2]) {
+    const code = normCode(parts[2]);
+    if (!code) return send(res, 400, { ok: false, error: 'bad_code' });
+    const st = getStore(code);
+    const sub = parts[3] || '';
+
+    if (!sub && method === 'GET') {
+      // 차량과 영상은 계약서 모양 그대로 {trip, inbox, seq}. 휴대폰 웹(cid 를 붙여 폴링)과 시험 도구(full=1)에만
+      // 올린 사진 목록(uploads), 차량 연결 여부(carOnline), 바뀐 것이 없으면 짧게 답하는 ver 를 더 줌
+      const cid = str(q.get('cid'), 40).replace(/[^A-Za-z0-9_-]/g, '');
+      if (cid) touchPresence(code, cid, str(q.get('me'), 20).replace(/[^A-Za-z0-9_-]/g, ''));
+      const body = {
+        trip: buildView(st),
+        inbox: st.inbox.filter((i) => i.seq > st.carSeq).map(publicItem),
+        seq: st.seq,
+      };
+      if (!cid && q.get('full') !== '1') return send(res, 200, body);
+      body.uploads = st.uploads;
+      body.carOnline = now() - st.carAt < CAR_ONLINE_MS;
+      const ver = md5(JSON.stringify(body)).slice(0, 16);
+      if (q.get('v') && q.get('v') === ver) return send(res, 200, { same: true, ver });
+      body.ver = ver;
+      return send(res, 200, body);
+    }
+
+    if (sub === 'presence' && method === 'GET') {
+      const t = st.trip || seedTrip(code);
+      return send(res, 200, presenceOf(code, (Array.isArray(t.members) ? t.members : []).map((m) => m && m.id)));
+    }
+
+    if (sub === 'state' && (method === 'PUT' || method === 'POST')) {
+      let body = await readJson(req);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) throw httpError(400, 'bad_trip');
+      if (body.trip && typeof body.trip === 'object' && !body.members && !body.places) body = body.trip;
+      const prev = st.trip || seedTrip(code);
+      const next = Object.assign({}, prev, body);
+      next.code = code;
+      next.rev = Math.max(Number(prev.rev) || 0, Number(body.rev) || 0) + 1;
+      // 휴대폰에서 바꾼 위치 공유가 차량 상태에 들어갔으면 그때부터는 차량 값을 따름
+      if (Array.isArray(next.members)) {
+        for (const m of next.members) {
+          if (m && Object.prototype.hasOwnProperty.call(st.shares, m.id) && !!m.sharing === !!st.shares[m.id]) delete st.shares[m.id];
+        }
+      }
+      st.trip = next;
+      st.stateAt = now();
+      st.carAt = now();
+      persist(st);
+      log('state', code + ' rev ' + next.rev, describeState(next));
+      return send(res, 200, { ok: true, rev: next.rev, seq: st.seq });
+    }
+
+    if (sub === 'inbox' && method === 'GET') {
+      const after = Number(q.get('after')) || 0;
+      const items = st.inbox.filter((i) => i.seq > after);
+      const t = now();
+      let taken = false;
+      for (const i of items) if (!i.takenAt) { i.takenAt = t; taken = true; }
+      const last = items.length ? items[items.length - 1].seq : 0;
+      const carSeq = Math.max(st.carSeq, Math.min(after, st.seq), last);
+      if (carSeq !== st.carSeq) { st.carSeq = carSeq; taken = true; }
+      st.carAt = t;
+      if (taken) persist(st);
+      return send(res, 200, items.map(publicItem));
+    }
+
+    if (sub === 'inbox' && method === 'POST') {
+      const body = await readJson(req);
+      const type = str(body.type, 20);
+      const by = str(body.by, 20).replace(/[^A-Za-z0-9_-]/g, '') || null;
+      const item = { type, by };
+      if (type === 'add') {
+        const place = cleanPlace(body.place || body.candidate, by);
+        if (!place) throw httpError(400, 'bad_place');
+        const dup = buildView(st).places.find((p) => samePlace(p, place));
+        if (dup) return send(res, 200, { ok: true, seq: st.seq, already: true, by: dup.by || null, status: dup.status || null });
+        item.place = place;
+      } else if (type === 'visit') {
+        const id = str(body.id, 64);
+        if (!id) throw httpError(400, 'bad_id');
+        const recent = st.inbox.slice().reverse().find((i) => i.type === 'visit' && i.id === id && now() - i.at < 30000);
+        if (recent) return send(res, 200, { ok: true, seq: recent.seq, already: true });
+        item.id = id;
+        if (body.name) item.name = str(body.name, 60);
+      } else if (type === 'photo') {
+        const url = str(body.url, 500);
+        if (!url) throw httpError(400, 'bad_url');
+        item.url = url;
+        if (!st.uploads.some((u) => uploadKey(u.url) === uploadKey(url))) st.uploads.push({ url, by, at: now() });
+      } else if (type === 'share') {
+        if (!by) throw httpError(400, 'bad_by');
+        item.on = !!body.on;
+        st.shares[by] = item.on;
+      } else {
+        throw httpError(400, 'bad_type');
+      }
+      pushInbox(st, item);
+      log('inbox', code + ' #' + item.seq + ' ' + type, by + ' ' + (item.place ? item.place.name : item.id || item.url || (type === 'share' ? (item.on ? '켬' : '끔') : '')));
+      return send(res, 200, { ok: true, seq: item.seq });
+    }
+
+    if (sub === 'photo' && method === 'POST') {
+      let buf = await readBody(req, MAX_PHOTO);
+      const ct = String(req.headers['content-type'] || '');
+      if (/multipart\/form-data/i.test(ct)) buf = firstMultipartFile(buf, ct) || Buffer.alloc(0);
+      const ext = sniffImage(buf);
+      if (!ext) throw httpError(415, 'not_image');
+      const by = str(q.get('by'), 20).replace(/[^A-Za-z0-9_-]/g, '') || null;
+      const name = code + '-' + stamp(new Date()) + '-' + crypto.randomBytes(3).toString('hex') + '.' + ext;
+      fs.writeFileSync(path.join(UPLOAD_DIR, name), buf);
+      const url = '/uploads/' + name;
+      st.uploads.push({ url, by, at: now() });
+      const item = pushInbox(st, { type: 'photo', by, url });
+      log('photo', code + ' #' + item.seq, (by || '') + ' ' + url + ' ' + Math.round(buf.length / 1024) + 'KB');
+      return send(res, 200, { ok: true, url, seq: item.seq });
+    }
+
+    // 시연 연습용: 여행을 처음 상태(trip_seed.json)로 되돌림. seq 는 이어서 씀(차량이 after 로 가져가는 번호가 꼬이지 않게)
+    if (sub === 'reset' && method === 'POST') {
+      Object.assign(st, { trip: null, inbox: [], carSeq: st.seq, stateAt: 0, shares: {}, uploads: [] });
+      persist(st);
+      log('reset', code, '');
+      return send(res, 200, { ok: true, seq: st.seq });
+    }
+  }
+  return send(res, 404, { ok: false, error: 'no_api', path: '/' + parts.join('/') });
+}
+
+function describeState(t) {
+  const bits = [];
+  if (t.now && t.now.id) bits.push('now ' + t.now.id);
+  if (t.mode && t.mode.active) bits.push('mode on');
+  if (t.car && t.car.eta) bits.push('eta ' + t.car.eta);
+  if (t.record && t.record.ready) bits.push('record');
+  return bits.join(', ');
+}
+
+function log(kind, a, b) {
+  const t = new Date();
+  const hh = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ':' + String(t.getSeconds()).padStart(2, '0');
+  console.log(hh, kind.padEnd(7), a, b ? '· ' + b : '');
+}
+
+// ---------------------------------------------------------------- 라우팅
+const STATIC_ROOTS = ['photos', 'data', 'audio', 'map', 'vendor'];
+
+async function handle(req, res) {
+  for (const [k, v] of Object.entries(CORS)) res.setHeader(k, v);
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    return res.end();
+  }
+  const u = new URL(req.url, 'http://localhost');
+  const pathname = u.pathname;
+  const parts = pathname.split('/').filter(Boolean);
+  const isRead = req.method === 'GET' || req.method === 'HEAD';
+
+  if (parts[0] === 'api') return handleApi(req, res, parts, u.searchParams);
+  if (!isRead) return send(res, 405, { ok: false, error: 'method' });
+
+  if (parts.length === 0) {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(landingPage());
+  }
+  if (pathname === '/favicon.ico') {
+    res.writeHead(204);
+    return res.end();
+  }
+
+  // 휴대폰 웹
+  if (parts[0] === 't') {
+    if (parts.length === 1) return redirect(res, '/t/' + DEFAULT_CODE + u.search);
+    const code = normCode(parts[1]);
+    if (parts.length === 2 && code) {
+      if (pathname.endsWith('/')) return redirect(res, '/t/' + parts[1] + u.search);
+      return serveFile(req, res, path.join(WEB, 'index.html'), 'no-cache');
+    }
+    return serveUnder(req, res, WEB, parts.slice(1).join('/'));
+  }
+
+  // 여행 영상: /reel/:code 는 index.html, /reel/reel.js 처럼 점이 있으면 web/reel/ 의 파일
+  if (parts[0] === 'reel') {
+    if (parts.length === 1) {
+      if (!pathname.endsWith('/')) return redirect(res, '/reel/' + u.search);
+      return serveFile(req, res, path.join(WEB, 'reel', 'index.html'), 'no-cache');
+    }
+    if (parts.length === 2 && !parts[1].includes('.') && normCode(parts[1])) {
+      if (pathname.endsWith('/')) return redirect(res, '/reel/' + parts[1] + u.search);
+      return serveFile(req, res, path.join(WEB, 'reel', 'index.html'), 'no-cache');
+    }
+    return serveUnder(req, res, path.join(WEB, 'reel'), parts.slice(1).join('/'));
+  }
+
+  if (parts[0] === 'web') return serveUnder(req, res, WEB, parts.slice(1).join('/'));
+  if (parts[0] === 'uploads') return serveUnder(req, res, UPLOAD_DIR, parts.slice(1).join('/'), 'public, max-age=31536000, immutable');
+  if (STATIC_ROOTS.includes(parts[0])) {
+    const cache = parts[0] === 'vendor' ? 'public, max-age=86400' : 'no-cache';
+    return serveUnder(req, res, WEB, parts.join('/'), cache);
+  }
+  return notFound(req, res);
+}
+
+const server = http.createServer((req, res) => {
+  handle(req, res).catch((e) => {
+    const status = e.status || 500;
+    if (status >= 500) console.error('[오류]', req.method, req.url, e.stack || e.message);
+    if (!res.headersSent) send(res, status, { ok: false, error: e.message || 'error' });
+    else res.end();
   });
 });
 
-// ---------------------------------------------------------------- 차·휴대폰 메시지
-// 필드를 하나씩 검사하고(글자 수, 숫자 범위), 쌓이는 배열에는 상한을 둠
-const MAX = { passes: 300, picks: 100, acks: 200, qa: 50, said: 1000, photos: 60 };
-const STICKER_RE = /^[a-z0-9_]{1,24}$/;
-const txt = (v, n) => (typeof v === 'string' ? v : typeof v === 'number' ? String(v) : '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').slice(0, n);
-const num = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
-const int = (v, lo, hi, d) => (Number.isInteger(v) ? Math.min(hi, Math.max(lo, v)) : d);
-const lang2 = (v, d) => (v === 'en' || v === 'ko' ? v : d);
-function capPush(arr, item, n) { arr.push(item); if (arr.length > n) arr.splice(0, arr.length - n); }
-
-// 차가 올린 여행 기록: 모양을 검사하고, 차에 말로 물어본 문장과 답은 남기지 않음
-function cleanRecord(b) {
-  const route = (Array.isArray(b.route) ? b.route : []).slice(0, 20000)
-    .filter(p => Array.isArray(p) && p.length >= 3 && p.slice(0, 3).every(v => typeof v === 'number' && Number.isFinite(v)) && Math.abs(p[1]) <= 90 && Math.abs(p[2]) <= 180)
-    .map(p => [p[0], p[1], p[2]]);
-  const events = (Array.isArray(b.events) ? b.events : []).slice(0, 5000).filter(e => e && typeof e === 'object').map(e => {
-    const type = txt(e.type, 20);
-    return { t: num(e.t, 0), type, placeId: txt(e.placeId, 60), title: type === 'ask' ? '' : txt(e.title, 80), detail: type === 'qa' ? '' : txt(e.detail, 80) };
-  });
-  return { tripId: txt(b.tripId, 40), scenarioId: txt(b.scenarioId, 40), lang: lang2(b.lang, 'ko'), startedAt: num(b.startedAt, 0), endedAt: num(b.endedAt, Date.now()), distanceM: Math.max(0, Math.round(num(b.distanceM, 0))), route, events };
-}
-
-function onCarMessage(g, car, msg) {
-  const now = Date.now(), type = msg.type;
-  if (now - (car.winAt || 0) > 10000) { car.winAt = now; car.winN = 0; }
-  if (++car.winN > 120) return;   // 10초에 120개 넘게 보내면 버림
-  const tag = o => Object.assign(o, { car: car.name, carNo: car.no });
-  if (type === 'story') {
-    g.story = tag({ type, placeId: txt(msg.placeId, 60), name: txt(msg.name, 60), kind: /^[a-z_]{1,16}$/.test(msg.kind || '') ? msg.kind : 'story', length: txt(msg.length, 12), lang: lang2(msg.lang, g.lang), text: txt(msg.text, 6000), rain: msg.rain === true, night: msg.night === true, color: txt(msg.color, 12), at: now, done: false });
-    g.line = null;
-    g.storyBy = g.storyBy || {}; g.lineBy = g.lineBy || {};
-    g.storyBy[car.no] = g.story; g.lineBy[car.no] = null;
-    broadcast(g, g.story, { cars: false });
-  } else if (type === 'line') {
-    // 아이 이야기를 읽는 중이면 kid: true (문장 번호가 아이 이야기 안에서 다시 0부터 셈)
-    const placeId = txt(msg.placeId, 60), cur = g.storyBy && g.storyBy[car.no];
-    g.line = tag({ type, placeId, index: int(msg.index, 0, 999, 0), kid: !!(cur && cur.placeId === placeId && cur.kid), at: now });
-    g.lineBy = g.lineBy || {}; g.lineBy[car.no] = g.line;
-    broadcast(g, g.line, { cars: false });
-  } else if (type === 'story_end') {
-    const placeId = txt(msg.placeId, 60);
-    // 다시 붙은 휴대폰이 끝난 이야기를 '지금 하는 중'으로 그리지 않게 저장해 둠
-    for (const s of [g.story, g.storyBy && g.storyBy[car.no]]) if (s && s.placeId === placeId && (!s.carNo || s.carNo === car.no)) s.done = true;
-    broadcast(g, tag({ type, placeId, at: now }), { cars: false });
-  } else if (type === 'pass') {
-    const ps = tag({ placeId: txt(msg.placeId, 60), name: txt(msg.name, 60), at: num(msg.at, now) });
-    if (!ps.placeId) return;
-    capPush(g.passes, ps, MAX.passes);
-    broadcast(g, Object.assign({ type }, ps), { cars: false });
-  } else if (type === 'trip') {
-    if (typeof msg.scenarioId === 'string' && /^[a-z0-9_-]{1,40}$/.test(msg.scenarioId) && scenarioEntry(msg.scenarioId)) g.scenarioId = msg.scenarioId;
-    g.lang = lang2(msg.lang, g.lang);
-    broadcast(g, tag({ type, scenarioId: g.scenarioId, lang: g.lang, entered: txt(msg.entered, 600) }), { cars: false });
-  } else if (type === 'pick_ack') {
-    const ack = tag({ type, id: txt(msg.id, 40), name: txt(msg.name, 60), mode: txt(msg.mode, 16), accepted: msg.accepted !== false && msg.mode !== 'later', at: now });
-    if (!ack.id) return;
-    if (g.pending && g.pending.id === ack.id) g.pending = null;   // 운전자가 답했으니 다음 장소를 받을 수 있음
-    capPush(g.acks, ack, MAX.acks);
-    broadcast(g, ack, { except: car.ws });
-  } else if (type === 'say') {
-    capPush(g.said, { at: now, text: txt(msg.text, 600), lang: lang2(msg.lang, g.lang), kind: txt(msg.kind, 20), car: car.name, carNo: car.no }, MAX.said);
-  } else if (type === 'trip_end') {
-    markEnded(g);   // 기록을 올리지 않고 끝내도 보관 기간을 셈
-    broadcast(g, tag({ type, at: now }), { cars: false });
-  } else if (type === 'qa') {
-    const item = tag({ q: txt(msg.q, 200), a: txt(msg.a, 1200), title: txt(msg.title, 60), placeId: txt(msg.placeId, 60), at: num(msg.at, now) });
-    if (!item.a) return;
-    capPush(g.qa, item, MAX.qa);
-    broadcast(g, Object.assign({ type }, item), { cars: false, full: true });
-  } else if (type === 'hunt') {
-    // 아이 모드의 창밖 보물찾기. 찾을 것을 휴대폰에 띄움 (사진은 가리고 창밖을 보게 함)
-    const placeId = txt(msg.placeId, 60);
-    if (!placeId) return;
-    g.hunt = tag({ type, placeId, text: txt(msg.text, 300), sticker: STICKER_RE.test(msg.sticker || '') ? msg.sticker : '', total: int(msg.total, 0, 50, 0), at: now });
-    broadcast(g, g.hunt, { cars: false });
-  } else if (type === 'hunt_end') {
-    if (g.hunt && g.hunt.carNo === car.no) g.hunt = null;
-    broadcast(g, tag({ type, placeId: txt(msg.placeId, 60), at: now }), { cars: false });
-  } else if (type === 'found') {
-    const f = tag({ placeId: txt(msg.placeId, 60), by: txt(msg.by, 20), sticker: STICKER_RE.test(msg.sticker || '') ? msg.sticker : '', count: int(msg.count, 0, 50, 0), total: int(msg.total, 0, 50, 0), at: now });
-    if (!f.placeId) return;
-    if (g.hunt && g.hunt.placeId === f.placeId && g.hunt.carNo === car.no) g.hunt = null;
-    g.found = g.found.filter(x => !(x.placeId === f.placeId && x.carNo === f.carNo));
-    capPush(g.found, f, 100);
-    broadcast(g, Object.assign({ type }, f), { cars: false });
-  } else if (type === 'kidmode') {
-    g.kid = !!msg.on;
-    broadcast(g, tag({ type, on: g.kid }), { cars: false });
-  } else if (type === 'kid') {
-    const kid = tag({ type, placeId: txt(msg.placeId, 60), text: txt(msg.text, 800), at: now });
-    if (!kid.text) return;
-    // 나중에 들어온 휴대폰도 이어서 보게 그 차의 이야기에 붙여 둠
-    const cur = g.storyBy && g.storyBy[car.no];
-    if (cur && cur.placeId === kid.placeId) cur.kid = kid.text;
-    broadcast(g, kid, { cars: false });
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    console.error('포트 ' + PORT + ' 를 이미 쓰고 있어요. 켜져 있는 서버를 끄거나 PORT=8788 node companion/server.js 로 실행하세요.');
+    process.exit(1);
   }
-}
-
-// 운전자 확인을 기다리는 장소는 그룹에 하나. 답이 없어도 90초 뒤에는 다음 장소를 받음
-const PICK_HOLD_MS = 90 * 1000;
-
-/** 휴대폰이 고른 곳. 이름과 위치는 시나리오에서 서버가 채움(휴대폰이 보낸 이름은 쓰지 않음). 지도에서 찍은 곳은 코스 근처(약 30km)만 */
-function pickPlace(g, msg) {
-  const sc = scenarioEntry(g.scenarioId);
-  const data = (sc && sc.data) || {};
-  if (msg.custom === true) {
-    const lat = num(msg.lat, NaN), lon0 = num(msg.lon, NaN);
-    if (!(Math.abs(lat) <= 90) || !Number.isFinite(lon0)) return null;
-    const lon = ((lon0 + 180) % 360 + 360) % 360 - 180;
-    const pts = (Array.isArray(data.route) ? data.route : []).map(p => [p[0], p[1]]).concat((data.places || []).map(p => [p.lat, p.lon]));
-    if (pts.length && !pts.some(p => Math.abs(p[0] - lat) < 0.3 && Math.abs(p[1] - lon) < 0.4)) return null;
-    return { placeId: '', name: g.lang === 'en' ? 'Spot picked on the map' : '지도에서 고른 곳', lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6, kind: 'place', custom: true };
-  }
-  const id = txt(msg.placeId, 60);
-  const p = id && [].concat(data.pickables || [], (data.places || []).filter(x => x.kind !== 'city')).find(x => x && x.id === id);
-  if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return null;
-  const name = p.name && typeof p.name === 'object' ? (p.name[g.lang] || p.name.ko || p.name.en || '') : String(p.name || '');
-  return { placeId: p.id, name: txt(name, 60), lat: p.lat, lon: p.lon, kind: txt(p.kind, 16) || 'place' };
-}
-
-function onPhoneMessage(g, ws, msg) {
-  const now = Date.now();
-  if (now - (ws.winAt || 0) > 10000) { ws.winAt = now; ws.winN = 0; }
-  if (++ws.winN > 30) return;   // 10초에 30개 넘게 보내면 버림
-  if (msg.type === 'pick') {
-    // 못 보낼 때는 보낸 휴대폰에만 까닭을 알림: bad(모르는 곳), nocar(차 없음), soon(20초 안에 또), busy(다른 곳 확인 중)
-    const refuse = (reason, extra) => send(ws, Object.assign({ type: 'pick_wait', reason }, extra || {}));
-    const place = pickPlace(g, msg);
-    if (!place) return refuse('bad');
-    if (!g.cars.size) return refuse('nocar');
-    g.pickAt = g.pickAt || new Map();
-    const left = 20000 - (now - (g.pickAt.get(ws.pid) || 0));
-    if (left > 0) return refuse('soon', { retryIn: Math.ceil(left / 1000) });
-    // 확인 중인 곳의 id 도 알려 줌: 운전자 답(pick_ack)이 오면 이 휴대폰도 바로 다시 보낼 수 있게
-    if (g.pending && now - g.pending.at < PICK_HOLD_MS) return refuse('busy', { id: g.pending.id, name: g.pending.name, retryIn: Math.ceil((PICK_HOLD_MS - (now - g.pending.at)) / 1000) });
-    g.pickAt.set(ws.pid, now);
-    const by = txt(msg.by, 20).trim() || (g.lang === 'en' ? 'Passenger' : '동승자');
-    const pick = Object.assign({ type: 'pick', id: crypto.randomBytes(4).toString('hex') }, place, { by, at: now });
-    g.pending = { id: pick.id, name: pick.name, at: now };
-    capPush(g.picks, pick, MAX.picks);
-    persist(g);
-    for (const c of g.cars.values()) send(c.ws, pick);
-    for (const p of g.phones) send(p, Object.assign({ mine: p === ws }, pick));
-  } else if (msg.type === 'hunt_found') {
-    // 창밖 보물찾기: 휴대폰에서 [찾았다]를 누르면 찾을 것을 낸 차에 알림. 스티커는 차가 줌
-    const h = g.hunt, placeId = txt(msg.placeId, 60);
-    if (!h || h.placeId !== placeId) return;
-    const by = txt(msg.by, 20).trim();
-    for (const c of g.cars.values()) if (!h.carNo || c.no === h.carNo) send(c.ws, { type: 'hunt_found', placeId, by, at: now });
-  }
-}
-
-server.listen(PORT, '0.0.0.0', () => {
-  console.log('구르는 가이드 그룹 서버: ' + PUBLIC_BASE + ' (에뮬레이터에서는 http://10.0.2.2:' + PORT + ')');
+  throw e;
 });
 
-// 마지막 안전망: 처리하지 못한 예외가 있어도 서버 전체가 꺼지지 않게 기록만 남김
-process.on('uncaughtException', e => console.error('[fatal]', e && e.message));
-process.on('unhandledRejection', e => console.error('[fatal]', e && e.message));
+server.listen(PORT, HOST, () => {
+  const u = urls(DEFAULT_CODE);
+  console.log('구르는 가이드 동반 서버 · 포트 ' + PORT);
+  console.log('  이 컴퓨터     ' + u.localUrl + '/t/' + DEFAULT_CODE);
+  console.log('  같은 와이파이 ' + u.tripUrl);
+  console.log('  에뮬레이터    ' + u.emuUrl + '/t/' + DEFAULT_CODE);
+  console.log('  여행 영상     ' + u.localUrl + '/reel/' + DEFAULT_CODE);
+  console.log('  상태 저장     ' + STATE_DIR);
+});
 
-// 끌 때(Ctrl+C, kill) 아직 쓰지 않은 그룹을 바로 저장하고 끝냄. 다시 켜면 이야기·퀴즈가 이어짐
-function flushAndExit() {
-  for (const [code, timer] of saveTimers) { clearTimeout(timer); const g = groups.get(code); if (g) writeGroup(g); }
-  saveTimers.clear();
+function shutdown() {
+  if (saveTimer) clearTimeout(saveTimer);
+  flush();
   process.exit(0);
 }
-process.on('SIGINT', flushAndExit);
-process.on('SIGTERM', flushAndExit);
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

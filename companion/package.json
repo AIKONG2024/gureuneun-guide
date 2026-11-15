@@ -1,19 +1,14 @@
 {
   "name": "gureuneun-guide-companion",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "구르는 가이드 여행 그룹 서버와 동승자 휴대폰 웹 페이지",
-  "type": "module",
+  "description": "구르는 가이드 동반 서버, 휴대폰 웹 '우리 여행', 여행 영상. 의존성 없음",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "demo": "DEMO_LOCAL_TRUST=1 node server.js"
+    "start": "node server.js"
   },
   "engines": {
     "node": ">=18"
-  },
-  "dependencies": {
-    "ws": "^8.18.0"
   },
   "license": "MIT"
 }

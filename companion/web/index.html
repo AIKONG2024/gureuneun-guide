@@ -2,58 +2,83 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0E1015">
-<meta name="color-scheme" content="dark">
-<title>구르는 가이드</title>
-<link rel="stylesheet" href="/vendor/fonts/asta-sans/asta-sans.css">
-<link rel="stylesheet" href="/css/style.css">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F2F4F7">
+<meta name="format-detection" content="telephone=no">
+<title>우리 여행 · 구르는 가이드</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/web/vendor/asta-sans/asta-sans.css">
+<link rel="stylesheet" href="/web/app.css">
 </head>
-<body>
-<main class="landing">
-  <div class="top">
-    <span class="mark" aria-hidden="true"><svg viewBox="33 27 49 49" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"><path d="M47.52 64.8H58.68C62.28 64.8 64.44 62.28 64.44 59.22C64.44 55.98 62.1 53.64 59.04 53.64H48.96C45.9 53.64 43.56 51.3 43.56 48.24C43.56 45.18 45.72 43.2 48.96 43.2H60.48"/><circle cx="43.2" cy="64.8" r="4.32"/><circle cx="64.8" cy="43.2" r="4.32"/><circle cx="73.5" cy="34.5" r="4.6" fill="#00AAD2" stroke="none"/></svg></span>
-    <span class="brand" id="brand"></span>
-    <button class="chip" id="langBtn" type="button"></button>
-  </div>
-  <form id="join" class="join" novalidate>
-    <h1><label for="code" id="h1"></label></h1>
-    <input id="code" class="code-input" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="4" placeholder="0000">
-    <p class="err" id="err" role="alert"></p>
-    <button class="btn primary" id="go" type="submit"></button>
-  </form>
-  <p class="foot" id="note"></p>
-</main>
-<script>
-  (function () {
-    'use strict';
-    // 그룹을 모르는 첫 화면이라 휴대폰 언어를 따름. 고른 언어는 그룹 페이지와 같이 씀
-    var TXT = {
-      ko: { brand: '구르는 가이드', h1: '그룹 번호를 넣어 주세요', go: '들어가기', note: '차 화면의 QR을 찍으면 바로 들어와요', err: '숫자 네 자리예요', other: 'EN', otherAria: 'Show in English' },
-      en: { brand: 'Rolling Guide', h1: 'Enter the group code', go: 'Join', note: 'Or scan the QR on the car screen', err: 'The code has 4 digits', other: '한국어', otherAria: '한국어로 보기' }
-    };
-    var lang;
-    try { lang = localStorage.getItem('gg_lang'); } catch (e) {}
-    if (lang !== 'ko' && lang !== 'en') lang = /^ko\b/i.test(navigator.language || '') ? 'ko' : 'en';
-    function $(id) { return document.getElementById(id); }
-    function render() {
-      var d = TXT[lang];
-      document.documentElement.lang = lang;
-      document.title = d.brand;
-      ['brand', 'h1', 'go', 'note'].forEach(function (k) { $(k).textContent = d[k]; });
-      $('langBtn').textContent = d.other; $('langBtn').setAttribute('aria-label', d.otherAria); $('langBtn').lang = lang === 'en' ? 'ko' : 'en';
-      if ($('err').textContent) $('err').textContent = d.err;
-    }
-    $('langBtn').onclick = function () { lang = lang === 'en' ? 'ko' : 'en'; try { localStorage.setItem('gg_lang', lang); } catch (e) {} render(); };
-    $('code').oninput = function () { var v = this.value.replace(/\D/g, '').slice(0, 4); if (v !== this.value) this.value = v; $('err').textContent = ''; };
-    $('join').onsubmit = function (e) {
-      e.preventDefault();
-      var c = $('code').value.replace(/\D/g, '');
-      if (c.length === 4) location.href = '/g/' + c;
-      else { $('err').textContent = TXT[lang].err; $('code').focus(); }
-    };
-    render();
-  })();
-</script>
+<body data-tab="now">
+<div class="app" id="app">
+  <header class="hd" id="hd">
+    <button class="hd-btn hd-me" data-act="pick-me" id="hdMe" aria-label="나 바꾸기"></button>
+    <div class="hd-t"><b>우리 여행</b><small id="hdSub">&nbsp;</small></div>
+    <button class="hd-btn hd-share" data-act="share-trip" aria-label="여행 링크 보내기"><i data-ic="share" data-s="22"></i></button>
+  </header>
+  <button class="pill" id="pill" data-act="pill" type="button"></button>
+  <div class="net" id="net">연결이 끊겼어요. 다시 연결하는 중이에요</div>
+  <main class="main">
+    <section class="panel" id="p-now">
+      <div id="nowBox"></div>
+      <div class="sec"><b>오늘 담은 곳</b><button class="sec-a" data-act="tab" data-tab="add"><i data-ic="plus" data-s="15" data-w="2.4"></i>담기</button></div>
+      <div class="card list" id="todayList"></div>
+      <div class="sec" id="heardSec" hidden><b>다시 보기</b><span id="heardCount"></span></div>
+      <div class="card list" id="heardList" hidden></div>
+    </section>
+    <section class="panel" id="p-add">
+      <div class="card form">
+        <div class="k">링크 붙여 넣기</div>
+        <div class="inp" id="inpBox">
+          <i data-ic="link" data-s="17" class="inp-ic"></i>
+          <span class="inp-pretty" id="pretty"></span>
+          <input id="link" type="url" inputmode="url" enterkeyhint="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="블로그, 지도 앱, 인스타그램 링크" aria-label="장소 링크">
+          <button type="button" class="inp-paste" data-act="paste">붙여 넣기</button>
+          <button type="button" class="inp-x" data-act="clear" aria-label="지우기"><i data-ic="x" data-s="12" data-w="3"></i></button>
+        </div>
+        <div class="ex"><span>예시</span><button type="button" data-act="example" data-i="0">블로그 · 황리단길 카페</button><button type="button" data-act="example" data-i="1">인스타그램 · 교촌마을</button></div>
+        <div id="pv"></div>
+        <button type="button" class="who" data-act="pick-me" id="addWho"></button>
+        <button type="button" class="go" data-act="add" id="addBtn" disabled></button>
+      </div>
+      <div class="sec"><b>이미 담긴 장소</b><span id="addedCount"></span></div>
+      <div class="card list" id="addedList"></div>
+    </section>
+    <section class="panel" id="p-plan">
+      <div id="etaBox"></div>
+      <div class="sec"><b>오늘 일정</b><span id="planDate"></span></div>
+      <div class="card tl" id="planList"></div>
+      <div class="sec" id="laterSec" hidden><b>가까워지면 제안</b><span id="laterCount"></span></div>
+      <p class="note" id="laterNote" hidden>시간을 정하기 어려운 곳은 근처를 지날 때 차가 먼저 들를지 물어봐요</p>
+      <div class="card list" id="laterList" hidden></div>
+      <div class="sec"><b>일행</b><span id="memCount"></span></div>
+      <div class="card" id="memList"></div>
+      <p class="foot"><i data-ic="shield-check" data-s="14"></i>실시간 위치는 본인이 직접 켠 경우에만 일행에게 보여요</p>
+    </section>
+    <section class="panel" id="p-rec">
+      <div id="recTop"></div>
+      <div class="sec" id="upSec" hidden><b>올린 사진</b><span id="upCount"></span></div>
+      <div class="grid" id="upGrid" hidden></div>
+    </section>
+  </main>
+  <nav class="tab" id="tabbar">
+    <button type="button" data-act="tab" data-tab="now"><i data-ic="audio-lines" data-s="24"></i><span>지금</span></button>
+    <button type="button" data-act="tab" data-tab="add"><i data-ic="circle-plus" data-s="24"></i><span>담기</span></button>
+    <button type="button" data-act="tab" data-tab="plan"><i data-ic="route" data-s="24"></i><span>일정</span></button>
+    <button type="button" data-act="tab" data-tab="rec"><i data-ic="film" data-s="24"></i><span>기록</span><em class="dot"></em></button>
+  </nav>
+</div>
+<div class="ov who-ov" id="whoOv"></div>
+<div class="ov sheet-ov" id="sheetOv" data-act="sheet-bg"><div class="sheet" id="sheet"></div></div>
+<div class="ov player" id="player">
+  <button type="button" class="pl-x" data-act="close-player" aria-label="닫기"><i data-ic="x" data-s="22" data-w="2.4"></i></button>
+  <div class="pl-box" id="plBox"></div>
+  <p class="pl-hint">가로로 돌리면 크게 볼 수 있어요</p>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="file" accept="image/*" multiple hidden>
+<script src="/web/vendor/lucide.min.js"></script>
+<script src="/web/app.js"></script>
 </body>
 </html>

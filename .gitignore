@@ -19,9 +19,16 @@ keystore.properties
 companion/node_modules/
 companion/data/
 companion/.env
+companion/state/
+companion/uploads/
 
 # 시연 녹화 도구
 tools/demo/node_modules/
 tools/demo/out/
+
+# 시연 영상 재료와 렌더 결과 (tools/film/media.py, build.py 로 다시 만듦)
+tools/film/assets/
+tools/film/renders/
+tools/film/snapshots/
 __pycache__/
 *.pyc

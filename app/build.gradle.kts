@@ -23,10 +23,11 @@ android {
         applicationId = "app.gureuneun.guide"
         minSdk = 28
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 20
+        versionName = "2.0.0"
         // 에뮬레이터에서 호스트 PC 의 동반 서버 주소
         buildConfigField("String", "COMPANION_URL", "\"http://10.0.2.2:8787\"")
+        buildConfigField("String", "TRIP_CODE", "\"GJ1016\"")
     }
 
     signingConfigs {
@@ -58,10 +59,6 @@ android {
         compose = true
         buildConfig = true
     }
-    // 차 앱에는 명소 사진(photos)과 스티커, 여행 영상 화면(reel)만 넣고 휴대폰 웹 페이지와 그 스크립트, 웹 글꼴(vendor)은 뺌
-    androidResources {
-        ignoreAssetsPattern = "!vendor:!js:!css:!group.html:!index.html:!.DS_Store"
-    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -69,7 +66,7 @@ android {
         }
     }
 
-    // 휴대폰 그룹 페이지와 같은 명소 사진(companion/web/photos)을 차 화면에서도 씀
+    // 휴대폰 웹과 같은 자원(지역 데이터, 사진, 오디오, 여행 영상 화면)을 차량 앱에서도 씀
     sourceSets {
         getByName("main") {
             assets.srcDirs("src/main/assets", "../companion/web")
@@ -98,8 +95,4 @@ dependencies {
     // QR 생성, 동반 서버 연결
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-
-    // 단위 시험 (질문 알아듣기, 조사 처리, 시나리오 자료 점검)
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("org.json:json:20240303")
 }

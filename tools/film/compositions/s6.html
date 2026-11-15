@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>구르는 가이드 s6</title>
+<style>
+/* 구르는 가이드 시연 필름
+   레퍼런스(Pleos Connect 공식 필름, Google Gemini in Android Auto, 현대모비스, Tesla)처럼 글씨는 작게, 상자와 번짐 없이.
+   색은 화면 속 UI에만 쓰고 바깥은 무채색(밝은 회색 스튜디오, 현대 샌드, 검정). 글꼴은 Pleos 와 같은 Asta Sans */
+@font-face{font-family:Asta;src:url(../assets/fonts/asta_regular.otf);font-weight:400}
+@font-face{font-family:Asta;src:url(../assets/fonts/asta_medium.otf);font-weight:500}
+@font-face{font-family:Asta;src:url(../assets/fonts/asta_semibold.otf);font-weight:600}
+@font-face{font-family:Asta;src:url(../assets/fonts/asta_bold.otf);font-weight:700}
+@font-face{font-family:Asta;src:url(../assets/fonts/asta_extrabold.otf);font-weight:800}
+*{box-sizing:border-box}
+html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#000}
+#root{position:relative;width:1920px;height:1080px;overflow:hidden;font-family:Asta;color:#F5F6F7;-webkit-font-smoothing:antialiased;letter-spacing:-.005em}
+.scene{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;background:#000}
+.scene.dark{background:#000}
+
+/* 실내 이미지와 그 속 화면 */
+.cam{position:absolute;left:0;top:0;width:1920px;height:1081px}
+.plate{position:absolute;left:0;top:0;width:1920px;height:1081px}
+.scr{position:absolute;overflow:hidden;border-radius:5px;background:#000}
+.scr video{position:absolute;filter:brightness(.9) saturate(1.02)}
+.scr .gl{position:absolute;inset:0;background:linear-gradient(112deg,rgba(255,255,255,.07),rgba(255,255,255,0) 36%);box-shadow:inset 0 0 16px rgba(0,0,0,.5)}
+.strip{position:absolute;height:4px;border-radius:3px;mix-blend-mode:screen;transform-origin:left center}
+.strip.warmw{background:#FFE6C4;box-shadow:0 0 8px 2px rgba(255,214,160,.6),0 0 26px 6px rgba(255,200,130,.22);opacity:.8}
+.strip.cool{background:#DCEBFF;box-shadow:0 0 8px 2px rgba(190,220,255,.55),0 0 26px 6px rgba(160,200,255,.2);opacity:.9}
+.strip.goldw{background:#F2CF98;box-shadow:0 0 10px 3px rgba(242,207,152,.7),0 0 34px 8px rgba(217,168,102,.3);opacity:.95}
+.dimmer{position:absolute;inset:0;background:#02040A;opacity:0}
+.warm{position:absolute;inset:0;opacity:0;mix-blend-mode:soft-light;background:radial-gradient(1300px 700px at 60% 45%,rgba(255,200,120,.9),rgba(217,168,102,.5) 55%,rgba(150,100,40,.35))}
+.sweep{position:absolute;left:0;top:-300px;width:700px;height:1700px;opacity:0;mix-blend-mode:screen;pointer-events:none;
+  background:linear-gradient(90deg,rgba(255,214,150,0),rgba(255,214,150,.12) 30%,rgba(255,236,200,.5) 50%,rgba(255,214,150,.12) 70%,rgba(255,214,150,0));filter:blur(10px)}
+.flash{position:absolute;inset:0;opacity:0;mix-blend-mode:screen;pointer-events:none;
+  background:radial-gradient(1100px 620px at 50% 58%,rgba(255,226,170,.7),rgba(242,207,152,.25) 45%,rgba(217,168,102,0) 75%)}
+
+/* 창밖 라벨: 앞유리 HUD 처럼 글자와 가는 선만 */
+.ar{position:absolute;opacity:0;z-index:30;color:#fff}
+.ar .t{display:block;font-weight:600;font-size:30px;letter-spacing:-.01em;text-shadow:0 1px 14px rgba(0,0,0,.55)}
+.ar .t i{font-style:normal;color:#9FE6F5;margin-right:8px}
+.ar .t small{font-weight:500;font-size:24px;opacity:.75;margin-left:8px}
+.ar .ln{display:block;width:1.5px;height:118px;margin:10px 0 0 6px;background:linear-gradient(rgba(255,255,255,.9),rgba(255,255,255,.15))}
+.ar .ring{display:block;width:14px;height:14px;margin:-2px 0 0 0;border-radius:50%;border:2px solid #fff;box-shadow:0 0 10px rgba(0,0,0,.35)}
+
+/* 사진 장면 */
+.photo{position:absolute;inset:0;overflow:hidden;opacity:0;z-index:10}
+.photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform-origin:50% 50%}
+.photo .vign{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.18),rgba(0,0,0,0) 26%,rgba(0,0,0,0) 58%,rgba(0,0,0,.5))}
+.photo .credit{position:absolute;right:30px;top:24px;font-weight:500;font-size:15px;color:rgba(255,255,255,.55)}
+
+/* 자막: 상자 없이 흰 글씨. 차가 말할 때만 아래에 얇은 빛 선 (Pleos Gleo, Gemini 처럼) */
+.sub{position:absolute;left:0;right:0;bottom:74px;display:flex;justify-content:center;opacity:0;z-index:50}
+.sub span{position:relative;display:inline-block;max-width:1500px;font-weight:500;font-size:32px;line-height:1.35;color:#fff;text-align:center;
+  text-shadow:0 1px 3px rgba(0,0,0,.45),0 2px 18px rgba(0,0,0,.35)}
+.sub em{font-style:normal;font-weight:500;color:rgba(255,255,255,.62);margin-right:14px}
+.sub.car span::after{content:'';position:absolute;left:50%;bottom:-20px;width:176px;height:3px;margin-left:-88px;border-radius:2px;
+  background:linear-gradient(90deg,rgba(110,124,255,0),#6E7CFF 28%,#A9BCFF 50%,#6E7CFF 72%,rgba(110,124,255,0));box-shadow:0 0 10px rgba(110,124,255,.65)}
+.sub.ink span{color:#1B2128;text-shadow:none}
+.sub.ink{bottom:48px}
+.sub.ink span{font-size:30px}
+.sub.ink em{color:rgba(27,33,40,.5)}
+.listen{position:absolute;left:50%;bottom:66px;width:176px;height:3px;margin-left:-88px;border-radius:2px;opacity:0;z-index:50;
+  background:linear-gradient(90deg,rgba(0,170,210,0),#00AAD2 28%,#7FE3F7 50%,#00AAD2 72%,rgba(0,170,210,0));box-shadow:0 0 10px rgba(0,170,210,.6)}
+
+/* 장 제목: 왼쪽 위 작은 글씨 (현대모비스 필름처럼) */
+.chap{position:absolute;left:96px;top:70px;display:flex;align-items:center;gap:14px;opacity:0;z-index:40;font-weight:600;font-size:26px;color:#fff;text-shadow:0 1px 10px rgba(0,0,0,.4)}
+.chap::before{content:'';width:22px;height:2px;background:#00AAD2}
+.chap.ink{color:#1B2128;text-shadow:none}
+
+/* 화면을 띄우는 스튜디오 (Pleos 필름의 밝은 회색, 경주는 현대 샌드) */
+.studio{position:absolute;inset:0;background:radial-gradient(1500px 900px at 50% 38%,#F5F6F7 0%,#E9EBED 55%,#DCDFE2 100%)}
+.studio.sand{background:radial-gradient(1500px 900px at 50% 38%,#F8F5F1 0%,#EEE7DE 55%,#E2D9CE 100%)}
+.stage{position:absolute;inset:0;perspective:2400px;transform-style:preserve-3d}
+.card{position:absolute;border-radius:22px;overflow:hidden;background:#0B0D10;opacity:0;border:10px solid #0B0D10;box-sizing:content-box;
+  box-shadow:0 36px 70px rgba(18,26,34,.26),0 10px 22px rgba(18,26,34,.14)}
+.card.car video{position:absolute}
+.card .sheen{position:absolute;inset:0;background:linear-gradient(118deg,rgba(255,255,255,.06),rgba(255,255,255,0) 30%);pointer-events:none}
+.card.phone{padding:0;border:11px solid #0B0C0E;border-radius:50px;background:#0B0C0E}
+.card.phone .bezel{position:relative;width:100%;height:100%;border-radius:39px;overflow:hidden;background:#fff}
+.card.phone video{position:absolute;left:0;top:0}
+.navi{position:absolute;right:120px;bottom:150px;width:600px;opacity:0;z-index:20}
+.navi .card{position:relative;width:580px;height:417px;opacity:1;border-width:8px;border-radius:16px}
+.navi img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.navi .lab{margin:14px 0 0 4px;font-weight:500;font-size:20px;color:#5A626B}
+.signal{position:absolute;left:50%;top:66px;width:64px;height:64px;margin-left:-32px;opacity:0;z-index:40}
+.signal svg{width:64px;height:64px}
+.reelwrap{position:absolute;inset:0;z-index:25;opacity:0}
+.reelpop{position:absolute;overflow:hidden;background:#000}
+.reelpop video{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover}
+.fam{position:absolute;width:300px;height:649px;border-radius:40px;opacity:0;transform:rotate(var(--r));overflow:hidden;border:9px solid #0B0C0E;
+  background:#0B0C0E;box-shadow:0 30px 60px rgba(18,26,34,.24),0 8px 18px rgba(18,26,34,.12)}
+.fam img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:saturate(.95) brightness(.97)}
+.fam b{position:absolute;right:16px;top:16px;width:44px;height:44px;border-radius:50%;background:var(--c);display:grid;place-items:center;font-weight:600;font-size:20px;color:#fff;box-shadow:0 0 0 3px #fff}
+
+/* 제목과 끝: 검정 바탕에 작은 글씨 */
+.title-bg{position:absolute;inset:0;background:#000}
+.ask{position:absolute;left:0;right:0;top:500px;text-align:center;font-weight:500;font-size:54px;letter-spacing:-.015em;color:#F5F6F7;opacity:0}
+.lock{position:absolute;left:50%;top:50%;display:flex;align-items:center;gap:22px;opacity:0;transform:translate(-50%,-50%)}
+.lock .mark{width:76px;height:76px}
+.lock h1{margin:0;font-weight:600;font-size:46px;letter-spacing:-.015em;color:#F5F6F7}
+.lock p{margin:4px 0 0;font-weight:500;font-size:21px;color:#8A939C}
+.end{position:absolute;left:0;right:0;top:400px;text-align:center;opacity:0}
+.end .mark{width:84px;height:84px}
+.end h1{margin:22px 0 0;font-weight:600;font-size:50px;letter-spacing:-.015em;color:#F5F6F7}
+.end p{margin:8px 0 0;font-weight:500;font-size:22px;color:#8A939C}
+.end .sdk{margin-top:40px;font-weight:500;font-size:17px;letter-spacing:.01em;color:#5E666F}
+.foot{position:absolute;left:0;right:0;bottom:52px;text-align:center;font-weight:500;font-size:15px;color:#4C535A;opacity:0}
+
+/* 움직임 */
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes fadeOut{to{opacity:0}}
+@keyframes reveal{from{opacity:0}to{opacity:1}}
+@keyframes push{from{transform:scale(1)}to{transform:scale(1.06)}}
+@keyframes push2{from{transform:scale(1)}to{transform:scale(1.08)}}
+@keyframes push6{from{transform:scale(1)}to{transform:scale(1.035)}}
+@keyframes arIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes photoIn{from{opacity:1;clip-path:inset(0 0 0 100%)}to{opacity:1;clip-path:inset(0 0 0 0)}}
+@keyframes kb1{from{transform:scale(1.14) translate(2%,1%)}to{transform:scale(1.02) translate(0,0)}}
+@keyframes kb2{from{transform:scale(1.02) translate(0,0)}to{transform:scale(1.14) translate(-2%,-1.2%)}}
+@keyframes subIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes chapIn{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+@keyframes listenIn{0%{opacity:0;transform:scaleX(.4)}100%{opacity:1;transform:scaleX(1)}}
+@keyframes phoneIn{from{opacity:0;transform:translateX(-70px) rotateY(22deg) rotateX(4deg)}to{opacity:1;transform:rotateY(12deg) rotateX(2deg)}}
+@keyframes phoneOut{from{opacity:1;transform:rotateY(12deg) rotateX(2deg)}to{opacity:0;transform:translateX(-180px) rotateY(22deg) rotateX(2deg)}}
+@keyframes carIn{from{opacity:0;transform:translateX(70px) rotateY(-16deg) rotateX(3deg)}to{opacity:1;transform:rotateY(-8deg) rotateX(1.5deg)}}
+@keyframes carCenter{from{opacity:1;transform:rotateY(-8deg) rotateX(1.5deg)}to{opacity:1;transform:translateX(-270px) translateY(-8px) scale(1.07)}}
+@keyframes carL{from{opacity:0;transform:translateX(-60px) rotateY(14deg) rotateX(2deg)}to{opacity:1;transform:rotateY(6deg) rotateX(1.5deg)}}
+@keyframes carL2{from{opacity:0;transform:rotateY(6deg) rotateX(1.5deg) scale(.99)}to{opacity:1;transform:rotateY(6deg) rotateX(1.5deg)}}
+@keyframes phoneR{from{opacity:0;transform:translateX(60px) rotateY(-20deg) rotateX(2deg)}to{opacity:1;transform:rotateY(-10deg) rotateX(1.5deg)}}
+@keyframes phoneR2{from{opacity:0;transform:rotateY(-10deg) rotateX(1.5deg) scale(.99)}to{opacity:1;transform:rotateY(-10deg) rotateX(1.5deg)}}
+@keyframes phoneUp{from{opacity:0;transform:translateY(60px)}to{opacity:1;transform:none}}
+@keyframes famIn{from{opacity:0;transform:translateY(46px) rotate(var(--r)) scale(.94)}to{opacity:1;transform:rotate(var(--r))}}
+@keyframes naviIn{from{opacity:0;transform:perspective(1600px) translateX(70px) rotateY(-30deg)}to{opacity:1;transform:perspective(1600px) rotateY(-10deg)}}
+@keyframes naviOut{from{opacity:1;transform:perspective(1600px) rotateY(-10deg)}to{opacity:0;transform:perspective(1600px) translateX(60px) rotateY(-26deg)}}
+@keyframes dimDown{from{opacity:.9}to{opacity:.28}}
+@keyframes goldOn{0%{opacity:.28;background:#DCEBFF}35%{opacity:1;background:#FFF1D6;box-shadow:0 0 16px 5px rgba(255,226,170,.9),0 0 60px 16px rgba(217,168,102,.5)}100%{opacity:1;background:#F2CF98;box-shadow:0 0 10px 3px rgba(242,207,152,.75),0 0 36px 9px rgba(217,168,102,.32)}}
+@keyframes dimIn{from{opacity:0}to{opacity:.3}}
+@keyframes dimOut{from{opacity:.3}to{opacity:.04}}
+@keyframes warmIn{from{opacity:0}to{opacity:.62}}
+@keyframes flash{0%{opacity:0}25%{opacity:.6}100%{opacity:0}}
+@keyframes sweep{0%{opacity:0;transform:translateX(-900px) rotate(14deg)}20%{opacity:1}100%{opacity:0;transform:translateX(2300px) rotate(14deg)}}
+@keyframes blink{0%,54%{opacity:1}55%,100%{opacity:.15}}
+@keyframes reelpop{from{left:var(--x);top:var(--y);width:var(--w);height:var(--h);border-radius:5px}to{left:0;top:0;width:1920px;height:1080px;border-radius:0}}
+@keyframes askIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes lockIn{from{opacity:0;transform:translate(-50%,-46%)}to{opacity:1;transform:translate(-50%,-50%)}}
+@keyframes endIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="s6" data-start="0" data-duration="35.167" data-width="1920" data-height="1080" data-no-timeline>
+<div class="scene ">
+<div class="cam" style="transform-origin:1060px 560px;animation:push6 10.67s ease-out 0s both;"><img class="plate" src="../assets/plate_b.jpg"><div class="scr" style="left:836.0px;top:455.9px;width:447.8px;height:211.3px"><video id="v13" class="clip sv" src="../assets/car.mp4" data-start="0.000" data-duration="11.371" data-media-start="238.883" muted playsinline style="width:447.8px;height:251.9px;left:0;top:-15.7px"></video><i class="gl"></i></div><div class="strip goldw" style="left:247px;top:584px;width:584px;transform:rotate(-0.8deg);"></div><div class="strip goldw" style="left:1288px;top:579px;width:412px;"></div></div><div class="chap" style="animation:chapIn .6s cubic-bezier(.2,.8,.2,1) 0.40s both, fadeOut .5s ease 3.40s forwards;">도착하면</div><div class="sub car" style="animation:subIn .3s ease 0.700s both, fadeOut .25s ease 4.931s forwards;"><span>동궁과 월지에 도착했어요. 오늘 경주 여행은 여기까지예요</span></div><div class="sub car" style="animation:subIn .3s ease 5.815s both, fadeOut .25s ease 10.671s forwards;"><span>오늘 여행을 1분 영상으로 만들었어요</span></div><div class="reelwrap" style="animation:reveal .01s linear 10.87s forwards;"><div class="reelpop" style="--x:828.1px;--y:452.2px;--w:463.5px;--h:218.7px;animation:reelpop .95s cubic-bezier(.65,0,.2,1) 10.87s both;"><video id="v14" class="clip rv" src="../assets/reel.mp4" data-start="10.871" data-duration="9.400" data-media-start="4.000" muted playsinline style=""></video><video id="v15" class="clip rv" src="../assets/reel.mp4" data-start="20.271" data-duration="2.400" data-media-start="15.000" muted playsinline style=""></video><video id="v16" class="clip rv" src="../assets/reel.mp4" data-start="22.671" data-duration="2.200" data-media-start="24.600" muted playsinline style=""></video><video id="v17" class="clip rv" src="../assets/reel.mp4" data-start="24.871" data-duration="1.800" data-media-start="39.400" muted playsinline style=""></video><video id="v18" class="clip rv" src="../assets/reel.mp4" data-start="26.671" data-duration="2.100" data-media-start="42.300" muted playsinline style=""></video><video id="v19" class="clip rv" src="../assets/reel.mp4" data-start="28.771" data-duration="1.600" data-media-start="51.900" muted playsinline style=""></video><video id="v20" class="clip rv" src="../assets/reel.mp4" data-start="30.371" data-duration="4.800" data-media-start="57.000" muted playsinline style=""></video></div></div>
+</div>
+</div>
+</body>
+</html>

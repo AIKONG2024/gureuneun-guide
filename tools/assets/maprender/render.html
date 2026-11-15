@@ -1,0 +1,179 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<!-- 구르는 가이드 v2 오프라인 지도 렌더 페이지. Aside 브라우저에서 http://127.0.0.1:8792/render.html?mode=... 로 엶
+     mode=tiles    : z16 표준 타일 격자에 맞춰 큰 화면 하나로 그린 뒤 512px 조각(JPEG 85)으로 잘라 저장 + 고속도로 선 좌표 추출
+     mode=overview : 여행 영상 배경용 1920x1080 개요 지도(경로 범위가 가운데 70%)
+     &debug=1      : 개요 지도에 경로선과 접근 구간(approach.json)을 그려 확인용으로 /tmp/rg-v2 에 저장
+     스타일: figs/map17.html 의 어두운 내비 스타일(OpenFreeMap liberty 기반, name:ko). 경로선·차 아이콘·핀 없음 -->
+<link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css">
+<style>
+html,body{margin:0;background:#161A1E;overflow:hidden}
+#m{position:absolute;left:0;top:0}
+.maplibregl-ctrl-attrib,.maplibregl-ctrl-logo{display:none!important}
+</style></head><body><div id="m"></div>
+<script src="vendor/maplibre/maplibre-gl.js"></script>
+<script>
+const Q = new URLSearchParams(location.search);
+const MODE = Q.get('mode') || 'tiles', DEBUG = Q.get('debug') === '1';
+const log = (...a) => fetch('/log', { method: 'POST', body: '[' + MODE + '] ' + a.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ') });
+const save = (path, blob) => fetch('/save?path=' + encodeURIComponent(path), { method: 'POST', body: blob }).then(r => r.json());
+const C = { bg:'#161A1E', resid:'#191E23', park:'#18241F', wood:'#17231E', grass:'#19251F', water:'#123049', waterLine:'#1B4366',
+  building:'#20262C', minor:'#2B3137', secondary:'#384047', major:'#454E56', motorway:'#525C66', casing:'#101316', path:'#23292E',
+  rail:'#2C3238', label:'#C7CED5', halo:'#121518', roadLabel:'#8F99A2', poi:'#AEB7BF', boundary:'#2A3138' };
+const SZ = { road: 14.5, poi: 15, place: 16 };   // 글자 크기(CSS px). 차량 화면에서 읽히게 map17 보다 크게
+
+async function styleJson() {
+  const base = await (await fetch('https://tiles.openfreemap.org/styles/liberty')).json();
+  const kindOf = id => /casing/.test(id) ? 'casing' : /motorway/.test(id) ? 'motorway' : /trunk_primary/.test(id) ? 'major' : /secondary_tertiary/.test(id) ? 'secondary' : /path_pedestrian/.test(id) ? 'path' : /rail/.test(id) ? 'rail' : /minor|street|link|service_track/.test(id) ? 'minor' : null;
+  const hide = /^(natural_earth|park_outline|road_area_pattern|road_one_way_arrow|highway-shield|road_shield_us|highway-name-path|airport|label_country|label_state|aeroway|building-3d|poi_transit)/;
+  base.layers.forEach(l => {
+    const id = l.id, p = l.paint = l.paint || {}, y = l.layout = l.layout || {};
+    if (hide.test(id)) { y.visibility = 'none'; return; }
+    if (id === 'background') p['background-color'] = C.bg;
+    else if (id === 'park') { p['fill-color'] = C.park; p['fill-opacity'] = 1; }
+    else if (id === 'landuse_residential' || /^landuse_/.test(id)) { p['fill-color'] = C.resid; p['fill-opacity'] = 1; }
+    else if (id === 'landcover_wood') { p['fill-color'] = C.wood; p['fill-opacity'] = 1; }
+    else if (/landcover_(grass|wetland)/.test(id)) { p['fill-color'] = C.grass; p['fill-opacity'] = 1; delete p['fill-pattern']; delete p['fill-translate-anchor']; }
+    else if (/^landcover_/.test(id)) { p['fill-color'] = C.bg; }
+    else if (id === 'water') p['fill-color'] = C.water;
+    else if (/^waterway/.test(id) && l.type === 'line') p['line-color'] = C.waterLine;
+    else if (id === 'building') { p['fill-color'] = C.building; p['fill-outline-color'] = '#272E35'; p['fill-opacity'] = 1; }
+    else if (/^boundary/.test(id)) p['line-color'] = C.boundary;
+    else if (l.type === 'line' && /^(road|bridge|tunnel)_/.test(id)) { const k = kindOf(id); if (k) p['line-color'] = C[k]; if (/hatching/.test(id)) y.visibility = 'none'; }
+    if (l.type === 'symbol') {
+      if (y['text-field']) y['text-field'] = ['coalesce', ['get', 'name:ko'], ['get', 'name']];
+      if (y['text-font']) y['text-font'] = /^label_|^place/.test(id) ? ['Noto Sans Bold'] : ['Noto Sans Regular'];
+      p['text-color'] = /highway-name/.test(id) ? C.roadLabel : (/poi/.test(id) ? C.poi : C.label);
+      p['text-halo-color'] = C.halo; p['text-halo-width'] = 1.6; p['text-halo-blur'] = 0.3;
+      if (/highway-name|road_label|water_name|waterway/.test(id)) y['text-size'] = SZ.road;
+      else if (/^poi/.test(id)) { y['text-size'] = SZ.poi; if (p['icon-opacity'] == null) p['icon-opacity'] = 0.85; }
+      else if (/^label_|^place/.test(id)) y['text-size'] = SZ.place;
+      if (/^label_(city|town|village)/.test(id)) y['icon-image'] = '';
+    }
+  });
+  base.layers.forEach(l => {                       // 면 레이어의 밝은 테두리선 없애기(공원 등)
+    if (l.type === 'fill' && l.id !== 'building' && (l.layout || {}).visibility !== 'none') l.paint['fill-outline-color'] = 'rgba(0,0,0,0)';
+  });
+  if (MODE === 'layers') log('layers', base.layers.filter(l => (l.layout || {}).visibility !== 'none' && l.type !== 'symbol' && !/^(road|bridge|tunnel)_/.test(l.id)).map(l => l.id + ':' + l.type + ':' + JSON.stringify(l.paint).slice(0, 90)));
+  return base;
+}
+
+// 웹 메르카토르: 경위도 ↔ 세계 좌표(0~1)
+const mx = lon => (lon + 180) / 360;
+const my = lat => { const s = Math.sin(lat * Math.PI / 180); return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI); };
+const lonOf = x => x * 360 - 180;
+const latOf = y => 360 / Math.PI * Math.atan(Math.exp((0.5 - y) * 2 * Math.PI)) - 90;
+
+function waitIdle(map) {
+  return new Promise(res => {
+    const check = () => { if (map.loaded() && map.areTilesLoaded()) res(); else map.once('idle', check); };
+    map.once('idle', check);
+  });
+}
+function mkMap(el, w, h, opts) {
+  el.style.width = w + 'px'; el.style.height = h + 'px';
+  return new maplibregl.Map(Object.assign({ container: el, interactive: false, attributionControl: false, pixelRatio: 2,
+    maxCanvasSize: [16384, 16384], fadeDuration: 0, localIdeographFontFamily: "'Apple SD Gothic Neo', 'Asta Sans', sans-serif",
+    canvasContextAttributes: { preserveDrawingBuffer: true, antialias: true } }, opts));
+}
+
+async function runTiles(style) {
+  const Z = 16, n = 2 ** Z, M = 1;                                  // M: 바깥 여백 타일(가장자리 글자 잘림 방지)
+  const S = +(Q.get('s') || 35.800), N = +(Q.get('n') || 35.850), W = +(Q.get('w') || 129.160), E = +(Q.get('e') || 129.236);
+  const txMin = Math.floor(mx(W) * n), txMax = Math.floor(mx(E) * n), tyMin = Math.floor(my(N) * n), tyMax = Math.floor(my(S) * n);
+  const nx = txMax - txMin + 1, ny = tyMax - tyMin + 1;
+  const cw = (nx + 2 * M) * 256, ch = (ny + 2 * M) * 256;
+  const cxw = (txMin - M) / n + cw / 2 / 256 / n, cyw = (tyMin - M) / n + ch / 2 / 256 / n;
+  const el = document.getElementById('m');
+  const map = mkMap(el, cw, ch, { style, center: [lonOf(cxw), latOf(cyw)], zoom: Z - 1, bearing: 0, pitch: 0 });
+  window.__map = map;
+  const gl = map.painter ? map.painter.context.gl : null;
+  await waitIdle(map);
+  await new Promise(r => setTimeout(r, 800));
+  const cv = map.getCanvas();
+  const glc = cv.getContext('webgl2') || cv.getContext('webgl');
+  const corner = map.project([lonOf((txMin) / n), latOf((tyMin) / n)]);
+  const info = { dpr: devicePixelRatio, inner: [innerWidth, innerHeight], css: [cw, ch], canvas: [cv.width, cv.height], tiles: { txMin, txMax, tyMin, tyMax, nx, ny },
+    maxRB: glc && glc.getParameter(glc.MAX_RENDERBUFFER_SIZE), maxVP: glc && Array.from(glc.getParameter(glc.MAX_VIEWPORT_DIMS)), cornerPx: [corner.x, corner.y], expect: [M * 256, M * 256], zoom: map.getZoom() };
+  log('info', info);
+  window.__info = info;
+  if (cv.width !== cw * 2 || cv.height !== ch * 2) { log('ERROR canvas size'); document.title = 'error canvas'; return; }
+  // 512 조각으로 잘라 저장
+  const t = document.createElement('canvas'); t.width = t.height = 512; const x = t.getContext('2d');
+  let done = 0;
+  for (let ty = tyMin; ty <= tyMax; ty++) for (let tx = txMin; tx <= txMax; tx++) {
+    const sx = (tx - txMin + M) * 512, sy = (ty - tyMin + M) * 512;
+    x.fillStyle = C.bg; x.fillRect(0, 0, 512, 512);
+    x.drawImage(cv, sx, sy, 512, 512, 0, 0, 512, 512);
+    const b = await new Promise(r => t.toBlob(r, 'image/jpeg', 0.85));
+    await save('app/src/main/assets/tiles/z16/' + tx + '_' + ty + '.jpg', b); done++;
+  }
+  await save('app/src/main/assets/tiles/meta.json', new Blob([JSON.stringify({ z: 16, scale: 2, tile: 512, txMin, txMax, tyMin, tyMax, bg: C.bg })]));
+  // 확인용 축소 미리보기(전체, 여백 포함 1/4)
+  const pv = document.createElement('canvas'); pv.width = cv.width / 4; pv.height = cv.height / 4;
+  pv.getContext('2d').drawImage(cv, 0, 0, pv.width, pv.height);
+  await save('tmp/tiles_overview_quarter.png', await new Promise(r => pv.toBlob(r, 'image/png')));
+  // 고속도로·연결로 선 좌표(원본 벡터 타일 기하, 경위도)
+  const feats = map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation', filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary']]] })
+    .concat(map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation', filter: ['==', ['get', 'class'], 'motorway'] }));
+  const all = map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation' })
+    .filter(f => /motorway|trunk|primary/.test(f.properties.class) || f.properties.ramp === 1);
+  const out = all.map(f => ({ p: f.properties, g: f.geometry }));
+  await save('tmp/motorway_raw.json', new Blob([JSON.stringify(out)]));
+  const rend = map.queryRenderedFeatures({ layers: style.layers.filter(l => /^(road|bridge|tunnel)_motorway/.test(l.id)).map(l => l.id) }).map(f => ({ p: f.properties, g: f.geometry, l: f.layer.id }));
+  await save('tmp/motorway_rendered.json', new Blob([JSON.stringify(rend)]));
+  log('tiles saved', done, 'features', out.length, 'rendered', rend.length);
+  document.title = 'done tiles ' + done;
+}
+
+async function runOverview(style) {
+  const sc = await (await fetch('/repo/companion/web/data/gyeongju.json')).json();
+  const R = sc.route.map(p => [p[1], p[0]]);
+  const xs = R.map(p => p[0]), ys = R.map(p => p[1]);
+  const W = 960, H = 540;                                              // CSS 크기. pixelRatio 2 로 1920x1080
+  const el = document.getElementById('m');
+  const map = mkMap(el, W, H, { style, center: [129.2, 35.82], zoom: 13 });
+  window.__map = map;
+  await new Promise(r => map.once('load', r));
+  map.fitBounds([[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]], { padding: { top: H * 0.15, bottom: H * 0.15, left: W * 0.15, right: W * 0.15 }, bearing: 0, duration: 0 });
+  if (DEBUG) {
+    const ap = await (await fetch('/repo/companion/web/data/approach.json')).json().catch(() => null);
+    map.addSource('route', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: R } } });
+    map.addLayer({ id: 'route', type: 'line', source: 'route', paint: { 'line-color': '#27C964', 'line-width': 3 } });
+    if (ap) {
+      const A = (ap.points || ap).map(p => [p[1], p[0]]);
+      map.addSource('ap', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: A } } });
+      map.addLayer({ id: 'ap', type: 'line', source: 'ap', paint: { 'line-color': '#FF4D8D', 'line-width': 3 } });
+      map.addSource('apd', { type: 'geojson', data: { type: 'FeatureCollection', features: A.map(c => ({ type: 'Feature', geometry: { type: 'Point', coordinates: c } })) } });
+      map.addLayer({ id: 'apd', type: 'circle', source: 'apd', paint: { 'circle-color': '#FFFFFF', 'circle-radius': 1.6 } });
+      map.addSource('gate', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'Point', coordinates: [sc.gate.lon, sc.gate.lat] } } });
+      map.addLayer({ id: 'gate', type: 'circle', source: 'gate', paint: { 'circle-color': '#FFD23F', 'circle-radius': 5, 'circle-stroke-color': '#000', 'circle-stroke-width': 1.5 } });
+      if (Q.get('zoomgate') === '1') map.jumpTo({ center: [sc.gate.lon - 0.006, sc.gate.lat + 0.004], zoom: 14.6 });
+    }
+  }
+  await waitIdle(map);
+  await new Promise(r => setTimeout(r, 800));
+  const cv = map.getCanvas();
+  const b = map.getBounds(), c = map.getCenter();
+  const meta = { width: cv.width, height: cv.height, bounds: [[b.getSouth(), b.getWest()], [b.getNorth(), b.getEast()]], zoom: +(map.getZoom() + 1).toFixed(4),
+    center: [c.lat, c.lng], cssWidth: W, cssHeight: H, pixelRatio: 2, cssZoom: +map.getZoom().toFixed(4),
+    note: 'zoom 은 이미지 픽셀 기준(512*2^zoom 세계 크기). 지도는 웹 메르카토르, bounds 는 map.getBounds()' };
+  log('overview', meta, 'dpr', devicePixelRatio);
+  const jpg = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.9));
+  if (DEBUG) await save('tmp/overview_debug' + (Q.get('zoomgate') === '1' ? '_gate' : '') + '.jpg', jpg);
+  else {
+    await save('companion/web/map/gyeongju_overview.jpg', jpg);
+    await save('companion/web/map/gyeongju_overview.json', new Blob([JSON.stringify(meta, null, 1)]));
+  }
+  document.title = 'done overview';
+}
+
+(async () => {
+  try {
+    document.title = 'running';
+    const style = await styleJson();
+    if (MODE === 'layers') { document.title = 'done layers'; return; }
+    if (MODE === 'tiles') await runTiles(style); else await runOverview(style);
+  } catch (e) { log('ERROR', String(e && e.stack || e)); document.title = 'error ' + e.message; }
+})();
+</script></body></html>
+

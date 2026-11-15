@@ -1,0 +1,125 @@
+{
+ "code": "GJ1016",
+ "title": "경주 1박 2일",
+ "region": "gyeongju",
+ "date": "2027.10.16",
+ "from": "서울",
+ "to": "경주",
+ "members": [
+  {
+   "id": "dad",
+   "name": "아빠",
+   "color": "#0B4A8F",
+   "driver": true,
+   "sharing": false
+  },
+  {
+   "id": "mom",
+   "name": "엄마",
+   "color": "#B8456E",
+   "sharing": false
+  },
+  {
+   "id": "kid1",
+   "name": "첫째",
+   "color": "#1F7A5C",
+   "sharing": false
+  },
+  {
+   "id": "kid2",
+   "name": "둘째",
+   "color": "#6B4FC8",
+   "sharing": false
+  }
+ ],
+ "places": [
+  {
+   "id": "lunch",
+   "name": "황남동 쌈밥집",
+   "kind": "food",
+   "area": "경주 황남동",
+   "lat": 35.8361,
+   "lon": 129.2079,
+   "by": "mom",
+   "source": "인스타그램",
+   "photo": "food_ssambap.jpg",
+   "time": "11:40",
+   "status": "visited",
+   "note": "점심 · 엄마가 담아 둔 식당"
+  },
+  {
+   "id": "daereungwon",
+   "name": "대릉원",
+   "kind": "sight",
+   "area": "경주 황남동",
+   "lat": 35.83895,
+   "lon": 129.21193,
+   "by": "dad",
+   "source": "지도 앱",
+   "photo": "daereungwon_1.jpg",
+   "time": "13:00",
+   "status": "visited",
+   "note": "신라 왕족의 무덤이 모인 곳"
+  },
+  {
+   "id": "hwangridan",
+   "name": "황리단길 카페",
+   "kind": "cafe",
+   "area": "경주 황남동",
+   "lat": 35.8372,
+   "lon": 129.2096,
+   "by": "mom",
+   "source": "블로그",
+   "photo": "hwangridan_1.jpg",
+   "time": "16:50",
+   "status": "visited",
+   "note": "한옥 카페가 모인 골목"
+  },
+  {
+   "id": "donggung",
+   "name": "동궁과 월지",
+   "kind": "sight",
+   "area": "경주 인왕동",
+   "lat": 35.8347,
+   "lon": 129.22644,
+   "by": "kid1",
+   "source": "블로그",
+   "photo": "donggung_night_1.jpg",
+   "time": "17:40",
+   "status": "next",
+   "note": "야경 시간에 맞춤"
+  }
+ ],
+ "now": {
+  "type": "sight",
+  "id": "cheomseongdae",
+  "title": "첨성대",
+  "line": "곧 오른쪽에 첨성대가 보여요",
+  "text": "신라 선덕여왕 때 세운 천문대예요. 돌 362개 남짓을 원통 모양으로 쌓아 올렸어요.",
+  "side": "right",
+  "photo": "cheomseongdae_1.jpg",
+  "at": 1792140720000
+ },
+ "heard": [
+  "cheonmachong",
+  "daereungwon",
+  "cheomseongdae"
+ ],
+ "mode": {
+  "active": true,
+  "region": "gyeongju",
+  "enteredAt": "11:24"
+ },
+ "car": {
+  "lat": 35.83575,
+  "lon": 129.21889,
+  "heading": 90,
+  "speedKmh": 28,
+  "driving": true,
+  "eta": "17:38",
+  "dest": "동궁과 월지",
+  "remainKm": 1.7
+ },
+ "record": null,
+ "rev": 0
+}

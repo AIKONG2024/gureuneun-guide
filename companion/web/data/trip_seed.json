@@ -1,0 +1,89 @@
+{
+ "code": "GJ1016",
+ "title": "경주 1박 2일",
+ "region": "gyeongju",
+ "date": "2027.10.16",
+ "from": "서울",
+ "to": "경주",
+ "members": [
+  {
+   "id": "dad",
+   "name": "아빠",
+   "color": "#0B4A8F",
+   "driver": true,
+   "sharing": false
+  },
+  {
+   "id": "mom",
+   "name": "엄마",
+   "color": "#B8456E",
+   "sharing": false
+  },
+  {
+   "id": "kid1",
+   "name": "첫째",
+   "color": "#1F7A5C",
+   "sharing": false
+  },
+  {
+   "id": "kid2",
+   "name": "둘째",
+   "color": "#6B4FC8",
+   "sharing": false
+  }
+ ],
+ "places": [
+  {
+   "id": "lunch",
+   "name": "황남동 쌈밥집",
+   "kind": "food",
+   "area": "경주 황남동",
+   "lat": 35.8361,
+   "lon": 129.2079,
+   "by": "mom",
+   "source": "인스타그램",
+   "photo": "food_ssambap.jpg",
+   "time": "11:40",
+   "status": "planned",
+   "note": "점심 · 엄마가 담아 둔 식당"
+  },
+  {
+   "id": "daereungwon",
+   "name": "대릉원",
+   "kind": "sight",
+   "area": "경주 황남동",
+   "lat": 35.83895,
+   "lon": 129.21193,
+   "by": "dad",
+   "source": "지도 앱",
+   "photo": "daereungwon_1.jpg",
+   "time": "13:00",
+   "status": "planned",
+   "note": "신라 왕족의 무덤이 모인 곳"
+  },
+  {
+   "id": "donggung",
+   "name": "동궁과 월지",
+   "kind": "sight",
+   "area": "경주 인왕동",
+   "lat": 35.8347,
+   "lon": 129.22644,
+   "by": "kid1",
+   "source": "블로그",
+   "photo": "donggung_night_1.jpg",
+   "time": "17:40",
+   "status": "planned",
+   "note": "야경 시간에 맞춤"
+  }
+ ],
+ "now": null,
+ "heard": [],
+ "mode": {
+  "active": false,
+  "region": "gyeongju",
+  "enteredAt": null
+ },
+ "car": null,
+ "record": null,
+ "rev": 0
+}

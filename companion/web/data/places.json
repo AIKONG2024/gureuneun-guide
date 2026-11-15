@@ -1,0 +1,122 @@
+[
+ {
+  "id": "hwangridan",
+  "name": "황리단길 카페",
+  "kind": "cafe",
+  "area": "경주 황남동",
+  "lat": 35.8372,
+  "lon": 129.2096,
+  "photo": "hwangridan_1.jpg",
+  "keywords": [
+   "황리단",
+   "황리단길",
+   "hwangridan",
+   "카페"
+  ],
+  "note": "한옥 카페가 모인 골목"
+ },
+ {
+  "id": "lunch",
+  "name": "황남동 쌈밥집",
+  "kind": "food",
+  "area": "경주 황남동",
+  "lat": 35.8361,
+  "lon": 129.2079,
+  "photo": "food_ssambap.jpg",
+  "keywords": [
+   "쌈밥",
+   "황남동",
+   "ssambap",
+   "점심"
+  ],
+  "note": "쌈밥 정식"
+ },
+ {
+  "id": "gyochon",
+  "name": "교촌마을",
+  "kind": "sight",
+  "area": "경주 교동",
+  "lat": 35.83083,
+  "lon": 129.21611,
+  "photo": "gyochon_1.jpg",
+  "keywords": [
+   "교촌",
+   "gyochon",
+   "최부자"
+  ],
+  "note": "한옥 마을"
+ },
+ {
+  "id": "woljeonggyo",
+  "name": "월정교",
+  "kind": "sight",
+  "area": "경주 교동",
+  "lat": 35.82944,
+  "lon": 129.21806,
+  "photo": "woljeonggyo_1.jpg",
+  "keywords": [
+   "월정교",
+   "woljeonggyo"
+  ],
+  "note": "밤 조명이 아름다운 다리"
+ },
+ {
+  "id": "daereungwon",
+  "name": "대릉원",
+  "kind": "sight",
+  "area": "경주 황남동",
+  "lat": 35.83895,
+  "lon": 129.21193,
+  "photo": "daereungwon_1.jpg",
+  "keywords": [
+   "대릉원",
+   "daereungwon",
+   "천마총"
+  ],
+  "note": "신라 왕족의 무덤"
+ },
+ {
+  "id": "donggung",
+  "name": "동궁과 월지",
+  "kind": "sight",
+  "area": "경주 인왕동",
+  "lat": 35.8347,
+  "lon": 129.22644,
+  "photo": "donggung_night_1.jpg",
+  "keywords": [
+   "동궁",
+   "월지",
+   "안압지",
+   "donggung"
+  ],
+  "note": "야경 명소"
+ },
+ {
+  "id": "cheomseongdae",
+  "name": "첨성대",
+  "kind": "sight",
+  "area": "경주 인왕동",
+  "lat": 35.8347,
+  "lon": 129.21898,
+  "photo": "cheomseongdae_1.jpg",
+  "keywords": [
+   "첨성대",
+   "cheomseongdae"
+  ],
+  "note": "신라 천문대"
+ },
+ {
+  "id": "museum",
+  "name": "국립경주박물관",
+  "kind": "sight",
+  "area": "경주 인왕동",
+  "lat": 35.8291,
+  "lon": 129.2279,
+  "photo": "museum_1.jpg",
+  "keywords": [
+   "박물관",
+   "museum"
+  ],
+  "note": "신라 유물"
+ }
+]

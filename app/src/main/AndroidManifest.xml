@@ -6,21 +6,15 @@
         android:required="true" />
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- 여행 중 프로세스를 지키는 포그라운드 서비스(TripService, mediaPlayback)와 그 알림 -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Pleos Connect SDK 권한. 여행 안내에 쓰는 것만: 읽어 주기, 듣기, 길 안내, 위치, 조명과 방향지시등, 와이퍼, 좌석 착석, 기어 -->
+    <!-- Pleos Connect SDK 권한: 설명 읽기, 짧은 말 듣기, 길 안내, 위치, 실내 조명, 방향지시등·기어 -->
     <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
     <uses-permission android:name="pleos.car.permission.STT_SERVICE" />
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
     <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH" />
     <uses-permission android:name="pleos.car.permission.FUSED_LOCATION" />
     <uses-permission android:name="pleos.car.permission.CAR_LIGHTS" />
-    <!-- 실내 조명 쓰기. SDK 가 실행 중에 이 권한을 확인함 (LightImpl 의 RequiresCustomPermission) -->
     <uses-permission android:name="pleos.car.permission.CONTROL_CAR_LIGHTS" />
-    <!-- 와이퍼 읽기에 필요 (SDK 가 와이퍼를 창문 권한으로 묶음). 창문은 읽지도 움직이지도 않음 -->
     <uses-permission android:name="pleos.car.permission.CAR_WINDOWS" />
     <uses-permission android:name="pleos.car.permission.CAR_SEATS" />
     <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
@@ -30,6 +24,7 @@
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:largeHeap="true"
         android:supportsRtl="true"
         android:theme="@style/Theme.Guide"
         android:usesCleartextTraffic="true">
@@ -44,16 +39,10 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- 주행 중에도 화면을 띄우되, 기능별 제한은 CarUxRestrictions 로 직접 적용 -->
+            <!-- 주행 중에도 화면을 띄우되, 영상·QR 은 CarUxRestrictions 와 기어로 직접 제한 -->
             <meta-data
                 android:name="distractionOptimized"
                 android:value="true" />
         </activity>
-
-        <!-- 여행 중에만 켜짐 (GuideApp.tripActive). 다른 앱이 부를 수 없음 -->
-        <service
-            android:name=".TripService"
-            android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
     </application>
 </manifest>
