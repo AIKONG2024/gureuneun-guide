@@ -6,8 +6,6 @@
 
 **시연 영상(1분 58초)**: [apk/구르는가이드_시연영상.mp4](apk/구르는가이드_시연영상.mp4) · [웹에서 보기](https://aikong2024.github.io/gureuneun-guide/)
 
-서울에서 경주로 가는 가족 여행 하루를 따라갑니다. 차량 화면과 휴대폰 화면은 에뮬레이터와 휴대폰 웹을 실제로 돌려 녹화했습니다. 지도 장면은 앱이 쓰는 경주 지도와 경로를 3D로 그린 것이고, 차 실내와 도로 장면은 생성 이미지와 스톡 영상입니다. 목소리는 AI 합성 음성입니다.
-
 ## 화면
 
 | 출발 전 '우리 여행' | 요금소를 지나면 여행 모드 |
@@ -64,8 +62,6 @@ adb shell am start -n app.gureuneun.guide/.MainActivity --es demo reset      # �
 | 서버 | Node.js 22 (18 이상), 외부 패키지 없음 |
 | 필요한 설정 | 위치 권한 `pleos.car.permission.FUSED_LOCATION`. 에뮬레이터는 `10.0.2.2:8787`로 서버에 붙습니다 |
 
-실차에서는 돌려 보지 못했습니다.
-
 ## APK 위치
 
 `apk/개인참가_구르는가이드_release.apk` (release 빌드, 서명 포함)
@@ -82,34 +78,17 @@ adb shell am start -n app.gureuneun.guide/.MainActivity --es demo reset      # �
 
 SDK별 연결 코드는 [app/src/main/java/app/gureuneun/guide/sdk](app/src/main/java/app/gureuneun/guide/sdk), 여행 흐름은 [TripEngine.kt](app/src/main/java/app/gureuneun/guide/engine/TripEngine.kt)에 있습니다.
 
-## 시제품이라 대신한 것
+## 시연용으로 대신한 부분
 
-- 에뮬레이터의 순정 내비게이션 지도가 비어 있어 앱이 오프라인 지도를 직접 그립니다.
-- 에뮬레이터 GPS가 움직이지 않아 실제 도로를 따라 위치를 흘려 넣는 시연 주행을 씁니다.
-- 명소 설명은 한국관광공사 관광 정보를 바탕으로 미리 다듬어 둔 문장입니다. 서비스에서는 TourAPI와 생성형 AI로 만듭니다.
-- 링크 속 장소 찾기는 장소 목록(`companion/web/data/places.json`)으로 대신합니다. 서비스에서는 카카오 로컬 API를 씁니다.
-- 여행 영상은 HTML 애니메이션으로 만들어 차량(WebView)과 휴대폰에서 같은 파일로 재생합니다.
+- 위치: 에뮬레이터 GPS 대신 실제 도로를 따라가는 시연 주행
+- 명소 설명: 미리 다듬어 둔 문장 (서비스에서는 TourAPI와 생성형 AI)
+- 링크 속 장소 찾기: 장소 목록 (서비스에서는 카카오 로컬 API)
 
 ## 빌드
 
 ```bash
 ./gradlew assembleRelease    # local.properties 에 sdk.dir, 서명은 keystore.properties (없으면 디버그 키)
 ```
-
-## 시연 영상 만들기
-
-에뮬레이터와 휴대폰 웹을 같은 시각에 녹화하고([tools/demo](tools/demo)), HyperFrames로 장면을 짜서 렌더합니다([tools/film](tools/film)). 차가 달리는 지도 장면은 앱 지도 타일과 경로를 three.js로 그립니다.
-
-```bash
-EMU=1 EVERY=250 node tools/demo/record_all.mjs         # 차량 화면(초당 4장)과 휴대폰 화면 녹화 → /tmp/rec
-node tools/demo/reel_rec.mjs                           # 여행 영상 녹화
-python3 tools/film/media.py /tmp/rec tools/film/assets # 녹화를 30fps 재료로
-python3 tools/film/world.py                            # 3D 지도 재료 (경로, 지도 텍스처)
-python3 tools/film/build.py /tmp/rec                   # 장면 HTML, 소리 믹스
-python3 tools/film/render.py apk/구르는가이드_시연영상.mp4
-```
-
-음악(tools/film/assets/music.mp3)과 주행 영상(tools/film/assets/stock_road_1.mp4)은 저장소에 없으니 아래 출처에서 받아 넣어야 합니다.
 
 ## 출처
 
